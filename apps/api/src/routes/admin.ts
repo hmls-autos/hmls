@@ -55,7 +55,7 @@ admin.get("/dashboard", async (c) => {
     .select({ total: sql<number>`COALESCE(SUM(${schema.quotes.totalAmount}), 0)` })
     .from(schema.quotes)
     .where(
-      sql`${schema.quotes.status} = 'paid' AND ${schema.quotes.createdAt} >= ${thirtyDaysAgo}`,
+      sql`${schema.quotes.status} = 'paid' AND ${schema.quotes.createdAt} >= ${thirtyDaysAgo.toISOString()}`,
     );
 
   return c.json({
