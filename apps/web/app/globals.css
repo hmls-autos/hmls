@@ -497,53 +497,6 @@ body {
   right: 8px;
 }
 
-/* ── 5. Steel Girder (I-beam divider) ── */
-.steel-girder {
-  position: relative;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.steel-girder::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 6px;
-  background: linear-gradient(180deg, var(--steel-light), var(--steel-mid));
-  border-radius: 1px;
-}
-
-.steel-girder::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  top: 6px;
-  bottom: 6px;
-  width: 4px;
-  background: linear-gradient(
-    90deg,
-    var(--steel-mid),
-    var(--steel-light),
-    var(--steel-mid)
-  );
-}
-
-/* Bottom flange via child element with .steel-girder-base */
-.steel-girder-base {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 6px;
-  background: linear-gradient(0deg, var(--steel-light), var(--steel-mid));
-  border-radius: 1px;
-}
-
 /* ── 6. Machined Groove ── */
 .machined-groove {
   background-image: repeating-linear-gradient(
