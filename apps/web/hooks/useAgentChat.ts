@@ -1,7 +1,13 @@
 "use client";
 
 import { type Message as AgentMessage, HttpAgent } from "@ag-ui/client";
-import { type RefObject, useCallback, useRef, useState } from "react";
+import {
+  type RefObject,
+  startTransition,
+  useCallback,
+  useRef,
+  useState,
+} from "react";
 import type { BookingConfirmationData } from "@/components/BookingConfirmation";
 import type { QuestionData } from "@/components/QuestionCard";
 import type { SlotPickerData } from "@/components/SlotPicker";
@@ -83,57 +89,11 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
       } as AgentMessage);
 
       let assistantId = "";
-      // Streaming render buffer: incoming deltas queue up here
-      // and drain smoothly via requestAnimationFrame
-      let fullBuffer = "";
-      let renderedLength = 0;
-      let rafId = 0;
-      const CHARS_PER_FRAME = 3;
-
-      const flushBuffer = () => {
-        if (renderedLength >= fullBuffer.length) {
-          rafId = 0;
-          return;
-        }
-        const nextLen = Math.min(
-          renderedLength + CHARS_PER_FRAME,
-          fullBuffer.length,
-        );
-        const rendered = fullBuffer.slice(0, nextLen);
-        renderedLength = nextLen;
-        setMessages((m) =>
-          m.map((msg) =>
-            msg.id === assistantId ? { ...msg, content: rendered } : msg,
-          ),
-        );
-        scrollToBottom();
-        rafId = requestAnimationFrame(flushBuffer);
-      };
-
-      const enqueueText = (delta: string) => {
-        fullBuffer += delta;
-        if (!rafId) {
-          rafId = requestAnimationFrame(flushBuffer);
-        }
-      };
-
-      const flushRemaining = () => {
-        if (rafId) cancelAnimationFrame(rafId);
-        if (renderedLength < fullBuffer.length) {
-          setMessages((m) =>
-            m.map((msg) =>
-              msg.id === assistantId ? { ...msg, content: fullBuffer } : msg,
-            ),
-          );
-        }
-      };
 
       try {
         await agent.runAgent(undefined, {
           onTextMessageStartEvent: ({ event }) => {
             assistantId = event.messageId;
-            fullBuffer = "";
-            renderedLength = 0;
             setMessages((m) => [
               ...m,
               { id: assistantId, role: "assistant", content: "" },
@@ -141,7 +101,16 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
             setTimeout(scrollToBottom, 0);
           },
           onTextMessageContentEvent: ({ event }) => {
-            enqueueText(event.delta);
+            startTransition(() => {
+              setMessages((m) =>
+                m.map((msg) =>
+                  msg.id === assistantId
+                    ? { ...msg, content: msg.content + event.delta }
+                    : msg,
+                ),
+              );
+            });
+            scrollToBottom();
           },
           onToolCallStartEvent: ({ event }) => {
             setCurrentTool(event.toolCallName);
@@ -181,12 +150,10 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
             setTimeout(scrollToBottom, 0);
           },
           onRunFinishedEvent: () => {
-            flushRemaining();
             setIsLoading(false);
             focusInput();
           },
           onRunErrorEvent: ({ event }) => {
-            flushRemaining();
             const msg =
               (event as { message?: string }).message ||
               "Agent encountered an error";
@@ -197,7 +164,6 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
           },
         });
       } catch (err) {
-        flushRemaining();
         const msg =
           err instanceof Error ? err.message : "Failed to connect to agent";
         console.error("[agent] Connection error:", msg);
