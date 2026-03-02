@@ -3,7 +3,6 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { AppError } from "@hmls/shared/errors";
 import { estimates } from "./routes/estimates.ts";
-import { customers } from "./routes/customers.ts";
 import { portal } from "./routes/portal.ts";
 import { admin } from "./routes/admin.ts";
 import { orders } from "./routes/orders.ts";
@@ -91,7 +90,6 @@ if (stripeKey) {
 
 // Mount routes
 app.route("/api/estimates", estimates);
-app.route("/api/customers", customers);
 app.route("/api/portal", portal);
 app.route("/api/admin", admin);
 app.route("/api/admin/orders", orders);

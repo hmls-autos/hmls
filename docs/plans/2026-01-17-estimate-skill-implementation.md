@@ -825,7 +825,7 @@ git commit -m "feat(agent): assemble estimate skill exports"
 import { estimateSkill } from "./skills/estimate/index.ts";
 
 // Update tools array in createZypherAgent call
-tools: [...calcomTools, ...customerTools, ...stripeTools, ...estimateSkill.tools],
+tools: [...customerTools, ...stripeTools, ...estimateSkill.tools],
 ```
 
 **Step 2: Update system prompt to include skill prompt**

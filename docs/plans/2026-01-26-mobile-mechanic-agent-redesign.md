@@ -40,7 +40,7 @@ User logs in → Enters chat → Agent knows user info (name, phone, email)
     ├── Ask about services → Answer questions
     ├── Request estimate → Agent asks for vehicle info → Generate estimate PDF
     ├── Confirm quote → Send Stripe formal quote
-    └── Book appointment → Create Cal.com booking
+    └── Book appointment → Create booking (custom scheduling)
 ```
 
 ### User Context
@@ -71,8 +71,8 @@ car.
 | `create_estimate`  | Generate estimate PDF                              |
 | `create_quote`     | Send formal Stripe quote                           |
 | `get_quote_status` | Check quote status                                 |
-| `get_availability` | Query available time slots (Cal.com)               |
-| `create_booking`   | Create appointment (Cal.com)                       |
+| `get_availability` | Query available time slots                         |
+| `create_booking`   | Create appointment                                 |
 
 **Remove:**
 
@@ -90,7 +90,7 @@ src/system-prompt.ts     # Simple identity + role + context
 ├── services/skill.md    # Service catalog lookup
 ├── estimate/skill.md    # PDF estimate generation
 ├── payments/skill.md    # Stripe quotes
-└── scheduling/skill.md  # Cal.com booking
+└── scheduling/skill.md  # Appointment booking
 ```
 
 ### Pricing Guidelines

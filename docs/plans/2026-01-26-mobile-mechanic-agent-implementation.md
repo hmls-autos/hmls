@@ -10,7 +10,7 @@ inquiries, estimates, quotes, and booking.
 (owner handles post-service), keep estimate/quote/booking tools. Add session context injection for
 logged-in user info.
 
-**Tech Stack:** Deno, Hono, Zypher Agent Framework, Stripe, Cal.com
+**Tech Stack:** Deno, Hono, Zypher Agent Framework, Stripe
 
 ---
 
@@ -115,7 +115,7 @@ git commit -m "refactor(api): remove create_invoice tool (owner handles post-ser
 import { anthropic, createZypherAgent } from "@corespeed/zypher";
 import { env } from "./env.ts";
 import { SYSTEM_PROMPT } from "./system-prompt.ts";
-import { calcomTools } from "./tools/calcom.ts";
+import { schedulingTools } from "./tools/scheduling.ts";
 import { serviceTools } from "./tools/customer.ts";
 import { stripeTools } from "./tools/stripe.ts";
 import { estimateTools } from "./skills/estimate/tools.ts";
@@ -129,7 +129,7 @@ export async function createHmlsAgent() {
 
   const agent = await createZypherAgent({
     model: anthropic(modelId, { apiKey: env.ANTHROPIC_API_KEY }),
-    tools: [...serviceTools, ...estimateTools, ...stripeTools, ...calcomTools],
+    tools: [...serviceTools, ...estimateTools, ...stripeTools, ...schedulingTools],
     overrides: {
       systemPromptLoader: async () => SYSTEM_PROMPT,
     },
@@ -300,7 +300,7 @@ git commit -m "feat(api): add UserContext type and formatter"
 import { anthropic, createZypherAgent } from "@corespeed/zypher";
 import { env } from "./env.ts";
 import { SYSTEM_PROMPT } from "./system-prompt.ts";
-import { calcomTools } from "./tools/calcom.ts";
+import { schedulingTools } from "./tools/scheduling.ts";
 import { serviceTools } from "./tools/customer.ts";
 import { stripeTools } from "./tools/stripe.ts";
 import { estimateTools } from "./skills/estimate/tools.ts";
@@ -324,7 +324,7 @@ export async function createHmlsAgent(options: CreateAgentOptions = {}) {
 
   const agent = await createZypherAgent({
     model: anthropic(modelId, { apiKey: env.ANTHROPIC_API_KEY }),
-    tools: [...serviceTools, ...estimateTools, ...stripeTools, ...calcomTools],
+    tools: [...serviceTools, ...estimateTools, ...stripeTools, ...schedulingTools],
     overrides: {
       systemPromptLoader: async () => systemPrompt,
     },

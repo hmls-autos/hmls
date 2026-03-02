@@ -98,7 +98,7 @@ export default function QuotesPage() {
                       )}
                     </div>
                     <span className="text-text-secondary shrink-0">
-                      {formatCents(item.amount)}
+                      {formatCents(item.amount ?? 0)}
                     </span>
                   </div>
                 ))}

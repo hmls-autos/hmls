@@ -27,7 +27,6 @@ Where `component` identifies the subsystem.
 | `[server]` | `console.log` | Server lifecycle | `[server] HMLS Agent running on Deno Deploy` |
 | `[agent]` | `console.log` | Agent operations | `[agent] threadId=abc, messages=5, user=123` |
 | `[stripe]` | `console.log` | Stripe API calls | `[stripe] Using cached customer: cus_123` |
-| `[calcom]` | `console.log` | Cal.com API calls | `[calcom] GET /bookings` |
 | `[billing]` | `console.error` | Billing errors | `[billing] Checkout error: ...` |
 | `[config]` | `console.warn` | Missing optional env vars | `[config] Optional env var X is not set` |
 | `[error]` | `console.error` | Global error handler | `[error] NOT_FOUND: Estimate 123 not found` |

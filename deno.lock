@@ -26,6 +26,7 @@
     "npm:@modelcontextprotocol/sdk@^1.25.3": "1.26.0_zod@4.3.6_hono@4.11.9_ajv@8.18.0_express@5.2.1",
     "npm:@react-pdf/renderer@^4.3.2": "4.3.2_react@19.2.3",
     "npm:@supabase/supabase-js@^2.95.0": "2.95.3",
+    "npm:drizzle-kit@*": "0.31.9_esbuild@0.25.12",
     "npm:drizzle-kit@~0.31.4": "0.31.9_esbuild@0.25.12",
     "npm:drizzle-orm@~0.45.1": "0.45.1_postgres@3.4.8",
     "npm:hono@^4.11.9": "4.11.9",

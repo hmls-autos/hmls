@@ -50,11 +50,18 @@ estimates.get("/:id/pdf", async (c) => {
 
   const token = c.req.query("token");
 
-  // If share token provided, use it for access
-  // Otherwise this endpoint is open (PDFs are shared via token links)
-  const [estimate] = await db
-    .select()
+  // Single JOIN: estimate + customer in one query
+  const [row] = await db
+    .select({
+      estimate: schema.estimates,
+      customerName: schema.customers.name,
+      customerPhone: schema.customers.phone,
+      customerEmail: schema.customers.email,
+      customerAddress: schema.customers.address,
+      customerVehicleInfo: schema.customers.vehicleInfo,
+    })
     .from(schema.estimates)
+    .leftJoin(schema.customers, eq(schema.estimates.customerId, schema.customers.id))
     .where(
       token
         ? and(
@@ -65,15 +72,16 @@ estimates.get("/:id/pdf", async (c) => {
     )
     .limit(1);
 
-  if (!estimate) throw Errors.notFound("Estimate", id);
+  if (!row) throw Errors.notFound("Estimate", id);
 
-  const [customer] = await db
-    .select()
-    .from(schema.customers)
-    .where(eq(schema.customers.id, estimate.customerId))
-    .limit(1);
-
-  if (!customer) throw Errors.notFound("Customer", estimate.customerId);
+  const estimate = row.estimate;
+  const customer = {
+    name: row.customerName,
+    phone: row.customerPhone,
+    email: row.customerEmail,
+    address: row.customerAddress,
+    vehicleInfo: row.customerVehicleInfo as { make?: string; model?: string; year?: string } | null,
+  };
 
   const pdfStream = await renderToStream(
     EstimatePdf({
@@ -85,17 +93,7 @@ estimates.get("/:id/pdf", async (c) => {
           price: number;
         }[],
       },
-      customer: {
-        name: customer.name,
-        phone: customer.phone,
-        email: customer.email,
-        address: customer.address,
-        vehicleInfo: customer.vehicleInfo as {
-          make?: string;
-          model?: string;
-          year?: string;
-        } | null,
-      },
+      customer,
     }),
   );
 

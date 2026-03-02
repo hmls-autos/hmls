@@ -26,66 +26,25 @@ app.get("/health", (c) => {
   return c.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// Auth middleware for all routes except health
-app.use("/diagnostics/*", async (c, next) => {
+// Shared auth middleware
+const requireAuth = async (c: any, next: any) => {
   const authResult = await authenticateRequest(c.req.raw);
-  if (authResult instanceof Response) {
-    return authResult;
-  }
+  if (authResult instanceof Response) return authResult;
   c.set("auth", authResult);
   await next();
-});
+};
 
-// Auth middleware for billing routes (except webhook)
-app.use("/billing/checkout", async (c, next) => {
-  const authResult = await authenticateRequest(c.req.raw);
-  if (authResult instanceof Response) {
-    return authResult;
-  }
-  c.set("auth", authResult);
-  await next();
-});
-
-app.use("/billing/portal", async (c, next) => {
-  const authResult = await authenticateRequest(c.req.raw);
-  if (authResult instanceof Response) {
-    return authResult;
-  }
-  c.set("auth", authResult);
-  await next();
-});
-
-// Auth middleware for vehicles
-app.use("/vehicles", async (c, next) => {
-  const authResult = await authenticateRequest(c.req.raw);
-  if (authResult instanceof Response) {
-    return authResult;
-  }
-  c.set("auth", authResult);
-  await next();
-});
-app.use("/vehicles/*", async (c, next) => {
-  const authResult = await authenticateRequest(c.req.raw);
-  if (authResult instanceof Response) {
-    return authResult;
-  }
-  c.set("auth", authResult);
-  await next();
-});
-
+app.use("/diagnostics/*", requireAuth);
+app.use("/billing/checkout", requireAuth);
+app.use("/billing/portal", requireAuth);
+app.use("/vehicles", requireAuth);
+app.use("/vehicles/*", requireAuth);
 app.use("/task", async (c, next) => {
-  // Skip auth in dev mode for testing
   if (DEV_MODE) {
     console.log("[diagnostic-agent] DEV_MODE: skipping auth");
-    await next();
-    return;
+    return next();
   }
-  const authResult = await authenticateRequest(c.req.raw);
-  if (authResult instanceof Response) {
-    return authResult;
-  }
-  c.set("auth", authResult);
-  await next();
+  return requireAuth(c, next);
 });
 
 // Mount routes

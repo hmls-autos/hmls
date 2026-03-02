@@ -146,8 +146,8 @@ The agent appends this to the system prompt as:
 | `get_estimate`     | Retrieve existing estimate         |
 | `create_quote`     | Send formal Stripe quote           |
 | `get_quote_status` | Check quote status                 |
-| `get_availability` | Query Cal.com availability         |
-| `create_booking`   | Create Cal.com appointment         |
+| `get_availability` | Query available time slots         |
+| `create_booking`   | Create appointment                 |
 
 ## Pricing Guidelines
 
@@ -184,7 +184,7 @@ The agent loads workflow instructions from `.skills/` directory:
 | services   | Service catalog lookup  |
 | estimate   | PDF estimate generation |
 | payments   | Stripe quote handling   |
-| scheduling | Cal.com booking         |
+| scheduling | Appointment booking     |
 
 ## Error Handling
 
@@ -233,8 +233,6 @@ Required environment variables:
 - `DATABASE_URL`
 - `ANTHROPIC_API_KEY`
 - `STRIPE_SECRET_KEY`
-- `CALCOM_API_KEY`
-- `CALCOM_EVENT_TYPE_ID`
 
 ### Testing the Agent
 

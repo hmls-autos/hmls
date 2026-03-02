@@ -37,7 +37,7 @@ import { Errors } from "@hmls/shared/errors";
 throw Errors.notFound("Estimate", id);
 throw Errors.badRequest("Invalid input");
 throw Errors.validation("Invalid AG-UI input", details);
-throw Errors.external("Cal.com", `${response.status} - ${error}`);
+throw Errors.external("Stripe", `${response.status} - ${error}`);
 throw Errors.internal("Unexpected state");
 throw Errors.database("Query failed");
 ```

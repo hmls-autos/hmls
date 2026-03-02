@@ -25,7 +25,6 @@ apps/
 │   ├── tools/                  # Zod-validated AI tool definitions
 │   │   ├── customer.ts         # Customer CRUD tools
 │   │   ├── stripe.ts           # Payment/invoice tools (factory function)
-│   │   ├── calcom.ts           # Scheduling tools
 │   │   └── ask-user-question.ts
 │   ├── skills/                 # Multi-tool workflows
 │   │   └── estimate/           # Each skill is a directory
@@ -102,7 +101,7 @@ A skill is a directory under `skills/` with these files: `index.ts`, `tools.ts`,
 |------|-----------|---------|
 | Files | `camelCase.ts` | `askUserQuestion.ts` |
 | Route files | Domain noun, lowercase | `estimates.ts`, `customers.ts` |
-| Tool files | Domain noun, lowercase | `stripe.ts`, `calcom.ts` |
+| Tool files | Domain noun, lowercase | `stripe.ts`, `scheduling.ts` |
 | Entrypoint | `index.ts` (API) or `main.ts` (diagnostic) | — |
 | Middleware files | Feature name, lowercase | `auth.ts`, `credits.ts` |
 

@@ -74,7 +74,6 @@ packages/
 
 - `customer.ts` - Customer CRUD
 - `stripe.ts` - Payments/invoices
-- `calcom.ts` - Scheduling
 
 **Agent Skills** (`apps/api/src/skills/`): Multi-tool workflows
 

@@ -100,7 +100,7 @@ const allTools = [
   ...serviceTools,
   ...estimateTools,
   ...(config.stripeSecretKey ? createStripeTools(config.stripeSecretKey) : []),
-  ...(config.calcomApiKey ? createCalcomTools(config.calcomApiKey, config.calcomEventTypeId) : []),
+  ...schedulingTools,
 ];
 ```
 

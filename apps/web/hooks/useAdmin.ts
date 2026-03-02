@@ -1,53 +1,6 @@
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
-
-interface LineItem {
-  name: string;
-  description: string;
-  price: number;
-}
-
-export interface Booking {
-  id: number;
-  customerId: number;
-  serviceType: string;
-  status: string;
-  scheduledAt: string;
-  durationMinutes: number;
-  location: string | null;
-  vehicleYear: string | null;
-  vehicleMake: string | null;
-  vehicleModel: string | null;
-  internalNotes: string | null;
-  customerName?: string | null;
-  createdAt: string;
-}
-
-export interface Estimate {
-  id: number;
-  customerId: number;
-  items: LineItem[];
-  subtotal: number;
-  priceRangeLow: number;
-  priceRangeHigh: number;
-  notes: string | null;
-  shareToken: string;
-  validDays: number;
-  expiresAt: string;
-  convertedToQuoteId: number | null;
-  createdAt: string;
-}
-
-export interface Quote {
-  id: number;
-  customerId: number;
-  estimateId: number | null;
-  items: LineItem[];
-  totalAmount: number;
-  status: string;
-  stripePaymentUrl: string | null;
-  createdAt: string;
-}
+import type { Booking, Estimate, Order, Quote } from "@/lib/types";
 
 interface DashboardStats {
   customers: number;
@@ -87,6 +40,10 @@ export type AdminEstimate = Estimate & {
 
 export type AdminQuote = Quote & {
   customer: { name: string | null; email: string | null };
+};
+
+export type AdminOrder = Order & {
+  customer: { name: string | null; email: string | null; phone: string | null };
 };
 
 interface CustomerDetail {
@@ -137,24 +94,6 @@ export function useAdminEstimates() {
   );
   return { estimates: data ?? [], isLoading, isError: !!error, mutate };
 }
-
-export interface Order {
-  id: number;
-  customerId: number;
-  estimateId: number | null;
-  quoteId: number | null;
-  bookingId: number | null;
-  status: string;
-  statusHistory: { status: string; timestamp: string; actor: string }[];
-  adminNotes: string | null;
-  cancellationReason: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type AdminOrder = Order & {
-  customer: { name: string | null; email: string | null; phone: string | null };
-};
 
 export function useAdminOrders(status?: string) {
   const params = status ? `?status=${encodeURIComponent(status)}` : "";

@@ -126,7 +126,7 @@ export const lookupLaborTimeTool = {
       .limit(30);
 
     if (laborTimes.length === 0 && serviceWords.length > 1) {
-      // Fallback: try matching ANY word (OR instead of AND) to surface partial matches
+      // Fallback 1: try matching ANY word (OR instead of AND) to surface partial matches
       const orConditions = [
         inArray(schema.olpLaborTimes.vehicleId, vehicleIds),
         sql`(${sql.join(
@@ -154,6 +154,7 @@ export const lookupLaborTimeTool = {
 
       laborTimes.push(...fallbackTimes);
     }
+
 
     if (laborTimes.length === 0) {
       return toolResult({

@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Replace the Cal.com scheduling integration with a custom Supabase-backed appointment system featuring multi-mechanic support, overlap prevention via `tstzrange` exclusion constraints, full work order capture, rich chat UI components, and a hero quick-start widget.
+**Goal:** Custom Supabase-backed appointment system with multi-mechanic support, overlap prevention via `tstzrange` exclusion constraints, full work order capture, rich chat UI components, and a hero quick-start widget. (Cal.com fully removed 2026-03-01.)
 
-**Architecture:** New Supabase tables (`providers`, `provider_availability`, `provider_schedule_overrides`, `provider_services`, enhanced `bookings`) with a trigger-computed `blocked_range` and GiST exclusion constraint. Two new agent tools (`get_availability`, `create_booking`) replace `calcom.ts`. The frontend gets a hero booking widget, `SlotPicker`, and `BookingConfirmation` chat components. Guest booking supported with optional login auto-fill.
+**Architecture:** Supabase tables (`providers`, `provider_availability`, `provider_schedule_overrides`, `provider_services`, enhanced `bookings`) with a trigger-computed `blocked_range` and GiST exclusion constraint. Agent tools (`get_availability`, `create_booking`) handle scheduling. The frontend gets a hero booking widget, `SlotPicker`, and `BookingConfirmation` chat components. Guest booking supported with optional login auto-fill.
 
 **Tech Stack:** Supabase PostgreSQL (tstzrange, btree_gist, exclusion constraints), Drizzle ORM + raw SQL migrations, Deno/Hono API, Zod schemas, React 19 / Next.js 16 / Tailwind CSS 4 frontend, AG-UI protocol.
 
@@ -266,8 +266,7 @@ CREATE INDEX IF NOT EXISTS idx_bookings_customer
 -- (Drop old constraint if it exists, add new one)
 DO $$
 BEGIN
-  -- Remove old calcom_booking_id column if desired (keep for backwards compat)
-  -- ALTER TABLE bookings DROP COLUMN IF EXISTS calcom_booking_id;
+  -- calcom_booking_id column dropped 2026-03-01
   NULL;
 END $$;
 ```
@@ -392,7 +391,7 @@ export const bookings = pgTable("bookings", {
   internalNotes: text("internal_notes"),
   preferredMechanicId: integer("preferred_mechanic_id").references(() => providers.id),
   status: varchar("status", { length: 50 }).notNull().default("requested"),
-  calcomBookingId: varchar("calcom_booking_id", { length: 100 }),
+  // calcom_booking_id removed 2026-03-01
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -993,67 +992,9 @@ git commit -m "feat(api): add create_booking work order tool with overlap protec
 
 ---
 
-### Task 7: Wire Agent — Replace Cal.com with Scheduling Tools
+### Task 7: Wire Agent — Completed (Cal.com removed 2026-03-01)
 
-**Files:**
-- Modify: `apps/api/src/agent.ts` (swap calcom for scheduling tools)
-- Modify: `apps/api/src/index.ts` (remove calcom env vars)
-- Modify: `apps/web/lib/agent-tools.ts` (update display names)
-
-**Step 1: Update agent.ts**
-
-In `apps/api/src/agent.ts`:
-
-1. Remove the import: `import { createCalcomTools } from "./tools/calcom.ts";`
-2. Add the import: `import { schedulingTools } from "./tools/scheduling.ts";`
-3. Remove `calcomApiKey` and `calcomEventTypeId` from the `AgentConfig` interface.
-4. In `allTools`, replace the Cal.com line:
-   ```typescript
-   // Remove:
-   ...(config.calcomApiKey ? createCalcomTools(config.calcomApiKey, config.calcomEventTypeId) : []),
-   // Add:
-   ...schedulingTools,
-   ```
-
-**Step 2: Update index.ts**
-
-In `apps/api/src/index.ts`:
-
-1. Remove `"CALCOM_API_KEY"` from the optional env vars warning array (line 22).
-2. Remove `calcomApiKey` and `calcomEventTypeId` from the `initChat()` call (lines 33-34).
-
-**Step 3: Update agent-tools.ts display names**
-
-In `apps/web/lib/agent-tools.ts`, update the tool display names:
-
-```typescript
-export const toolDisplayNames: Record<string, string> = {
-  get_availability: "Checking availability",
-  create_booking: "Creating work order",
-  get_customer: "Looking up customer",
-  create_customer: "Saving customer info",
-  get_services: "Getting services",
-  create_estimate: "Preparing estimate",
-  get_estimate: "Loading estimate",
-  create_quote: "Creating quote",
-  create_invoice: "Creating invoice",
-  get_quote_status: "Checking quote status",
-  ask_user_question: "Asking a question",
-};
-```
-
-**Step 4: Verify everything compiles**
-
-Run: `deno task check:api`
-Run: `cd apps/web && bun run typecheck`
-Expected: No errors for both.
-
-**Step 5: Commit**
-
-```bash
-git add apps/api/src/agent.ts apps/api/src/index.ts apps/web/lib/agent-tools.ts
-git commit -m "feat(api): wire scheduling tools, remove Cal.com integration"
-```
+Cal.com integration (`calcom.ts`, env vars, AgentConfig fields) fully removed. Scheduling tools wired directly.
 
 ---
 
@@ -1088,7 +1029,7 @@ The booking is created as "requested" — tell the customer their mechanic will 
 **NEVER skip the review step.** Always show a summary and get explicit confirmation before calling create_booking.
 ```
 
-Also remove any remaining Cal.com references in the system prompt.
+Cal.com references in system prompt removed (2026-03-01).
 
 **Step 2: Verify types compile**
 
@@ -1764,34 +1705,9 @@ git commit -m "feat(web): read hero query params and enable guest chat access"
 
 ---
 
-### Task 14: Delete Cal.com Tool File
+### Task 14: Delete Cal.com Tool File — Completed (2026-03-01)
 
-**Files:**
-- Delete: `apps/api/src/tools/calcom.ts`
-
-**Step 1: Delete the file**
-
-```bash
-rm apps/api/src/tools/calcom.ts
-```
-
-**Step 2: Verify no remaining imports**
-
-Run: `grep -r "calcom" apps/api/src/ apps/web/` — should return nothing (already removed in Task 7).
-
-**Step 3: Verify everything compiles**
-
-Run: `deno task check:api`
-Run: `cd apps/web && bun run typecheck`
-Run: `cd apps/web && bun run build`
-Expected: All pass.
-
-**Step 4: Commit**
-
-```bash
-git add -A
-git commit -m "chore: remove Cal.com integration (replaced by custom scheduling)"
-```
+`calcom.ts` deleted and all references removed.
 
 ---
 

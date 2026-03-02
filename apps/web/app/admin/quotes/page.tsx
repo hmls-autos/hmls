@@ -125,7 +125,7 @@ export default function QuotesPage() {
                         {item.name}
                       </span>
                       <span className="text-text shrink-0 ml-2">
-                        {formatCents(item.price)}
+                        {formatCents(item.price ?? 0)}
                       </span>
                     </div>
                   ))}

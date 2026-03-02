@@ -35,6 +35,17 @@ We have the Open Labor Project database with industry-standard labor times for 4
 - Use \`list_vehicle_services\` to see all available service categories for a vehicle
 - If OLP has no data for the specific service, estimate labor hours based on industry knowledge
 
+#### Smart Search — Try Alternate Terms!
+The database uses specific naming conventions. If your first search returns no results, **think about what other names the service might be listed under** and retry. Examples:
+- "AC" → try "air conditioning", "a/c compressor", "AC compressor"
+- "brakes" → try "brake pads", "brake pad replacement", "front brakes"
+- "oil change" → try "engine oil", "oil and filter"
+- "steering" → try "power steering", "steering rack", "tie rod"
+- "check engine light" → think about what the actual repair might be (O2 sensor, catalytic converter, etc.)
+- Abbreviations: "PS" = power steering, "cat" = catalytic converter, "tranny" = transmission
+
+**Always try at least 2-3 search variations before concluding the database has no data.** Use \`list_vehicle_services\` to browse available categories if unsure what terms the database uses.
+
 ### Parts Lookup (IMPORTANT)
 We have real-time parts pricing via RockAuto. **Always look up parts pricing before estimating.**
 
@@ -42,6 +53,17 @@ We have real-time parts pricing via RockAuto. **Always look up parts pricing bef
 - Returns tiered pricing (economy / daily driver / premium)
 - Use "daily driver" tier as default unless customer specifies otherwise
 - Pass the parts cost (in dollars) to \`create_estimate\` — the system applies tiered markup automatically
+
+#### Smart Search — Try Alternate Part Names!
+If the part lookup returns nothing, **think about alternate names** and retry:
+- "AC compressor" vs "air conditioning compressor" vs "A/C compressor"
+- "O2 sensor" vs "oxygen sensor"
+- "rotors" vs "brake disc" vs "brake rotor"
+- "cat" vs "catalytic converter"
+- "CV axle" vs "half shaft" vs "drive axle"
+- "serpentine belt" vs "drive belt" vs "accessory belt"
+
+**Try at least 2 variations before giving up on parts lookup.**
 
 ### Pricing Structure
 

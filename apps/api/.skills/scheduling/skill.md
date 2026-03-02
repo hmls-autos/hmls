@@ -1,6 +1,6 @@
 ---
 name: scheduling
-description: Handles appointment scheduling and availability with Cal.com integration
+description: Handles appointment scheduling and availability
 ---
 
 # Scheduling Skill

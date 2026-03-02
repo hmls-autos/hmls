@@ -88,17 +88,6 @@ export const pricingConfig = pgTable("pricing_config", {
   description: text("description"),
 });
 
-export const vehiclePricing = pgTable("vehicle_pricing", {
-  id: serial("id").primaryKey(),
-  make: varchar("make", { length: 50 }).notNull(),
-  model: varchar("model", { length: 50 }),
-  multiplier: numeric("multiplier", { precision: 3, scale: 2 }).notNull()
-    .default("1.00"),
-  notes: text("notes"),
-}, (table) => ({
-  uniqueMakeModel: unique().on(table.make, table.model),
-}));
-
 export const estimates = pgTable("estimates", {
   id: serial("id").primaryKey(),
   customerId: integer("customer_id").references(() => customers.id).notNull(),
@@ -127,12 +116,10 @@ export const bookings = pgTable("bookings", {
   vehicleMake: varchar("vehicle_make", { length: 50 }),
   vehicleModel: varchar("vehicle_model", { length: 50 }),
   vehicleMileage: integer("vehicle_mileage"),
-  estimateId: integer("estimate_id").references(() => estimates.id),
+  estimateId: integer("estimate_id").references(() => estimates.id, { onDelete: "cascade" }),
   scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
   appointmentEnd: timestamp("appointment_end", { withTimezone: true }),
   durationMinutes: integer("duration_minutes").notNull().default(60),
-  bufferBeforeMinutes: integer("buffer_before_minutes").notNull().default(30),
-  bufferAfterMinutes: integer("buffer_after_minutes").notNull().default(15),
   blockedRange: tstzrange("blocked_range"),
   location: text("location"),
   locationLat: numeric("location_lat", { precision: 10, scale: 7 }),
@@ -146,7 +133,6 @@ export const bookings = pgTable("bookings", {
   internalNotes: text("internal_notes"),
   preferredMechanicId: integer("preferred_mechanic_id").references(() => providers.id),
   status: varchar("status", { length: 50 }).notNull().default("requested"),
-  calcomBookingId: varchar("calcom_booking_id", { length: 100 }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -156,7 +142,7 @@ export const bookings = pgTable("bookings", {
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   customerId: integer("customer_id").references(() => customers.id).notNull(),
-  estimateId: integer("estimate_id").references(() => estimates.id),
+  estimateId: integer("estimate_id").references(() => estimates.id, { onDelete: "cascade" }),
   quoteId: integer("quote_id").references(() => quotes.id),
   bookingId: integer("booking_id").references(() => bookings.id),
   status: varchar("status", { length: 30 }).notNull().default("estimated"),

@@ -1,12 +1,12 @@
 # Custom Appointment System Design
 
 **Date:** 2026-02-22
-**Status:** Approved
-**Replaces:** Cal.com integration (`apps/api/src/tools/calcom.ts`)
+**Status:** Implemented — Cal.com fully removed 2026-03-01
+**Replaces:** Former Cal.com integration (deleted)
 
 ## Overview
 
-Replace the third-party Cal.com scheduling integration with a custom Supabase-backed appointment
+Custom Supabase-backed appointment
 system. The system is fully agentic — the AI chat agent drives the booking flow using rich UI
 components. A hero quick-start widget on the landing page pre-seeds the conversation with context.
 
@@ -199,14 +199,14 @@ CREATE INDEX idx_bookings_customer
 | Overlap prevention | `EXCLUDE USING gist` | Database-enforced; handles race conditions automatically |
 | Slot generation | Continuous ranges, discretized at query time | Accommodates variable-duration services (30-min to 4-hr) |
 | Buffer/travel time | Per-booking `buffer_before/after`, trigger-computed | Customer sees clean times; DB blocks expanded window |
-| Availability model | Recurring schedule + date overrides | Matches industry standard (Cal.com, Calendly pattern) |
+| Availability model | Recurring schedule + date overrides | Matches industry standard (Calendly pattern) |
 | Race condition handling | Optimistic insert, catch `23P01` error | Simplest correct approach for low-medium concurrency |
 
 ## Agent Tools
 
 ### `get_availability` — Check Available Slots
 
-Replaces Cal.com's `get_availability` tool.
+Custom availability query tool.
 
 **Input:**
 - `serviceType` (string, required) — service to look up duration
@@ -247,7 +247,7 @@ Replaces Cal.com's `get_availability` tool.
 
 ### `create_booking` — Create Work Order
 
-Replaces Cal.com's `create_booking` tool.
+Custom booking creation tool.
 
 **Input:**
 ```typescript
@@ -316,12 +316,9 @@ Replaces Cal.com's `create_booking` tool.
 }
 ```
 
-### Removal
+### Removal (Completed 2026-03-01)
 
-- Delete `apps/api/src/tools/calcom.ts`
-- Remove `calcomApiKey` and `calcomEventTypeId` from `AgentConfig`
-- Remove Cal.com env vars (`CALCOM_API_KEY`, `CALCOM_EVENT_TYPE_ID`)
-- Remove Cal.com tools from `agent.ts` `allTools` array
+All Cal.com code, env vars, and FK references have been removed.
 
 ## Hero Quick-Start Widget
 
@@ -390,8 +387,7 @@ if (toolName === "create_booking") {
 
 Update `apps/api/src/system-prompt.ts` booking workflow:
 
-- Remove all Cal.com references
-- Add work order gathering flow:
+- Work order gathering flow:
   1. Ask about the issue / what service they need
   2. Collect vehicle info (year, make, model)
   3. Recommend service + gather parts preference
