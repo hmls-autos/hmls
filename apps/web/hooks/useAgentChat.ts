@@ -11,8 +11,10 @@ const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL || "http://localhost:8080";
 
 export interface Message {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "estimate-card" | "booking-confirmation";
   content: string;
+  estimateData?: EstimateCardData;
+  bookingData?: BookingConfirmationData;
 }
 
 interface UseAgentChatOptions {
@@ -32,12 +34,7 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
   );
   const [pendingSlotPicker, setPendingSlotPicker] =
     useState<SlotPickerData | null>(null);
-  const [bookingConfirmations, setBookingConfirmations] = useState<
-    Array<{ id: string; data: BookingConfirmationData }>
-  >([]);
-  const [estimateCards, setEstimateCards] = useState<
-    Array<{ id: string; data: EstimateCardData }>
-  >([]);
+  // bookingConfirmations and estimateCards are now embedded in the messages array
   const agentRef = useRef<HttpAgent | null>(null);
   const toolCallNamesRef = useRef<Map<string, string>>(new Map());
   const tokenRef = useRef(accessToken);
@@ -168,11 +165,13 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
                 toolName === "create_booking" &&
                 result.success !== undefined
               ) {
-                setBookingConfirmations((prev) => [
-                  ...prev,
+                setMessages((m) => [
+                  ...m,
                   {
                     id: crypto.randomUUID(),
-                    data: result as BookingConfirmationData,
+                    role: "booking-confirmation",
+                    content: "",
+                    bookingData: result as BookingConfirmationData,
                   },
                 ]);
               }
@@ -181,11 +180,13 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
                 result.success &&
                 result.items
               ) {
-                setEstimateCards((prev) => [
-                  ...prev,
+                setMessages((m) => [
+                  ...m,
                   {
                     id: crypto.randomUUID(),
-                    data: result as EstimateCardData,
+                    role: "estimate-card",
+                    content: "",
+                    estimateData: result as EstimateCardData,
                   },
                 ]);
               }
@@ -255,8 +256,6 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
     setMessages([]);
     setPendingQuestion(null);
     setPendingSlotPicker(null);
-    setBookingConfirmations([]);
-    setEstimateCards([]);
     agentRef.current = null;
   }, []);
 
@@ -271,8 +270,6 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
     currentTool,
     pendingQuestion,
     pendingSlotPicker,
-    bookingConfirmations,
-    estimateCards,
     sendMessage,
     answerQuestion,
     selectSlot,

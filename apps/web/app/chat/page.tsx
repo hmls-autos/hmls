@@ -29,8 +29,6 @@ function ChatPageInner() {
     currentTool,
     pendingQuestion,
     pendingSlotPicker,
-    bookingConfirmations,
-    estimateCards,
     sendMessage,
     answerQuestion,
     selectSlot,
@@ -236,39 +234,61 @@ function ChatPageInner() {
             )}
           </AnimatePresence>
 
-          {messages.map((msg) => (
-            <motion.div
-              key={msg.id}
-              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.2 }}
-              className={`flex ${
-                msg.role === "user" ? "justify-end" : "justify-start"
-              }`}
-            >
+          {messages.map((msg) => {
+            if (msg.role === "estimate-card" && msg.estimateData) {
+              return (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="flex justify-start"
+                >
+                  <div className="max-w-[80%]">
+                    <EstimateCard data={msg.estimateData} />
+                  </div>
+                </motion.div>
+              );
+            }
+            if (msg.role === "booking-confirmation" && msg.bookingData) {
+              return (
+                <BookingConfirmation key={msg.id} data={msg.bookingData} />
+              );
+            }
+            return (
               <motion.div
-                initial={{ opacity: 0, x: msg.role === "user" ? 20 : -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.2, delay: 0.05 }}
-                className={`max-w-[80%] px-5 py-3 rounded-2xl ${
-                  msg.role === "user"
-                    ? "bg-red-primary text-white rounded-br-md"
-                    : "bg-surface-alt border border-border text-text rounded-bl-md"
+                key={msg.id}
+                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.2 }}
+                className={`flex ${
+                  msg.role === "user" ? "justify-end" : "justify-start"
                 }`}
               >
-                {msg.role === "user" ? (
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                    {msg.content}
-                  </p>
-                ) : (
-                  <Markdown
-                    content={msg.content}
-                    className="text-sm leading-relaxed"
-                  />
-                )}
+                <motion.div
+                  initial={{ opacity: 0, x: msg.role === "user" ? 20 : -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.2, delay: 0.05 }}
+                  className={`max-w-[80%] px-5 py-3 rounded-2xl ${
+                    msg.role === "user"
+                      ? "bg-red-primary text-white rounded-br-md"
+                      : "bg-surface-alt border border-border text-text rounded-bl-md"
+                  }`}
+                >
+                  {msg.role === "user" ? (
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">
+                      {msg.content}
+                    </p>
+                  ) : (
+                    <Markdown
+                      content={msg.content}
+                      className="text-sm leading-relaxed"
+                    />
+                  )}
+                </motion.div>
               </motion.div>
-            </motion.div>
-          ))}
+            );
+          })}
 
           {/* Question card */}
           <AnimatePresence>
@@ -290,29 +310,6 @@ function ChatPageInner() {
                 disabled={isLoading}
               />
             )}
-          </AnimatePresence>
-
-          {/* Estimate cards */}
-          <AnimatePresence>
-            {estimateCards.map((ec) => (
-              <motion.div
-                key={ec.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex justify-start"
-              >
-                <div className="max-w-[80%]">
-                  <EstimateCard data={ec.data} />
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-
-          {/* Booking confirmations */}
-          <AnimatePresence>
-            {bookingConfirmations.map((bc) => (
-              <BookingConfirmation key={bc.id} data={bc.data} />
-            ))}
           </AnimatePresence>
 
           {/* Tool indicator */}
