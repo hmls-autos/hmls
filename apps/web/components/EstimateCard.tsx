@@ -1,8 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { Download, FileText } from "lucide-react";
-import { useState } from "react";
+import { Download, ExternalLink, FileText } from "lucide-react";
 
 const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL || "http://localhost:8080";
 
@@ -24,30 +22,24 @@ interface EstimateCardProps {
 }
 
 export function EstimateCard({ data }: EstimateCardProps) {
-  const [showPdf, setShowPdf] = useState(false);
-
   const pdfUrl = data.shareUrl ? `${AGENT_URL}${data.shareUrl}` : null;
   const downloadLink = data.downloadUrl
     ? `${AGENT_URL}${data.downloadUrl}`
     : pdfUrl;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className="rounded-xl border border-red-200 bg-red-50/50 overflow-hidden"
-    >
+    <div className="rounded-xl border border-border bg-surface overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 flex items-center gap-2 border-b border-red-100">
-        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-red-primary text-white text-xs">
+      <div className="px-4 py-3 flex items-center gap-2 border-b border-border">
+        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-red-primary text-white text-xs shrink-0">
           <FileText className="w-3.5 h-3.5" />
         </div>
-        <span className="font-semibold text-red-900 text-sm">
+        <span className="font-semibold text-text text-sm">
           Estimate {data.estimateId ? `#${data.estimateId}` : ""}
         </span>
-        <span className="text-xs text-red-700/70 ml-1">{data.vehicle}</span>
+        <span className="text-xs text-text-secondary ml-1">{data.vehicle}</span>
         {data.note && (
-          <span className="ml-auto text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+          <span className="ml-auto text-xs text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">
             Not saved
           </span>
         )}
@@ -61,14 +53,14 @@ export function EstimateCard({ data }: EstimateCardProps) {
             className="flex justify-between text-sm"
           >
             <div className="flex-1 min-w-0">
-              <span className="text-red-900">{item.name}</span>
+              <span className="text-text">{item.name}</span>
               {item.description && (
-                <span className="text-red-700/60 text-xs ml-1 truncate">
+                <span className="text-text-secondary text-xs ml-1 truncate">
                   — {item.description}
                 </span>
               )}
             </div>
-            <span className="font-medium text-red-900 ml-3 tabular-nums">
+            <span className="font-medium text-text ml-3 tabular-nums">
               ${item.price.toFixed(2)}
             </span>
           </div>
@@ -76,19 +68,19 @@ export function EstimateCard({ data }: EstimateCardProps) {
       </div>
 
       {/* Totals */}
-      <div className="px-4 py-3 border-t border-red-100 bg-red-50/80">
+      <div className="px-4 py-3 border-t border-border bg-surface-alt">
         <div className="flex justify-between text-sm">
-          <span className="text-red-700">Subtotal</span>
-          <span className="font-semibold text-red-900 tabular-nums">
+          <span className="text-text-secondary">Subtotal</span>
+          <span className="font-semibold text-text tabular-nums">
             ${data.subtotal.toFixed(2)}
           </span>
         </div>
         <div className="flex justify-between text-sm mt-1">
-          <span className="text-red-700">Estimated Range</span>
-          <span className="font-semibold text-red-900">{data.priceRange}</span>
+          <span className="text-text-secondary">Estimated Range</span>
+          <span className="font-semibold text-text">{data.priceRange}</span>
         </div>
         {data.expiresAt && (
-          <p className="text-xs text-red-600/60 mt-2">
+          <p className="text-xs text-text-secondary mt-2">
             Valid until{" "}
             {new Date(data.expiresAt).toLocaleDateString("en-US", {
               month: "short",
@@ -101,21 +93,22 @@ export function EstimateCard({ data }: EstimateCardProps) {
 
       {/* Actions */}
       {pdfUrl && (
-        <div className="px-4 py-2.5 border-t border-red-100 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowPdf(!showPdf)}
-            className="text-xs font-medium text-red-primary hover:text-red-dark transition-colors flex items-center gap-1"
+        <div className="px-4 py-2.5 border-t border-border flex items-center gap-3">
+          <a
+            href={pdfUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-medium text-red-primary hover:opacity-80 transition-opacity flex items-center gap-1"
           >
-            <FileText className="w-3.5 h-3.5" />
-            {showPdf ? "Hide PDF" : "View PDF"}
-          </button>
+            <ExternalLink className="w-3.5 h-3.5" />
+            View PDF
+          </a>
           {downloadLink && (
             <a
               href={downloadLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs font-medium text-red-primary hover:text-red-dark transition-colors flex items-center gap-1 ml-auto"
+              className="text-xs font-medium text-red-primary hover:opacity-80 transition-opacity flex items-center gap-1 ml-auto"
             >
               <Download className="w-3.5 h-3.5" />
               Download
@@ -123,17 +116,6 @@ export function EstimateCard({ data }: EstimateCardProps) {
           )}
         </div>
       )}
-
-      {/* Embedded PDF */}
-      {showPdf && pdfUrl && (
-        <div className="border-t border-red-100">
-          <iframe
-            src={pdfUrl}
-            title={`Estimate ${data.estimateId || ""} PDF`}
-            className="w-full h-[500px] bg-white"
-          />
-        </div>
-      )}
-    </motion.div>
+    </div>
   );
 }
