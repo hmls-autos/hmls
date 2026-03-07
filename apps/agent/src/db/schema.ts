@@ -97,6 +97,7 @@ export const estimates = pgTable("estimates", {
   subtotal: integer("subtotal").notNull(), // in cents
   priceRangeLow: integer("price_range_low").notNull(), // in cents
   priceRangeHigh: integer("price_range_high").notNull(), // in cents
+  vehicleInfo: jsonb("vehicle_info"), // {year, make, model}
   notes: text("notes"),
   shareToken: varchar("share_token", { length: 64 }).notNull(),
   validDays: integer("valid_days").notNull().default(14),

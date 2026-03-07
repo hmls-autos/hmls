@@ -57,7 +57,6 @@ estimates.get("/:id/pdf", async (c) => {
       customerPhone: schema.customers.phone,
       customerEmail: schema.customers.email,
       customerAddress: schema.customers.address,
-      customerVehicleInfo: schema.customers.vehicleInfo,
     })
     .from(schema.estimates)
     .leftJoin(schema.customers, eq(schema.estimates.customerId, schema.customers.id))
@@ -79,7 +78,7 @@ estimates.get("/:id/pdf", async (c) => {
     phone: row.customerPhone,
     email: row.customerEmail,
     address: row.customerAddress,
-    vehicleInfo: row.customerVehicleInfo as { make?: string; model?: string; year?: string } | null,
+    vehicleInfo: estimate.vehicleInfo as { make?: string; model?: string; year?: string } | null,
   };
 
   const pdfStream = await renderToStream(

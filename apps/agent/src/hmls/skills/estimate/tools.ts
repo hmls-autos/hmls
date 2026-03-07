@@ -241,6 +241,13 @@ export const createEstimateTool = {
         .values({
           customerId: customer.id,
           items: allItems,
+          vehicleInfo: params.vehicle
+            ? {
+              year: String(params.vehicle.year),
+              make: params.vehicle.make,
+              model: params.vehicle.model,
+            }
+            : null,
           subtotal,
           priceRangeLow: rangeLow,
           priceRangeHigh: rangeHigh,
