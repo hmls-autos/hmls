@@ -18,12 +18,12 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     paddingBottom: 20,
     borderBottomWidth: 2,
-    borderBottomColor: "#10b981",
+    borderBottomColor: "#dc2626",
   },
   logo: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#10b981",
+    color: "#dc2626",
   },
   logoSubtext: {
     fontSize: 10,
@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 12,
     fontWeight: "bold",
-    color: "#10b981",
+    color: "#dc2626",
     marginBottom: 8,
     textTransform: "uppercase",
   },
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingTop: 15,
     borderTopWidth: 2,
-    borderTopColor: "#10b981",
+    borderTopColor: "#dc2626",
   },
   totalRow: {
     flexDirection: "row",
@@ -295,9 +295,10 @@ export function EstimatePdf({ estimate, customer }: EstimatePdfProps) {
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.disclaimer}>
-            This estimate is valid until{" "}
-            {formatDate(estimate.expiresAt)}. Final price may vary based on actual conditions found
-            during service. Payment is due upon completion of service.
+            By proceeding with this estimate, you authorize HMLS Mobile Mechanic to perform the
+            services listed above. This estimate is valid until {formatDate(estimate.expiresAt)}.
+            Final price may vary based on actual conditions found during service. Payment is due upon
+            completion of service.
           </Text>
           <Text style={styles.cta}>
             Ready to proceed? Reply in chat or call us to schedule your service.
