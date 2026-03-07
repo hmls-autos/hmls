@@ -46,7 +46,4 @@ jobs:
         run: cd apps/web && bun run typecheck
 
       - name: Check API
-        run: deno task check:api
-
-      - name: Check Diagnostic Agent
-        run: deno task check:diagnostic
+        run: deno task check
