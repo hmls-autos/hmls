@@ -1,8 +1,7 @@
 "use client";
 
 import { Download, ExternalLink, FileText } from "lucide-react";
-
-const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL || "http://localhost:8080";
+import { AGENT_URL } from "@/lib/config";
 
 export interface EstimateCardData {
   success: boolean;
