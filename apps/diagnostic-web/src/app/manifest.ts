@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "AutoDiag - AI Vehicle Diagnostics",
-    short_name: "AutoDiag",
+    name: "Fixo - AI Vehicle Diagnostics",
+    short_name: "Fixo",
     description: "AI-powered vehicle diagnostics at your fingertips",
     start_url: "/chat",
     display: "standalone",

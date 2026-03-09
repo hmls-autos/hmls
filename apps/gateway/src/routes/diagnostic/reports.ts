@@ -101,7 +101,7 @@ reports.get("/:id/report", async (c) => {
   return new Response(pdfStream as unknown as ReadableStream, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="AutoDiag-Report-${sessionId}.pdf"`,
+      "Content-Disposition": `attachment; filename="Fixo-Report-${sessionId}.pdf"`,
     },
   });
 });

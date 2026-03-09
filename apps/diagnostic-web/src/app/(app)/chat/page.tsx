@@ -61,7 +61,7 @@ export default function ChatPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `AutoDiag-Report-${sessionId}.pdf`;
+      a.download = `Fixo-Report-${sessionId}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     },

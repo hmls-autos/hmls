@@ -14,8 +14,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "AutoDiag - AI Vehicle Diagnostics",
-    template: "%s | AutoDiag",
+    default: "Fixo - AI Vehicle Diagnostics",
+    template: "%s | Fixo",
   },
   description:
     "AI-powered vehicle diagnostics. Describe your car problem, snap a photo, or enter OBD codes for instant expert analysis.",
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "AutoDiag",
+    title: "Fixo",
   },
 };
 
