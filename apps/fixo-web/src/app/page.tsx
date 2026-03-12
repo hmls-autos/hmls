@@ -130,7 +130,7 @@ function DiagnosticSheet() {
               <div className="size-6 rounded bg-primary flex items-center justify-center">
                 <Wrench className="size-3 text-primary-foreground" />
               </div>
-              <span className="text-sm font-bold">Fixo Inspection Report</span>
+              <span className="text-sm font-bold">Fixo<span className="text-primary">.</span> Inspection Report</span>
             </div>
             <span className="text-[11px] font-mono text-muted-foreground">
               #FX-2026-0847
@@ -271,7 +271,7 @@ export default function LandingPage() {
             <div className="size-7 rounded-lg bg-primary flex items-center justify-center">
               <Wrench className="size-3.5 text-primary-foreground" />
             </div>
-            <span className="text-base font-bold tracking-tight">Fixo</span>
+            <span className="text-base font-bold tracking-tight">Fixo<span className="text-primary">.</span></span>
           </Link>
           <div className="flex items-center gap-1">
             <Link href="/pricing">
@@ -640,7 +640,7 @@ export default function LandingPage() {
             <div className="size-5 rounded bg-primary flex items-center justify-center">
               <Wrench className="size-3 text-primary-foreground" />
             </div>
-            Fixo
+            Fixo<span className="text-primary">.</span>
           </div>
           <div className="flex gap-6">
             <Link href="/pricing" className="hover:text-foreground transition-colors">
@@ -650,7 +650,7 @@ export default function LandingPage() {
               Sign In
             </Link>
           </div>
-          <p>&copy; {new Date().getFullYear()} Fixo</p>
+          <p>&copy; {new Date().getFullYear()} Fixo<span className="text-primary">.</span></p>
         </div>
       </footer>
     </div>

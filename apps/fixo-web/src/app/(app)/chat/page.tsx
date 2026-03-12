@@ -22,7 +22,7 @@ function WelcomeScreen() {
       <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
         <Car className="w-8 h-8 text-primary" />
       </div>
-      <h2 className="text-xl font-semibold mb-2">Fixo</h2>
+      <h2 className="text-xl font-semibold mb-2">Fixo<span className="text-primary">.</span></h2>
       <p className="text-text-secondary text-sm max-w-xs">
         Describe your car problem, snap a photo of a warning light, or enter an
         OBD code for instant expert analysis.
@@ -275,7 +275,7 @@ export default function ChatPage() {
     <div className="flex flex-col h-dvh">
       {/* Header */}
       <header className="sticky top-0 z-10 bg-surface/80 backdrop-blur-sm border-b border-border px-4 py-3 flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Fixo</h1>
+        <h1 className="text-lg font-semibold">Fixo<span className="text-primary">.</span></h1>
         {messages.length > 0 && !isLoading && (
           <button
             type="button"
