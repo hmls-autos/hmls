@@ -110,7 +110,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-10">
           <h1 className="text-2xl font-bold tracking-tight">
-            Auto<span className="text-primary">Diag</span>
+            Fixo<span className="text-primary">.</span>
           </h1>
           <p className="text-text-secondary text-sm mt-1">
             AI-powered vehicle diagnostics
