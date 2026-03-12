@@ -1,5 +1,5 @@
 import { createHmlsApp } from "./hmls-app.ts";
-import { createDiagnosticApp } from "./diagnostic-app.ts";
+import { createDiagnosticApp } from "./fixo-app.ts";
 
 // ── Fail fast on required env vars ──
 const DATABASE_URL = Deno.env.get("DATABASE_URL");
@@ -37,6 +37,15 @@ function handler(request: Request): Response | Promise<Response> {
   if (DIAG_HOSTS.includes(host)) {
     return diagApp.fetch(request);
   }
+
+  // Path-based routing: /diag/* → diagnostic app (strip prefix)
+  const url = new URL(request.url);
+  if (url.pathname === "/diag" || url.pathname.startsWith("/diag/")) {
+    const newPath = url.pathname.slice("/diag".length) || "/";
+    const newUrl = new URL(newPath + url.search, url.origin);
+    return diagApp.fetch(new Request(newUrl, request));
+  }
+
   return mainApp.fetch(request);
 }
 
