@@ -332,24 +332,24 @@ export function EstimatePdf({ estimate, customer }: EstimatePdfProps) {
             authorization.
           </Text>
           <Text style={styles.termsText}>
-            5. No-Show Fee: A $75 fee will be charged if you are not available at the scheduled
-            time and location without prior notice.
+            5. No-Show Fee: A $75 fee will be charged if you are not available at the scheduled time
+            and location without prior notice.
           </Text>
           <Text style={styles.termsText}>
-            6. Cancellation: Cancellations made less than 24 hours before the scheduled
-            appointment are subject to a $50 cancellation fee.
+            6. Cancellation: Cancellations made less than 24 hours before the scheduled appointment
+            are subject to a $50 cancellation fee.
           </Text>
           <Text style={styles.termsText}>
-            7. After-Hours Surcharge: Services performed outside standard hours (Mon-Fri
-            8AM-6PM) may include a surcharge of up to $75.
+            7. After-Hours Surcharge: Services performed outside standard hours (Mon-Fri 8AM-6PM)
+            may include a surcharge of up to $75.
           </Text>
           <Text style={styles.termsText}>
-            8. Diagnostic Fee: A diagnostic/trip fee may apply and is non-refundable regardless
-            of whether you proceed with repairs.
+            8. Diagnostic Fee: A diagnostic/trip fee may apply and is non-refundable regardless of
+            whether you proceed with repairs.
           </Text>
           <Text style={styles.termsText}>
-            9. Payment: Payment is due upon completion of service. We accept cash, card, and
-            digital payments. This estimate is valid until {formatDate(estimate.expiresAt)}.
+            9. Payment: Payment is due upon completion of service. We accept cash, card, and digital
+            payments. This estimate is valid until {formatDate(estimate.expiresAt)}.
           </Text>
         </View>
         <View style={styles.footer}>

@@ -58,10 +58,13 @@ packages/
 ### Service Communication & Subdomain Routing
 
 The API server uses hostname-based dispatch to route requests:
-- **`localhost:8080`** / default → Main HMLS API (estimates, portal, admin, chat)
-- **`diag.localhost:8080`** / `api.diag.hmls.autos` → Diagnostic API (sessions, billing, vehicles, chat)
 
-Each sub-app has its own CORS, auth middleware, and error handler. No middleware leaks between domains.
+- **`localhost:8080`** / default → Main HMLS API (estimates, portal, admin, chat)
+- **`diag.localhost:8080`** / `api.diag.hmls.autos` → Diagnostic API (sessions, billing, vehicles,
+  chat)
+
+Each sub-app has its own CORS, auth middleware, and error handler. No middleware leaks between
+domains.
 
 - **Web → Agent**: Direct AG-UI protocol connection via `@ag-ui/client` (port 8080)
 - **DiagWeb → Agent**: AG-UI via `http://diag.localhost:8080` / `https://api.diag.hmls.autos`
@@ -179,24 +182,25 @@ deno deploy env delete <KEY> --app hmls-api --org spinsirr
 
 ### Production URLs
 
-| App | Domain | Hosting |
-|-----|--------|---------|
-| Web (HMLS) | `https://hmls.autos` | Deno Deploy |
-| API (main + diagnostic) | `https://api.diag.hmls.autos` (diagnostic) | Deno Deploy (`hmls-api`) |
-| Diagnostic Web | `https://diag.hmls.autos` | Vercel (`prj_EzagTZlxfjG6U6h3Cbdt8uWjPwdO`, scope: `spinsirrs-projects`) |
+| App                     | Domain                                     | Hosting                                                                  |
+| ----------------------- | ------------------------------------------ | ------------------------------------------------------------------------ |
+| Web (HMLS)              | `https://hmls.autos`                       | Deno Deploy                                                              |
+| API (main + diagnostic) | `https://api.diag.hmls.autos` (diagnostic) | Deno Deploy (`hmls-api`)                                                 |
+| Diagnostic Web          | `https://diag.hmls.autos`                  | Vercel (`prj_EzagTZlxfjG6U6h3Cbdt8uWjPwdO`, scope: `spinsirrs-projects`) |
 
 Both main API and diagnostic API run in the same Deno Deploy app (`hmls-api`), routed by hostname.
 
 ### Cloudflare DNS (zone: `hmls.autos`)
 
-| Type | Name | Target | Proxy |
-|------|------|--------|-------|
-| CNAME | `diag` | `cname.vercel-dns.com` | DNS only (gray cloud) |
-| CNAME | `api.diag` | `hmls-api.deno.dev` | DNS only (gray cloud) |
+| Type  | Name       | Target                 | Proxy                 |
+| ----- | ---------- | ---------------------- | --------------------- |
+| CNAME | `diag`     | `cname.vercel-dns.com` | DNS only (gray cloud) |
+| CNAME | `api.diag` | `hmls-api.deno.dev`    | DNS only (gray cloud) |
 
 ### Supabase Auth (project: `ddkapmjkubklyzuciscd`)
 
 **URL Configuration** (Dashboard > Authentication > URL Configuration):
+
 - **Site URL**: `https://hmls.autos`
 - **Redirect URLs**:
   - `https://hmls.autos`

@@ -1,4 +1,5 @@
-[!] **Prerequisite**: This command should only be used AFTER the human has tested and committed the code.
+[!] **Prerequisite**: This command should only be used AFTER the human has tested and committed the
+code.
 
 **AI must NOT execute git commit** - only read history (`git log`, `git status`, `git diff`).
 
@@ -35,6 +36,7 @@ EOF
 ```
 
 **Auto-completes**:
+
 - [OK] Appends session to journal-N.md
 - [OK] Auto-detects line count, creates new file if >2000 lines
 - [OK] Updates index.md (Total Sessions +1, Last Active, line stats, history)
@@ -53,10 +55,10 @@ If a task was completed this session:
 
 ## Script Command Reference
 
-| Command | Purpose |
-|---------|---------|
-| `get-context.sh` | Get all context info |
+| Command                                       | Purpose                                 |
+| --------------------------------------------- | --------------------------------------- |
+| `get-context.sh`                              | Get all context info                    |
 | `add-session.sh --title "..." --commit "..."` | **One-click add session (recommended)** |
-| `task.sh create "<title>" [--slug <name>]` | Create new task directory |
-| `task.sh archive <name>` | Archive completed task |
-| `task.sh list` | List active tasks |
+| `task.sh create "<title>" [--slug <name>]`    | Create new task directory               |
+| `task.sh archive <name>`                      | Archive completed task                  |
+| `task.sh list`                                | List active tasks                       |

@@ -1,12 +1,17 @@
 # OLP Labor Times Scraper — Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan
+> task-by-task.
 
-**Goal:** Scrape all labor time data (~1.3M entries) from openlaborproject.com into Supabase so the agent can provide vehicle-specific labor hours.
+**Goal:** Scrape all labor time data (~1.3M entries) from openlaborproject.com into Supabase so the
+agent can provide vehicle-specific labor hours.
 
-**Architecture:** Hierarchical crawl of Next.js pages extracting embedded JSON props. Two Supabase tables (olp_vehicles + olp_labor_times). Single Deno script with rate limiting, resumability, and batch inserts.
+**Architecture:** Hierarchical crawl of Next.js pages extracting embedded JSON props. Two Supabase
+tables (olp_vehicles + olp_labor_times). Single Deno script with rate limiting, resumability, and
+batch inserts.
 
-**Tech Stack:** Deno, postgres.js (raw SQL for migration), Drizzle ORM (for scraper inserts), Supabase PostgreSQL
+**Tech Stack:** Deno, postgres.js (raw SQL for migration), Drizzle ORM (for scraper inserts),
+Supabase PostgreSQL
 
 **Design doc:** `docs/plans/2026-02-24-olp-labor-times-scraper-design.md`
 
@@ -15,6 +20,7 @@
 ### Task 1: Create database migration
 
 **Files:**
+
 - Modify: `apps/api/src/db/migrate.ts` (add migrationStep6)
 
 **Step 1: Add the OLP tables migration to migrate.ts**
@@ -93,7 +99,8 @@ export const olpVehicles = pgTable("olp_vehicles", {
 
 export const olpLaborTimes = pgTable("olp_labor_times", {
   id: serial("id").primaryKey(),
-  vehicleId: integer("vehicle_id").references(() => olpVehicles.id, { onDelete: "cascade" }).notNull(),
+  vehicleId: integer("vehicle_id").references(() => olpVehicles.id, { onDelete: "cascade" })
+    .notNull(),
   name: varchar("name", { length: 200 }).notNull(),
   slug: varchar("slug", { length: 200 }).notNull(),
   category: varchar("category", { length: 50 }).notNull(),
@@ -105,27 +112,29 @@ export const olpLaborTimes = pgTable("olp_labor_times", {
 
 **Step 3: Run the migration**
 
-Run: `cd /Users/spenc/hmls/hmls-web && deno task --cwd apps/api db:migrate`
-Expected: "Step 6: OLP reference tables..." then "Migrations completed successfully!"
+Run: `cd /Users/spenc/hmls/hmls-web && deno task --cwd apps/api db:migrate` Expected: "Step 6: OLP
+reference tables..." then "Migrations completed successfully!"
 
 **Step 4: Verify tables exist**
 
 Run a quick SQL check via Supabase MCP `execute_sql`:
+
 ```sql
 SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'olp_%';
 ```
+
 Expected: `olp_vehicles` and `olp_labor_times`
 
 **Step 5: Run typecheck**
 
-Run: `deno task check:api`
-Expected: No errors
+Run: `deno task check:api` Expected: No errors
 
 ---
 
 ### Task 2: Build the scraper script
 
 **Files:**
+
 - Create: `apps/api/src/scripts/scrape-olp.ts`
 - Modify: `apps/api/deno.json` (add task)
 
@@ -420,7 +429,9 @@ async function insertVehicle(
 async function insertJobsBatch(vehicleId: number, jobs: Job[]): Promise<void> {
   for (let i = 0; i < jobs.length; i += BATCH_SIZE) {
     const batch = jobs.slice(i, i + BATCH_SIZE);
-    const values = batch.map((j) => sql`(${vehicleId}, ${j.name}, ${j.slug}, ${j.category}, ${j.laborHours})`);
+    const values = batch.map((j) =>
+      sql`(${vehicleId}, ${j.name}, ${j.slug}, ${j.category}, ${j.laborHours})`
+    );
 
     await sql`
       INSERT INTO olp_labor_times (vehicle_id, name, slug, category, labor_hours)
@@ -463,7 +474,12 @@ async function main() {
 
       for (const config of configs) {
         // Resumability: skip if already scraped
-        const exists = await vehicleExists(make.slug, model.slug, config.yearRange, config.engineSlug);
+        const exists = await vehicleExists(
+          make.slug,
+          model.slug,
+          config.yearRange,
+          config.engineSlug,
+        );
         if (exists) {
           skipped++;
           continue;
@@ -473,7 +489,9 @@ async function main() {
         await delay(DELAY_MS);
 
         if (jobs.length === 0) {
-          console.warn(`  [WARN] No jobs for ${make.name} ${model.name} ${config.yearRange} ${config.engine}`);
+          console.warn(
+            `  [WARN] No jobs for ${make.name} ${model.name} ${config.yearRange} ${config.engine}`,
+          );
           continue;
         }
 
@@ -504,7 +522,8 @@ main().catch(async (err) => {
 });
 ```
 
-**Note on batch inserts:** The script above has a simplified batch insert. The actual implementation should use postgres.js's native parameterized batching. Here's the corrected `insertJobsBatch`:
+**Note on batch inserts:** The script above has a simplified batch insert. The actual implementation
+should use postgres.js's native parameterized batching. Here's the corrected `insertJobsBatch`:
 
 ```typescript
 async function insertJobsBatch(vehicleId: number, jobs: Job[]): Promise<void> {
@@ -524,15 +543,16 @@ async function insertJobsBatch(vehicleId: number, jobs: Job[]): Promise<void> {
 
 **Step 3: Run typecheck**
 
-Run: `deno task check:api`
-Expected: No errors (the script uses `postgres` directly, not Drizzle, to keep it simple)
+Run: `deno task check:api` Expected: No errors (the script uses `postgres` directly, not Drizzle, to
+keep it simple)
 
 **Step 4: Run the migration first, then the scraper**
 
-Run: `cd /Users/spenc/hmls/hmls-web && deno task --cwd apps/api db:migrate`
-Then: `cd /Users/spenc/hmls/hmls-web && deno task --cwd apps/api db:scrape-olp`
+Run: `cd /Users/spenc/hmls/hmls-web && deno task --cwd apps/api db:migrate` Then:
+`cd /Users/spenc/hmls/hmls-web && deno task --cwd apps/api db:scrape-olp`
 
 Expected output:
+
 ```
 === OLP Labor Times Scraper ===
 
@@ -546,11 +566,13 @@ Fetching makes...
   ...
 ```
 
-The scraper runs for ~35 minutes. It's resumable — if interrupted, re-run and it skips already-scraped vehicles.
+The scraper runs for ~35 minutes. It's resumable — if interrupted, re-run and it skips
+already-scraped vehicles.
 
 **Step 5: Verify data after scraper completes**
 
 Run via Supabase MCP `execute_sql`:
+
 ```sql
 SELECT
   (SELECT count(*) FROM olp_vehicles) as vehicles,
@@ -567,6 +589,7 @@ Expected: ~5000 vehicles, ~1.3M labor times, ~165 MB total
 **Step 1: Verify the agent can query vehicle-specific labor times**
 
 Run via Supabase MCP `execute_sql`:
+
 ```sql
 SELECT v.make, v.model, v.year_range, v.engine, lt.name, lt.labor_hours, lt.category
 FROM olp_labor_times lt

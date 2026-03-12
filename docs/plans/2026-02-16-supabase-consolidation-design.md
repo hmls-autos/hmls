@@ -2,12 +2,15 @@
 
 ## Summary
 
-Consolidate from Neon + Supabase (two databases) to Supabase-only (one database). Move all business tables into Supabase's Postgres so auth and data live together. Replace the app-level customer sync with a DB trigger.
+Consolidate from Neon + Supabase (two databases) to Supabase-only (one database). Move all business
+tables into Supabase's Postgres so auth and data live together. Replace the app-level customer sync
+with a DB trigger.
 
 ## Decisions
 
 - **Start fresh** — no data to migrate from Neon, re-seed in Supabase
-- **Direct Postgres connection** — Deno API connects via Supabase's direct connection string with Drizzle ORM
+- **Direct Postgres connection** — Deno API connects via Supabase's direct connection string with
+  Drizzle ORM
 - **DB trigger** for auth-customer sync — replaces the /auth/sync API endpoint
 - **Remove Neon** — no more local Postgres or Neon dependency
 
@@ -29,7 +32,8 @@ Consolidate from Neon + Supabase (two databases) to Supabase-only (one database)
 
 ### Supabase Migrations (SQL)
 
-1. Create all tables: services, customers (with auth_user_id), conversations, messages, bookings, quotes, pricingConfig, vehiclePricing, estimates, invoices
+1. Create all tables: services, customers (with auth_user_id), conversations, messages, bookings,
+   quotes, pricingConfig, vehiclePricing, estimates, invoices
 2. Seed data: services, pricing_config, vehicle_pricing
 3. Create trigger function `handle_new_user()` + trigger on auth.users
 

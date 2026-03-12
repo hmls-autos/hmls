@@ -1,10 +1,12 @@
 # SEO Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan
+> task-by-task.
 
 **Goal:** Add comprehensive SEO to hmls.autos — local search ranking + social sharing
 
-**Architecture:** All Next.js built-in APIs (Metadata, sitemap, robots, ImageResponse). No external deps. JsonLd component for structured data. Per-page metadata via exports or sub-layouts.
+**Architecture:** All Next.js built-in APIs (Metadata, sitemap, robots, ImageResponse). No external
+deps. JsonLd component for structured data. Per-page metadata via exports or sub-layouts.
 
 **Tech Stack:** Next.js 16 Metadata API, ImageResponse (from `next/og`)
 
@@ -13,6 +15,7 @@
 ### Task 1: JsonLd Component
 
 **Files:**
+
 - Create: `apps/web/components/JsonLd.tsx`
 
 **Step 1: Create the component**
@@ -30,8 +33,7 @@ export function JsonLd({ data }: { data: Record<string, unknown> }) {
 
 **Step 2: Verify lint passes**
 
-Run: `cd apps/web && bun run lint`
-Expected: PASS
+Run: `cd apps/web && bun run lint` Expected: PASS
 
 **Step 3: Commit**
 
@@ -45,6 +47,7 @@ git commit -m "feat(web): add JsonLd component for structured data"
 ### Task 2: Root Metadata + WebSite Schema
 
 **Files:**
+
 - Modify: `apps/web/app/layout.tsx:1-25` (metadata export)
 
 **Step 1: Expand the metadata export**
@@ -101,13 +104,12 @@ Add inside `<body>`, before `<ThemeProvider>`:
     name: "HMLS Mobile Mechanic",
     url: "https://hmls.autos",
   }}
-/>
+/>;
 ```
 
 **Step 3: Verify lint + typecheck**
 
-Run: `cd apps/web && bun run lint && bun run typecheck`
-Expected: PASS
+Run: `cd apps/web && bun run lint && bun run typecheck` Expected: PASS
 
 **Step 4: Commit**
 
@@ -121,6 +123,7 @@ git commit -m "feat(web): add root SEO metadata and WebSite schema"
 ### Task 3: Homepage AutoRepair Schema
 
 **Files:**
+
 - Modify: `apps/web/app/page.tsx`
 
 **Step 1: Add AutoRepair JSON-LD to homepage**
@@ -165,8 +168,7 @@ import { JsonLd } from "@/components/JsonLd";
 
 **Step 2: Verify lint**
 
-Run: `cd apps/web && bun run lint`
-Expected: PASS
+Run: `cd apps/web && bun run lint` Expected: PASS
 
 **Step 3: Commit**
 
@@ -180,6 +182,7 @@ git commit -m "feat(web): add AutoRepair structured data to homepage"
 ### Task 4: Per-Page Metadata (contact, terms, privacy)
 
 **Files:**
+
 - Modify: `apps/web/app/contact/page.tsx:1-6`
 - Modify: `apps/web/app/terms/page.tsx:1-4`
 - Modify: `apps/web/app/privacy/page.tsx:1-4`
@@ -226,8 +229,7 @@ export const metadata: Metadata = {
 
 **Step 4: Verify lint + typecheck**
 
-Run: `cd apps/web && bun run lint && bun run typecheck`
-Expected: PASS
+Run: `cd apps/web && bun run lint && bun run typecheck` Expected: PASS
 
 **Step 5: Commit**
 
@@ -241,6 +243,7 @@ git commit -m "feat(web): add per-page SEO metadata for contact, terms, privacy"
 ### Task 5: Login Page Metadata (via sub-layout)
 
 **Files:**
+
 - Create: `apps/web/app/login/layout.tsx`
 
 **Step 1: Create login sub-layout with metadata**
@@ -267,8 +270,7 @@ export default function LoginLayout({
 
 **Step 2: Verify lint + typecheck**
 
-Run: `cd apps/web && bun run lint && bun run typecheck`
-Expected: PASS
+Run: `cd apps/web && bun run lint && bun run typecheck` Expected: PASS
 
 **Step 3: Commit**
 
@@ -282,6 +284,7 @@ git commit -m "feat(web): add login page metadata via sub-layout"
 ### Task 6: Sitemap
 
 **Files:**
+
 - Create: `apps/web/app/sitemap.ts`
 
 **Step 1: Create dynamic sitemap**
@@ -323,8 +326,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
 **Step 2: Verify lint**
 
-Run: `cd apps/web && bun run lint`
-Expected: PASS
+Run: `cd apps/web && bun run lint` Expected: PASS
 
 **Step 3: Commit**
 
@@ -338,6 +340,7 @@ git commit -m "feat(web): add dynamic sitemap.xml"
 ### Task 7: Robots
 
 **Files:**
+
 - Create: `apps/web/app/robots.ts`
 
 **Step 1: Create robots config**
@@ -359,8 +362,7 @@ export default function robots(): MetadataRoute.Robots {
 
 **Step 2: Verify lint**
 
-Run: `cd apps/web && bun run lint`
-Expected: PASS
+Run: `cd apps/web && bun run lint` Expected: PASS
 
 **Step 3: Commit**
 
@@ -374,6 +376,7 @@ git commit -m "feat(web): add robots.txt config"
 ### Task 8: Web Manifest
 
 **Files:**
+
 - Create: `apps/web/app/manifest.ts`
 
 **Step 1: Create manifest**
@@ -385,8 +388,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "HMLS Mobile Mechanic",
     short_name: "HMLS",
-    description:
-      "Expert mobile mechanic service in Orange County. We come to you.",
+    description: "Expert mobile mechanic service in Orange County. We come to you.",
     start_url: "/",
     display: "standalone",
     background_color: "#ffffff",
@@ -397,8 +399,7 @@ export default function manifest(): MetadataRoute.Manifest {
 
 **Step 2: Verify lint**
 
-Run: `cd apps/web && bun run lint`
-Expected: PASS
+Run: `cd apps/web && bun run lint` Expected: PASS
 
 **Step 3: Commit**
 
@@ -412,6 +413,7 @@ git commit -m "feat(web): add web app manifest"
 ### Task 9: Dynamic Favicon
 
 **Files:**
+
 - Create: `apps/web/app/icon.tsx`
 
 **Step 1: Create dynamic favicon**
@@ -456,8 +458,8 @@ export default function Icon() {
 
 **Step 2: Verify lint + build**
 
-Run: `cd apps/web && bun run lint && bun run build`
-Expected: PASS — favicon should appear in build output
+Run: `cd apps/web && bun run lint && bun run build` Expected: PASS — favicon should appear in build
+output
 
 **Step 3: Commit**
 
@@ -471,6 +473,7 @@ git commit -m "feat(web): add dynamic favicon"
 ### Task 10: Dynamic OG Image
 
 **Files:**
+
 - Create: `apps/web/app/opengraph-image.tsx`
 
 **Step 1: Create OG image**
@@ -527,8 +530,8 @@ export default function OGImage() {
 
 **Step 2: Verify lint + build**
 
-Run: `cd apps/web && bun run lint && bun run build`
-Expected: PASS — OG image route should appear in build output
+Run: `cd apps/web && bun run lint && bun run build` Expected: PASS — OG image route should appear in
+build output
 
 **Step 3: Commit**
 
@@ -550,6 +553,7 @@ cd apps/web && bun run build
 ```
 
 Expected: All PASS. Build output should show new routes:
+
 - `/sitemap.xml`
 - `/robots.txt`
 - `/manifest.webmanifest`

@@ -6,7 +6,8 @@
 
 ## Overview
 
-Uses **Drizzle ORM** with **Supabase PostgreSQL**. The shared `@hmls/shared/db` package provides a lazy-init `createDbClient(schema)` factory. Each app has its own `schema.ts` and `client.ts`.
+Uses **Drizzle ORM** with **Supabase PostgreSQL**. The shared `@hmls/shared/db` package provides a
+lazy-init `createDbClient(schema)` factory. Each app has its own `schema.ts` and `client.ts`.
 
 ---
 
@@ -30,16 +31,16 @@ export const customers = pgTable("customers", {
 
 ### Naming Rules
 
-| Item | Convention | Example |
-|------|-----------|---------|
-| Table names | `snake_case`, plural | `diagnostic_sessions`, `customers` |
-| Column names | `snake_case` in DB, `camelCase` in TypeScript | `labor_hours` -> `laborHours` |
-| Primary keys | `serial("id").primaryKey()` or `uuid("id").primaryKey().defaultRandom()` | API uses `serial`; diagnostic uses `uuid` |
-| Timestamps | `timestamp("created_at").defaultNow().notNull()` | Every table has `createdAt` |
-| Foreign keys | Inline `.references(() => table.id)` | `customerId: integer("customer_id").references(() => customers.id)` |
-| Money | `integer` in **cents** | `totalAmount: integer("total_amount").notNull()` |
-| JSON columns | `jsonb` with inline comment documenting shape | `items: jsonb("items").notNull()` |
-| Status fields | `varchar` with string union (API) or `pgEnum` (diagnostic) | `varchar("status", { length: 50 }).default("draft")` |
+| Item          | Convention                                                               | Example                                                             |
+| ------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| Table names   | `snake_case`, plural                                                     | `diagnostic_sessions`, `customers`                                  |
+| Column names  | `snake_case` in DB, `camelCase` in TypeScript                            | `labor_hours` -> `laborHours`                                       |
+| Primary keys  | `serial("id").primaryKey()` or `uuid("id").primaryKey().defaultRandom()` | API uses `serial`; diagnostic uses `uuid`                           |
+| Timestamps    | `timestamp("created_at").defaultNow().notNull()`                         | Every table has `createdAt`                                         |
+| Foreign keys  | Inline `.references(() => table.id)`                                     | `customerId: integer("customer_id").references(() => customers.id)` |
+| Money         | `integer` in **cents**                                                   | `totalAmount: integer("total_amount").notNull()`                    |
+| JSON columns  | `jsonb` with inline comment documenting shape                            | `items: jsonb("items").notNull()`                                   |
+| Status fields | `varchar` with string union (API) or `pgEnum` (diagnostic)               | `varchar("status", { length: 50 }).default("draft")`                |
 
 ### Inferred Types
 
@@ -75,7 +76,8 @@ export const db = createDbClient(schema);
 export { schema };
 ```
 
-The shared `createDbClient` uses a **lazy-init Proxy** so the DB connection is only created on first use.
+The shared `createDbClient` uses a **lazy-init Proxy** so the DB connection is only created on first
+use.
 
 ---
 
@@ -119,14 +121,17 @@ await db
 const [{ count }] = await db
   .select({ count: sql<number>`count(*)` })
   .from(diagnosticSessions)
-  .where(and(eq(diagnosticSessions.userId, auth.userId), gte(diagnosticSessions.createdAt, monthStart)));
+  .where(
+    and(eq(diagnosticSessions.userId, auth.userId), gte(diagnosticSessions.createdAt, monthStart)),
+  );
 ```
 
 ---
 
 ## Migration Approach
 
-Currently uses raw SQL in a single string, executed via `sql.unsafe()` in `apps/api/src/db/migrate.ts`. No versioned migration files or rollback support.
+Currently uses raw SQL in a single string, executed via `sql.unsafe()` in
+`apps/api/src/db/migrate.ts`. No versioned migration files or rollback support.
 
 ---
 

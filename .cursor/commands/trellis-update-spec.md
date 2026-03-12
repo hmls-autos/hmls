@@ -1,6 +1,7 @@
 # Update Spec - Capture Knowledge into Specifications
 
-When you learn something valuable (from debugging, implementing, or discussion), use this command to update the relevant spec documents.
+When you learn something valuable (from debugging, implementing, or discussion), use this command to
+update the relevant spec documents.
 
 **Timing**: After completing a task, fixing a bug, or discovering a new pattern
 
@@ -8,13 +9,13 @@ When you learn something valuable (from debugging, implementing, or discussion),
 
 ## When to Update Specs
 
-| Trigger | Example | Target Spec |
-|---------|---------|-------------|
-| **Fixed a bug** | Found a subtle issue with error handling | `backend/error-handling.md` |
-| **Discovered a pattern** | Found a better way to structure code | Relevant guidelines file |
-| **Hit a gotcha** | Learned that X must be done before Y | Relevant spec + "Common Mistakes" section |
-| **Established a convention** | Team agreed on naming pattern | `quality-guidelines.md` |
-| **Cross-layer insight** | Understood how data flows between layers | `guides/cross-layer-thinking-guide.md` |
+| Trigger                      | Example                                  | Target Spec                               |
+| ---------------------------- | ---------------------------------------- | ----------------------------------------- |
+| **Fixed a bug**              | Found a subtle issue with error handling | `backend/error-handling.md`               |
+| **Discovered a pattern**     | Found a better way to structure code     | Relevant guidelines file                  |
+| **Hit a gotcha**             | Learned that X must be done before Y     | Relevant spec + "Common Mistakes" section |
+| **Established a convention** | Team agreed on naming pattern            | `quality-guidelines.md`                   |
+| **Cross-layer insight**      | Understood how data flows between layers | `guides/cross-layer-thinking-guide.md`    |
 
 ---
 
@@ -47,17 +48,18 @@ Answer these questions:
 
 ### Step 2: Classify the Update Type
 
-| Type | Description | Action |
-|------|-------------|--------|
-| **New Pattern** | A reusable approach discovered | Add to "Patterns" section |
+| Type                  | Description                    | Action                                    |
+| --------------------- | ------------------------------ | ----------------------------------------- |
+| **New Pattern**       | A reusable approach discovered | Add to "Patterns" section                 |
 | **Forbidden Pattern** | Something that causes problems | Add to "Anti-patterns" or "Don't" section |
-| **Common Mistake** | Easy-to-make error | Add to "Common Mistakes" section |
-| **Convention** | Agreed-upon standard | Add to relevant section |
-| **Gotcha** | Non-obvious behavior | Add warning callout |
+| **Common Mistake**    | Easy-to-make error             | Add to "Common Mistakes" section          |
+| **Convention**        | Agreed-upon standard           | Add to relevant section                   |
+| **Gotcha**            | Non-obvious behavior           | Add warning callout                       |
 
 ### Step 3: Read the Target Spec
 
 Before editing, read the current spec to:
+
 - Understand existing structure
 - Avoid duplicating content
 - Find the right section for your update
@@ -92,14 +94,9 @@ If you added a new section or the spec status changed, update the category's `in
 
 **Solution**: Brief description of the approach.
 
-**Example**:
-\`\`\`
-// Good
-code example
+**Example**: \`\`\` // Good code example
 
-// Bad
-code example
-\`\`\`
+// Bad code example \`\`\`
 
 **Why**: Explanation of why this works better.
 ```
@@ -109,19 +106,11 @@ code example
 ```markdown
 ### Don't: Pattern Name
 
-**Problem**:
-\`\`\`
-// Don't do this
-bad code example
-\`\`\`
+**Problem**: \`\`\` // Don't do this bad code example \`\`\`
 
 **Why it's bad**: Explanation of the issue.
 
-**Instead**:
-\`\`\`
-// Do this instead
-good code example
-\`\`\`
+**Instead**: \`\`\` // Do this instead good code example \`\`\`
 ```
 
 ### Adding a Common Mistake
@@ -205,9 +194,11 @@ Development Flow:
 
 ## Core Philosophy
 
-> **Specs are living documents. Every debugging session, every "aha moment" is an opportunity to make the spec better.**
+> **Specs are living documents. Every debugging session, every "aha moment" is an opportunity to
+> make the spec better.**
 
 The goal is **institutional memory**:
+
 - What one person learns, everyone benefits from
 - What AI learns in one session, persists to future sessions
 - Mistakes become documented guardrails

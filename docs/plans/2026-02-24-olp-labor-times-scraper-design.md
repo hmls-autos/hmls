@@ -2,7 +2,8 @@
 
 ## Goal
 
-Scrape all labor time data from openlaborproject.com and store it in Supabase so the agent can provide vehicle-specific labor hour estimates instead of generic ones.
+Scrape all labor time data from openlaborproject.com and store it in Supabase so the agent can
+provide vehicle-specific labor hour estimates instead of generic ones.
 
 ## Database Schema
 
@@ -51,8 +52,10 @@ Hierarchical, 3-level crawl extracting embedded `__NEXT_DATA__` JSON:
 
 1. Fetch `/labor-times` -> extract 87 makes (name, slug, modelCount)
 2. For each make -> fetch `/labor-times/{make}/` -> extract models list
-3. For each model -> fetch `/labor-times/{make}/{model}/` -> extract vehicle configs (year-range, engine, fuel, timing)
-4. For each config -> fetch `/labor-times/{make}/{model}/{years}/{engine}/` -> extract `jobsByCategory` JSON -> INSERT vehicles + labor times
+3. For each model -> fetch `/labor-times/{make}/{model}/` -> extract vehicle configs (year-range,
+   engine, fuel, timing)
+4. For each config -> fetch `/labor-times/{make}/{model}/{years}/{engine}/` -> extract
+   `jobsByCategory` JSON -> INSERT vehicles + labor times
 
 ### Rate Limiting
 
@@ -62,7 +65,8 @@ Hierarchical, 3-level crawl extracting embedded `__NEXT_DATA__` JSON:
 
 ### Resumability
 
-Before fetching a config page, check if `olp_vehicles` already has that (make_slug, model_slug, year_range, engine_slug). If yes, skip. Allows restart without re-scraping.
+Before fetching a config page, check if `olp_vehicles` already has that (make_slug, model_slug,
+year_range, engine_slug). If yes, skip. Allows restart without re-scraping.
 
 ### Error Handling
 
@@ -79,18 +83,19 @@ Before fetching a config page, check if `olp_vehicles` already has that (make_sl
 ## Deno Task
 
 Add to `apps/api/deno.json`:
+
 ```json
 "db:scrape-olp": "deno run --env=../../.env --allow-net --allow-env --allow-read src/scripts/scrape-olp.ts"
 ```
 
 ## Scale Estimate
 
-| Item | Count | Size |
-|------|-------|------|
-| olp_vehicles | ~5,000 | ~1 MB |
-| olp_labor_times | ~1.3M | ~100-150 MB |
-| Current DB | - | 13 MB |
-| **Total after scrape** | | **~165 MB / 500 MB** |
+| Item                   | Count  | Size                 |
+| ---------------------- | ------ | -------------------- |
+| olp_vehicles           | ~5,000 | ~1 MB                |
+| olp_labor_times        | ~1.3M  | ~100-150 MB          |
+| Current DB             | -      | 13 MB                |
+| **Total after scrape** |        | **~165 MB / 500 MB** |
 
 ## Example Agent Query
 

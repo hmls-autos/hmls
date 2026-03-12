@@ -6,7 +6,8 @@
 
 ## Overview
 
-The web app uses **Next.js App Router** with a flat, non-nested layout. There is **no `src/` directory** — all code lives directly under `apps/web/`. The `@/*` path alias maps to `apps/web/*`.
+The web app uses **Next.js App Router** with a flat, non-nested layout. There is **no `src/`
+directory** — all code lives directly under `apps/web/`. The `@/*` path alias maps to `apps/web/*`.
 
 ---
 
@@ -87,15 +88,15 @@ apps/web/
 
 ## Naming Conventions
 
-| Item | Convention | Example |
-|------|-----------|---------|
-| Components | `PascalCase.tsx` | `ChatWidget.tsx`, `ServiceCard.tsx` |
-| Hooks | `useCamelCase.ts` | `useAgentChat.ts`, `useCustomer.ts` |
-| Utilities | `camelCase.ts` | `fetcher.ts`, `image-loader.ts` |
-| Pages | `page.tsx` (Next.js convention) | `app/chat/page.tsx` |
-| Layouts | `layout.tsx` | `app/login/layout.tsx` |
-| Section components | `components/sections/PascalCase.tsx` | `HeroNew.tsx` |
-| UI primitives | `components/ui/PascalCase.tsx` | `RevealOnScroll.tsx` |
+| Item               | Convention                           | Example                             |
+| ------------------ | ------------------------------------ | ----------------------------------- |
+| Components         | `PascalCase.tsx`                     | `ChatWidget.tsx`, `ServiceCard.tsx` |
+| Hooks              | `useCamelCase.ts`                    | `useAgentChat.ts`, `useCustomer.ts` |
+| Utilities          | `camelCase.ts`                       | `fetcher.ts`, `image-loader.ts`     |
+| Pages              | `page.tsx` (Next.js convention)      | `app/chat/page.tsx`                 |
+| Layouts            | `layout.tsx`                         | `app/login/layout.tsx`              |
+| Section components | `components/sections/PascalCase.tsx` | `HeroNew.tsx`                       |
+| UI primitives      | `components/ui/PascalCase.tsx`       | `RevealOnScroll.tsx`                |
 
 ---
 

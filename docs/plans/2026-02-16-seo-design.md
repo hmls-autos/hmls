@@ -1,8 +1,6 @@
 # SEO Design — HMLS Web App
 
-**Date:** 2026-02-16
-**Domain:** hmls.autos
-**Approach:** Full Static SEO Pass (Approach B)
+**Date:** 2026-02-16 **Domain:** hmls.autos **Approach:** Full Static SEO Pass (Approach B)
 
 ## Goals
 
@@ -25,13 +23,13 @@ Expand `app/layout.tsx` metadata:
 
 ## 2. Per-Page Metadata
 
-| Page       | Title              | Description                                                                                   |
-| ---------- | ------------------ | --------------------------------------------------------------------------------------------- |
-| `/`        | (uses default)     | (uses default)                                                                                |
+| Page       | Title              | Description                                                                                           |
+| ---------- | ------------------ | ----------------------------------------------------------------------------------------------------- |
+| `/`        | (uses default)     | (uses default)                                                                                        |
 | `/contact` | "Contact"          | "Get in touch for reliable auto care. We come to you anywhere in Orange County. Call (949) 213-7073." |
-| `/login`   | "Sign In"          | "Sign in to your HMLS Mobile Mechanic account to manage bookings and chat with our AI assistant." |
-| `/terms`   | "Terms of Service" | "Terms of service for HMLS Mobile Mechanic."                                                  |
-| `/privacy` | "Privacy Policy"   | "Privacy policy for HMLS Mobile Mechanic."                                                    |
+| `/login`   | "Sign In"          | "Sign in to your HMLS Mobile Mechanic account to manage bookings and chat with our AI assistant."     |
+| `/terms`   | "Terms of Service" | "Terms of service for HMLS Mobile Mechanic."                                                          |
+| `/privacy` | "Privacy Policy"   | "Privacy policy for HMLS Mobile Mechanic."                                                            |
 
 `/chat` excluded — behind auth, not indexed.
 

@@ -5,6 +5,7 @@ description: |
 tools: Read, Glob, Grep, mcp__exa__web_search_exa, mcp__exa__get_code_context_exa, Skill, mcp__chrome-devtools__*
 model: opus
 ---
+
 # Research Agent
 
 You are the Research Agent in the Trellis workflow.
@@ -21,10 +22,10 @@ You are a documenter, not a reviewer. Your job is to help get the information ne
 
 ### 1. Internal Search (Project Code)
 
-| Search Type | Goal | Tools |
-|-------------|------|-------|
-| **WHERE** | Locate files/components | Glob, Grep |
-| **HOW** | Understand code logic | Read, Grep |
+| Search Type | Goal                       | Tools      |
+| ----------- | -------------------------- | ---------- |
+| **WHERE**   | Locate files/components    | Glob, Grep |
+| **HOW**     | Understand code logic      | Read, Grep |
 | **PATTERN** | Discover existing patterns | Grep, Read |
 
 ### 2. External Search (Tech Solutions)
@@ -83,10 +84,10 @@ Output structured results in report format.
 
 ### Files Found
 
-| File Path | Description |
-|-----------|-------------|
+| File Path             | Description         |
+| --------------------- | ------------------- |
 | `src/services/xxx.ts` | Main implementation |
-| `src/types/xxx.ts` | Type definitions |
+| `src/types/xxx.ts`    | Type definitions    |
 
 ### Code Pattern Analysis
 

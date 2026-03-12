@@ -6,7 +6,9 @@
 
 ## Overview
 
-No structured logging library is used. The codebase uses `console.log`, `console.error`, and `console.warn` with a **bracketed-prefix convention**. The API app uses Hono's built-in `logger()` middleware for HTTP request logging.
+No structured logging library is used. The codebase uses `console.log`, `console.error`, and
+`console.warn` with a **bracketed-prefix convention**. The API app uses Hono's built-in `logger()`
+middleware for HTTP request logging.
 
 ---
 
@@ -22,14 +24,14 @@ Where `component` identifies the subsystem.
 
 ## Log Categories
 
-| Prefix | Level | Usage | Example |
-|--------|-------|-------|---------|
-| `[server]` | `console.log` | Server lifecycle | `[server] HMLS Agent running on Deno Deploy` |
-| `[agent]` | `console.log` | Agent operations | `[agent] threadId=abc, messages=5, user=123` |
-| `[stripe]` | `console.log` | Stripe API calls | `[stripe] Using cached customer: cus_123` |
-| `[billing]` | `console.error` | Billing errors | `[billing] Checkout error: ...` |
-| `[config]` | `console.warn` | Missing optional env vars | `[config] Optional env var X is not set` |
-| `[error]` | `console.error` | Global error handler | `[error] NOT_FOUND: Estimate 123 not found` |
+| Prefix      | Level           | Usage                     | Example                                      |
+| ----------- | --------------- | ------------------------- | -------------------------------------------- |
+| `[server]`  | `console.log`   | Server lifecycle          | `[server] HMLS Agent running on Deno Deploy` |
+| `[agent]`   | `console.log`   | Agent operations          | `[agent] threadId=abc, messages=5, user=123` |
+| `[stripe]`  | `console.log`   | Stripe API calls          | `[stripe] Using cached customer: cus_123`    |
+| `[billing]` | `console.error` | Billing errors            | `[billing] Checkout error: ...`              |
+| `[config]`  | `console.warn`  | Missing optional env vars | `[config] Optional env var X is not set`     |
+| `[error]`   | `console.error` | Global error handler      | `[error] NOT_FOUND: Estimate 123 not found`  |
 
 ---
 

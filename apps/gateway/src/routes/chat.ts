@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { eachValueFrom } from "rxjs-for-await";
-import { concatMap, from, type Observable, pipe } from "rxjs";
+import { concatMap, from, pipe } from "rxjs";
 import { eq } from "drizzle-orm";
 import { type AgentConfig, createHmlsAgent, type UserContext } from "@hmls/agent";
 import { db, schema } from "@hmls/agent/db";

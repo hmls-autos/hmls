@@ -2,12 +2,15 @@
 
 ## Summary
 
-Add social login (OAuth) support to the HMLS web app using Supabase Auth's built-in OAuth providers. Social login buttons appear above the existing email/password form. A Postgres trigger auto-syncs new auth users to the `customers` table by matching email or creating a new record.
+Add social login (OAuth) support to the HMLS web app using Supabase Auth's built-in OAuth providers.
+Social login buttons appear above the existing email/password form. A Postgres trigger auto-syncs
+new auth users to the `customers` table by matching email or creating a new record.
 
 ## Decisions
 
 - **Providers**: Google, Apple, Facebook, GitHub, Discord, Twitter/X
-- **Customer sync**: DB trigger on `auth.users` INSERT — match by email first, auto-create if not found
+- **Customer sync**: DB trigger on `auth.users` INSERT — match by email first, auto-create if not
+  found
 - **Login UI**: Social buttons above existing email/password form with divider
 - **Platform**: Web only (no native app requirements)
 - **Approach**: Supabase-native OAuth (Approach A — DB trigger sync)
@@ -40,6 +43,7 @@ User clicks "Sign in with Google"
 ### DB Trigger
 
 A Supabase migration that:
+
 1. Adds `auth_user_id UUID UNIQUE` column to `customers` table
 2. Creates function `handle_new_user()`:
    - Extracts email, name from `auth.users` + `raw_user_meta_data`
@@ -79,7 +83,8 @@ A Supabase migration that:
 ### Supabase Dashboard (manual)
 
 1. **URL Configuration**: Set Site URL to `https://hmls.autos`, add redirect URLs
-2. **Auth Providers**: Enable Google, Apple, Facebook, GitHub, Discord, Twitter/X with client IDs/secrets from each provider's developer console
+2. **Auth Providers**: Enable Google, Apple, Facebook, GitHub, Discord, Twitter/X with client
+   IDs/secrets from each provider's developer console
 
 ### Supabase Migration (SQL)
 
@@ -88,7 +93,8 @@ A Supabase migration that:
 
 ### New Files
 
-- `apps/web/app/auth/callback/route.ts` — OAuth callback handler (exchanges code for session via PKCE)
+- `apps/web/app/auth/callback/route.ts` — OAuth callback handler (exchanges code for session via
+  PKCE)
 
 ### Modified Files
 
@@ -96,4 +102,5 @@ A Supabase migration that:
 
 ### Environment Variables (per provider)
 
-Each provider needs its client ID and secret configured in the Supabase dashboard. No new env vars needed in the app code — Supabase handles the OAuth flow server-side.
+Each provider needs its client ID and secret configured in the Supabase dashboard. No new env vars
+needed in the app code — Supabase handles the OAuth flow server-side.

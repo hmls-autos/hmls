@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { db, schema } from "@hmls/agent/db";
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { type AdminEnv, requireAdmin } from "../middleware/admin.ts";
 import { notifyOrderStatusChange } from "@hmls/agent";
 

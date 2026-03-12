@@ -25,9 +25,9 @@ workspace/
 
 ## Active Developers
 
-| Developer | Last Active | Sessions | Active File |
-|-----------|-------------|----------|-------------|
-| (none yet) | - | - | - |
+| Developer  | Last Active | Sessions | Active File |
+| ---------- | ----------- | -------- | ----------- |
+| (none yet) | -           | -        | -           |
 
 ---
 
@@ -42,6 +42,7 @@ Run the initialization script:
 ```
 
 This will:
+
 1. Create your identity file (gitignored)
 2. Create your progress directory
 3. Create your personal index
@@ -72,6 +73,7 @@ This will:
 ### Session Record Format
 
 Each session should include:
+
 - Summary: One-line description
 - Main Changes: What was modified
 - Git Commits: Commit hashes and messages
@@ -86,8 +88,7 @@ Use this template when recording sessions:
 ```markdown
 ## Session {N}: {Title}
 
-**Date**: YYYY-MM-DD
-**Task**: {task-name}
+**Date**: YYYY-MM-DD **Task**: {task-name}
 
 ### Summary
 
@@ -100,8 +101,8 @@ Use this template when recording sessions:
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash      | Message          |
+| --------- | ---------------- |
 | `abc1234` | {commit message} |
 
 ### Testing

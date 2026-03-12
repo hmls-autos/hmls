@@ -6,7 +6,8 @@
 
 ## Overview
 
-The web app uses **Biome** for linting/formatting, **Tailwind CSS v4** with semantic design tokens, and has strong accessibility conventions.
+The web app uses **Biome** for linting/formatting, **Tailwind CSS v4** with semantic design tokens,
+and has strong accessibility conventions.
 
 ---
 
@@ -14,12 +15,12 @@ The web app uses **Biome** for linting/formatting, **Tailwind CSS v4** with sema
 
 Configured at `apps/web/biome.json`:
 
-| Setting | Value |
-|---------|-------|
-| Indent | `space`, width `2` |
-| Quotes | `double` |
-| Linter rules | `recommended` |
-| Import organization | Auto-organized |
+| Setting             | Value              |
+| ------------------- | ------------------ |
+| Indent              | `space`, width `2` |
+| Quotes              | `double`           |
+| Linter rules        | `recommended`      |
+| Import organization | Auto-organized     |
 
 ```bash
 cd apps/web && bun run lint       # Run Biome
@@ -43,7 +44,8 @@ When suppression is needed, always include an explanation:
 
 ### Tailwind CSS v4 with Semantic Tokens
 
-All colors reference semantic tokens defined in `apps/web/app/globals.css`, not raw Tailwind classes:
+All colors reference semantic tokens defined in `apps/web/app/globals.css`, not raw Tailwind
+classes:
 
 ```css
 /* globals.css — theme tokens */
@@ -77,12 +79,12 @@ Use **lucide-react** exclusively. No other icon library.
    ```tsx
    <button aria-label={isOpen ? "Close chat" : "Open chat"}>
      <MessageCircle />
-   </button>
+   </button>;
    ```
 
 2. **`type="button"` on non-submit buttons**:
    ```tsx
-   <button type="button" onClick={toggle}>...</button>
+   <button type="button" onClick={toggle}>...</button>;
    ```
 
 3. **`focus-visible:ring-2 focus-visible:ring-red-primary`** on interactive elements:
@@ -92,17 +94,17 @@ Use **lucide-react** exclusively. No other icon library.
 
 4. **`aria-hidden="true"` on decorative icons**:
    ```tsx
-   <RefreshCw size={20} aria-hidden="true" />
+   <RefreshCw size={20} aria-hidden="true" />;
    ```
 
 ### Screen Reader Support
 
 ```tsx
 {/* Skip-to-content link in root layout */}
-<a href="#main-content" className="sr-only focus:not-sr-only ...">Skip to content</a>
+<a href="#main-content" className="sr-only focus:not-sr-only ...">Skip to content</a>;
 
 {/* SR-only labels for inputs */}
-<label htmlFor="chat-input" className="sr-only">Chat message</label>
+<label htmlFor="chat-input" className="sr-only">Chat message</label>;
 ```
 
 ### Semantic HTML
@@ -126,10 +128,10 @@ Respected in three ways:
 
 ## Animation Systems
 
-| System | Use Case | Where |
-|--------|----------|-------|
-| CSS `reveal` class + IntersectionObserver | Landing page scroll reveals | `RevealOnScroll` component |
-| Framer Motion | Interactive client components | Chat, error, login pages |
+| System                                    | Use Case                      | Where                      |
+| ----------------------------------------- | ----------------------------- | -------------------------- |
+| CSS `reveal` class + IntersectionObserver | Landing page scroll reveals   | `RevealOnScroll` component |
+| Framer Motion                             | Interactive client components | Chat, error, login pages   |
 
 Prefer CSS animations for server-rendered sections; Framer Motion for client components.
 
@@ -166,7 +168,8 @@ Generate `sitemap.ts`, `robots.ts`, and `manifest.ts` as TypeScript files in `ap
 
 ## Forbidden Patterns
 
-- Do not use raw Tailwind color classes — always use semantic tokens (`bg-red-primary`, not `bg-red-600`)
+- Do not use raw Tailwind color classes — always use semantic tokens (`bg-red-primary`, not
+  `bg-red-600`)
 - Do not use `autoFocus` attribute — use `useEffect` with device detection instead
 - Do not omit `type="button"` on non-submit buttons
 - Do not omit `aria-label` on icon-only buttons

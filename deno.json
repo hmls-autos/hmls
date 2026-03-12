@@ -18,10 +18,10 @@
     "lineWidth": 100,
     "semiColons": true,
     "singleQuote": false,
-    "exclude": ["apps/web/", "apps/diagnostic-web/"]
+    "exclude": ["apps/web/", "apps/fixo-web/"]
   },
   "lint": {
-    "exclude": ["apps/web/", "apps/diagnostic-web/"]
+    "exclude": ["apps/web/", "apps/fixo-web/"]
   },
   "tasks": {
     "dev:api": "deno task --cwd apps/gateway dev",

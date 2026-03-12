@@ -5,6 +5,7 @@ description: |
 tools: Read, Write, Edit, Bash, Glob, Grep, mcp__exa__web_search_exa, mcp__exa__get_code_context_exa
 model: opus
 ---
+
 # Debug Agent
 
 You are the Debug Agent in the Trellis workflow.
@@ -12,6 +13,7 @@ You are the Debug Agent in the Trellis workflow.
 ## Context
 
 Before debugging, read:
+
 - `.trellis/spec/` - Development guidelines
 - Error messages or issue descriptions provided
 

@@ -1,12 +1,17 @@
 # Diagnostic SaaS Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan
+> task-by-task.
 
-**Goal:** Build an independent SaaS product — an AI-powered vehicle diagnostic PWA with Freemium pricing (Free + Plus $19.99/mo).
+**Goal:** Build an independent SaaS product — an AI-powered vehicle diagnostic PWA with Freemium
+pricing (Free + Plus $19.99/mo).
 
-**Architecture:** Monorepo extension. New `apps/diagnostic-web/` Next.js PWA frontend communicates with enhanced `apps/diagnostic-agent/` Hono API backend. Supabase Auth for users, Stripe Subscriptions for billing, existing AG-UI streaming protocol for real-time chat.
+**Architecture:** Monorepo extension. New `apps/diagnostic-web/` Next.js PWA frontend communicates
+with enhanced `apps/diagnostic-agent/` Hono API backend. Supabase Auth for users, Stripe
+Subscriptions for billing, existing AG-UI streaming protocol for real-time chat.
 
-**Tech Stack:** Next.js 16 (App Router), React 19, Tailwind CSS 4, Supabase Auth (`@supabase/ssr`), AG-UI (`@ag-ui/client`), Stripe Subscriptions, Drizzle ORM, Hono, Deno Deploy.
+**Tech Stack:** Next.js 16 (App Router), React 19, Tailwind CSS 4, Supabase Auth (`@supabase/ssr`),
+AG-UI (`@ag-ui/client`), Stripe Subscriptions, Drizzle ORM, Hono, Deno Deploy.
 
 **Design Doc:** `docs/plans/2026-02-17-diagnostic-saas-design.md`
 
@@ -17,6 +22,7 @@
 ### Task 1: Scaffold `apps/diagnostic-web` Next.js PWA
 
 **Files:**
+
 - Create: `apps/diagnostic-web/package.json`
 - Create: `apps/diagnostic-web/next.config.ts`
 - Create: `apps/diagnostic-web/tsconfig.json`
@@ -71,6 +77,7 @@
 **Step 2: Create next.config.ts**
 
 Copy pattern from `apps/web/next.config.ts`:
+
 ```typescript
 import type { NextConfig } from "next";
 
@@ -91,7 +98,8 @@ Copy directly from `apps/web/` — same patterns.
 
 **Step 4: Create globals.css with diagnostic-specific design tokens**
 
-Based on `apps/web/src/app/globals.css` but with a distinct brand color (blue instead of red for differentiation):
+Based on `apps/web/src/app/globals.css` but with a distinct brand color (blue instead of red for
+differentiation):
 
 ```css
 @import "tailwindcss";
@@ -99,7 +107,7 @@ Based on `apps/web/src/app/globals.css` but with a distinct brand color (blue in
 :root {
   --background: #fafafa;
   --foreground: #171717;
-  --primary: #2563eb;         /* Blue — diagnostic brand */
+  --primary: #2563eb; /* Blue — diagnostic brand */
   --primary-hover: #1d4ed8;
   --surface: #ffffff;
   --surface-alt: #f5f5f5;
@@ -123,9 +131,9 @@ Based on `apps/web/src/app/globals.css` but with a distinct brand color (blue in
 
 **Step 5: Create root layout, page, and PWA manifest**
 
-Layout: ThemeProvider + AuthProvider shell (AuthProvider created in Task 3).
-Page: Simple redirect to `/chat` or landing copy.
-Manifest: `display: "standalone"`, `start_url: "/chat"`, diagnostic branding.
+Layout: ThemeProvider + AuthProvider shell (AuthProvider created in Task 3). Page: Simple redirect
+to `/chat` or landing copy. Manifest: `display: "standalone"`, `start_url: "/chat"`, diagnostic
+branding.
 
 **Step 6: Install dependencies and verify dev server starts**
 
@@ -155,6 +163,7 @@ git commit -m "feat(diagnostic-web): scaffold Next.js PWA app"
 ### Task 2: Supabase Auth Setup
 
 **Files:**
+
 - Create: `apps/diagnostic-web/lib/supabase/client.ts`
 - Create: `apps/diagnostic-web/lib/supabase/server.ts`
 - Create: `apps/diagnostic-web/lib/supabase/middleware.ts`
@@ -165,6 +174,7 @@ git commit -m "feat(diagnostic-web): scaffold Next.js PWA app"
 **Step 1: Create Supabase browser client**
 
 Copy pattern from `apps/web/lib/supabase/client.ts`:
+
 ```typescript
 import { createBrowserClient } from "@supabase/ssr";
 
@@ -203,7 +213,8 @@ export const config = {
 
 **Step 5: Create auth callback and confirm routes**
 
-Copy from `apps/web/src/app/auth/callback/route.ts` and `apps/web/src/app/auth/confirm/route.ts`. Change default redirect to `/chat`.
+Copy from `apps/web/src/app/auth/callback/route.ts` and `apps/web/src/app/auth/confirm/route.ts`.
+Change default redirect to `/chat`.
 
 **Step 6: Create .env.local**
 
@@ -231,24 +242,28 @@ git commit -m "feat(diagnostic-web): add Supabase auth setup"
 ### Task 3: AuthProvider Component + Login Page
 
 **Files:**
+
 - Create: `apps/diagnostic-web/src/components/AuthProvider.tsx`
 - Create: `apps/diagnostic-web/src/app/(auth)/login/page.tsx`
 - Modify: `apps/diagnostic-web/src/app/layout.tsx` (wrap with AuthProvider)
 
 **Step 1: Create AuthProvider**
 
-Copy pattern from `apps/web/src/components/AuthProvider.tsx`. Provides `useAuth()` hook with `{ user, session, supabase, isLoading }`.
+Copy pattern from `apps/web/src/components/AuthProvider.tsx`. Provides `useAuth()` hook with
+`{ user, session, supabase, isLoading }`.
 
 **Step 2: Create login page**
 
 Simplified login page:
+
 - Email + password form
 - Google OAuth button
 - Sign up / sign in toggle
 - Redirect to `/chat` on success
 - Mobile-optimized layout (full-screen, centered)
 
-Reference `apps/web/src/app/login/page.tsx` for patterns but keep simpler — no multi-step flow. Single form with email, password, and Google button.
+Reference `apps/web/src/app/login/page.tsx` for patterns but keep simpler — no multi-step flow.
+Single form with email, password, and Google button.
 
 **Step 3: Update root layout to wrap with AuthProvider and ThemeProvider**
 
@@ -286,6 +301,7 @@ git commit -m "feat(diagnostic-web): add auth provider and login page"
 ### Task 4: Database Migration — user_profiles + vehicles
 
 **Files:**
+
 - Create: `apps/diagnostic-agent/src/db/migrations/001_user_profiles.sql`
 - Modify: `apps/diagnostic-agent/src/db/schema.ts` (add new tables)
 
@@ -299,7 +315,7 @@ export const userTierEnum = pgEnum("user_tier", ["free", "plus"]);
 
 // User profiles (extends Supabase auth.users)
 export const userProfiles = pgTable("user_profiles", {
-  id: uuid("id").primaryKey(),  // matches auth.users.id
+  id: uuid("id").primaryKey(), // matches auth.users.id
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   tier: userTierEnum("tier").default("free").notNull(),
@@ -361,6 +377,7 @@ git commit -m "feat(diagnostic): add user_profiles and vehicles schema"
 ### Task 5: Auth Middleware Overhaul — Support SaaS Users
 
 **Files:**
+
 - Modify: `apps/diagnostic-agent/src/middleware/auth.ts`
 - Create: `apps/diagnostic-agent/src/middleware/tier.ts`
 - Modify: `apps/diagnostic-agent/src/main.ts`
@@ -371,7 +388,7 @@ Update `apps/diagnostic-agent/src/middleware/auth.ts`:
 
 ```typescript
 export interface AuthContext {
-  userId: string;          // Supabase auth.users.id
+  userId: string; // Supabase auth.users.id
   email: string;
   tier: "free" | "plus";
   stripeCustomerId: string | null;
@@ -415,7 +432,7 @@ export async function authenticateRequest(req: Request): Promise<AuthContext | R
     return {
       userId: authUser.id,
       email: authUser.email,
-      tier: "plus" as const,  // legacy customers get full access
+      tier: "plus" as const, // legacy customers get full access
       stripeCustomerId: customer.stripeCustomerId,
       stripeSubscriptionId: null,
       customerId: customer.id,
@@ -457,10 +474,13 @@ export async function checkFreeTierLimit(
   const limit = FREE_LIMITS[inputType as keyof typeof FREE_LIMITS];
   if (limit === undefined) {
     // Free users can only use text
-    return new Response(JSON.stringify({
-      error: "upgrade_required",
-      message: "Upgrade to Plus to use photo, audio, video, and OBD diagnostics",
-    }), { status: 403, headers: { "Content-Type": "application/json" } });
+    return new Response(
+      JSON.stringify({
+        error: "upgrade_required",
+        message: "Upgrade to Plus to use photo, audio, video, and OBD diagnostics",
+      }),
+      { status: 403, headers: { "Content-Type": "application/json" } },
+    );
   }
 
   // Count this month's usage
@@ -471,18 +491,25 @@ export async function checkFreeTierLimit(
   const [{ count }] = await db.select({ count: sql<number>`count(*)` })
     .from(schema.diagnosticMedia)
     .where(and(
-      eq(schema.diagnosticMedia.sessionId, sql`ANY(
+      eq(
+        schema.diagnosticMedia.sessionId,
+        sql`ANY(
         SELECT id FROM diagnostic_sessions WHERE user_id = ${auth.userId}
-      )`),
+      )`,
+      ),
       gte(schema.diagnosticMedia.createdAt, monthStart),
     ));
 
   if (Number(count) >= limit) {
-    return new Response(JSON.stringify({
-      error: "limit_reached",
-      message: `Free plan limit reached (${limit} text diagnoses/month). Upgrade to Plus for unlimited access.`,
-      usage: { used: Number(count), limit },
-    }), { status: 403, headers: { "Content-Type": "application/json" } });
+    return new Response(
+      JSON.stringify({
+        error: "limit_reached",
+        message:
+          `Free plan limit reached (${limit} text diagnoses/month). Upgrade to Plus for unlimited access.`,
+        usage: { used: Number(count), limit },
+      }),
+      { status: 403, headers: { "Content-Type": "application/json" } },
+    );
   }
 
   return null; // Under limit, proceed
@@ -491,7 +518,8 @@ export async function checkFreeTierLimit(
 
 **Step 4: Update main.ts to use new auth context**
 
-Update route handlers in sessions.ts and input.ts to use `auth.userId` instead of `auth.customerId` for new SaaS user queries.
+Update route handlers in sessions.ts and input.ts to use `auth.userId` instead of `auth.customerId`
+for new SaaS user queries.
 
 **Step 5: Verify**
 
@@ -510,6 +538,7 @@ git commit -m "feat(diagnostic): overhaul auth for SaaS user support"
 ### Task 6: Diagnostic Chat Page
 
 **Files:**
+
 - Create: `apps/diagnostic-web/src/hooks/useAgentChat.ts`
 - Create: `apps/diagnostic-web/src/app/(app)/chat/page.tsx`
 - Create: `apps/diagnostic-web/src/components/chat/MessageBubble.tsx`
@@ -520,7 +549,8 @@ git commit -m "feat(diagnostic): overhaul auth for SaaS user support"
 
 **Step 1: Create useAgentChat hook**
 
-Copy pattern from `apps/web/src/hooks/useAgentChat.ts`. Key change: point to `NEXT_PUBLIC_AGENT_URL` (port 8001 for diagnostic-agent, not 8080).
+Copy pattern from `apps/web/src/hooks/useAgentChat.ts`. Key change: point to `NEXT_PUBLIC_AGENT_URL`
+(port 8001 for diagnostic-agent, not 8080).
 
 ```typescript
 const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL || "http://localhost:8001";
@@ -533,6 +563,7 @@ Renders user and assistant messages with proper styling. Assistant messages use 
 **Step 3: Create ChatInput component**
 
 Mobile-first input with:
+
 - Text input field
 - Camera button (icon, wired up in Task 7)
 - Send button
@@ -555,7 +586,7 @@ Mobile-first input with:
       <Send className="w-5 h-5" />
     </button>
   </div>
-</div>
+</div>;
 ```
 
 **Step 4: Create chat page**
@@ -600,6 +631,7 @@ Minimal layout for authenticated pages — no Navbar (mobile PWA), just renders 
 **Step 6: Test end-to-end**
 
 Start both servers:
+
 ```bash
 # Terminal 1
 deno task dev:diagnostic
@@ -621,6 +653,7 @@ git commit -m "feat(diagnostic-web): add chat page with AG-UI streaming"
 ### Task 7: Camera Capture + Photo Upload
 
 **Files:**
+
 - Create: `apps/diagnostic-web/src/components/media/CameraCapture.tsx`
 - Create: `apps/diagnostic-web/src/hooks/useCamera.ts`
 - Modify: `apps/diagnostic-web/src/app/(app)/chat/page.tsx`
@@ -661,6 +694,7 @@ export function useCamera() {
 **Step 2: Create CameraCapture component**
 
 Full-screen camera overlay with:
+
 - Live video preview
 - Capture button (large, centered bottom)
 - Close button (top-right)
@@ -670,6 +704,7 @@ Full-screen camera overlay with:
 **Step 3: Wire camera into chat page**
 
 When user taps camera button:
+
 1. Open CameraCapture overlay
 2. User takes photo
 3. Convert to base64
@@ -694,6 +729,7 @@ git commit -m "feat(diagnostic-web): add camera capture for photo diagnosis"
 ### Task 8: Stripe Subscription Integration (Backend)
 
 **Files:**
+
 - Create: `apps/diagnostic-agent/src/routes/billing.ts`
 - Modify: `apps/diagnostic-agent/src/main.ts` (mount billing routes)
 - Modify: `apps/diagnostic-agent/src/lib/stripe.ts` (add subscription functions)
@@ -795,6 +831,7 @@ git commit -m "feat(diagnostic): add Stripe subscription billing routes"
 ### Task 9: Pricing Page + Upgrade Flow (Frontend)
 
 **Files:**
+
 - Create: `apps/diagnostic-web/src/app/pricing/page.tsx`
 - Create: `apps/diagnostic-web/src/components/UpgradeModal.tsx`
 - Modify: `apps/diagnostic-web/src/app/(app)/chat/page.tsx` (handle 403 upgrade_required)
@@ -851,6 +888,7 @@ export default function PricingPage() {
 **Step 2: Create UpgradeModal**
 
 Modal that appears when Free user hits a limit (403 from backend):
+
 - Shows what they tried to do
 - Shows Plus benefits
 - "Upgrade to Plus" button → redirects to Stripe Checkout
@@ -859,6 +897,7 @@ Modal that appears when Free user hits a limit (403 from backend):
 **Step 3: Handle 403 in chat page**
 
 When agent returns `error: "upgrade_required"` or `error: "limit_reached"`:
+
 - Show UpgradeModal
 - Don't show error in chat
 
@@ -885,6 +924,7 @@ git commit -m "feat(diagnostic-web): add pricing page and upgrade flow"
 ### Task 10: Audio Recording
 
 **Files:**
+
 - Create: `apps/diagnostic-web/src/hooks/useAudioRecorder.ts`
 - Create: `apps/diagnostic-web/src/components/media/AudioRecorder.tsx`
 - Modify: `apps/diagnostic-web/src/components/chat/ChatInput.tsx` (add mic button)
@@ -892,6 +932,7 @@ git commit -m "feat(diagnostic-web): add pricing page and upgrade flow"
 **Step 1: Create useAudioRecorder hook**
 
 Uses `MediaRecorder API`:
+
 - Start/stop recording
 - Waveform visualization via `AnalyserNode`
 - Duration tracking
@@ -900,6 +941,7 @@ Uses `MediaRecorder API`:
 **Step 2: Create AudioRecorder component**
 
 Bottom sheet overlay:
+
 - Large record button (red when recording)
 - Waveform visualization
 - Duration counter
@@ -907,7 +949,8 @@ Bottom sheet overlay:
 
 **Step 3: Wire into ChatInput**
 
-Add mic button next to camera button. Tap → open AudioRecorder. On send → POST to `/diagnostics/:id/input` as audio type.
+Add mic button next to camera button. Tap → open AudioRecorder. On send → POST to
+`/diagnostics/:id/input` as audio type.
 
 **Step 4: Test**
 
@@ -924,12 +967,14 @@ git commit -m "feat(diagnostic-web): add audio recording for sound diagnosis"
 ### Task 11: OBD Code Input
 
 **Files:**
+
 - Create: `apps/diagnostic-web/src/components/media/ObdInput.tsx`
 - Modify: `apps/diagnostic-web/src/components/chat/ChatInput.tsx` (add OBD button)
 
 **Step 1: Create ObdInput component**
 
 Bottom sheet with:
+
 - Text field for manual code entry (e.g., "P0171")
 - Code format validation (P/B/C/U + 4 digits)
 - "Add another code" to enter multiple
@@ -937,7 +982,8 @@ Bottom sheet with:
 
 **Step 2: Wire into ChatInput**
 
-Add OBD icon button. Tap → open ObdInput sheet. On send → POST each code to `/diagnostics/:id/input` as obd type.
+Add OBD icon button. Tap → open ObdInput sheet. On send → POST each code to `/diagnostics/:id/input`
+as obd type.
 
 **Step 3: Test**
 
@@ -954,6 +1000,7 @@ git commit -m "feat(diagnostic-web): add OBD code input"
 ### Task 12: Diagnostic Report PDF
 
 **Files:**
+
 - Create: `apps/diagnostic-agent/src/pdf/diagnostic-report.tsx`
 - Create: `apps/diagnostic-agent/src/routes/reports.ts`
 - Modify: `apps/diagnostic-agent/src/main.ts` (mount reports route)
@@ -961,6 +1008,7 @@ git commit -m "feat(diagnostic-web): add OBD code input"
 **Step 1: Create React-PDF report template**
 
 Reference `apps/api/src/pdf/` for patterns. Report includes:
+
 - Header: date, vehicle info, session ID
 - Summary: overall assessment with severity badge
 - Issues found: list with severity, description, recommended action, estimated cost
@@ -995,12 +1043,14 @@ git commit -m "feat(diagnostic): add diagnostic report PDF generation"
 ### Task 13: Diagnostic History Page
 
 **Files:**
+
 - Create: `apps/diagnostic-web/src/app/(app)/history/page.tsx`
 - Create: `apps/diagnostic-web/src/components/BottomNav.tsx`
 
 **Step 1: Create history page**
 
 List of past diagnostic sessions:
+
 - Card per session: date, vehicle, status, severity badge
 - Tap → navigate to `/chat?session=<id>` to view conversation
 - Empty state for new users
@@ -1008,6 +1058,7 @@ List of past diagnostic sessions:
 **Step 2: Create bottom navigation bar**
 
 Fixed bottom nav (mobile pattern):
+
 - Chat (message icon) — `/chat`
 - History (clock icon) — `/history`
 - Vehicles (car icon) — `/vehicles`
@@ -1039,6 +1090,7 @@ git commit -m "feat(diagnostic-web): add history page and bottom navigation"
 ### Task 14: Vehicle Management Page
 
 **Files:**
+
 - Create: `apps/diagnostic-web/src/app/(app)/vehicles/page.tsx`
 - Create: `apps/diagnostic-agent/src/routes/vehicles.ts`
 - Modify: `apps/diagnostic-agent/src/main.ts` (mount vehicles route)
@@ -1060,7 +1112,8 @@ git commit -m "feat(diagnostic-web): add history page and bottom navigation"
 
 **Step 3: Connect vehicles to diagnostic sessions**
 
-When starting a new chat, prompt user to select which vehicle they're asking about (if they have multiple).
+When starting a new chat, prompt user to select which vehicle they're asking about (if they have
+multiple).
 
 **Step 4: Commit**
 
@@ -1073,11 +1126,13 @@ git commit -m "feat(diagnostic): add vehicle management"
 ### Task 15: Settings Page
 
 **Files:**
+
 - Create: `apps/diagnostic-web/src/app/(app)/settings/page.tsx`
 
 **Step 1: Create settings page**
 
 Sections:
+
 - **Account**: email, sign out button
 - **Subscription**: current plan, upgrade/manage button (links to Stripe Portal)
 - **Theme**: light/dark/system toggle

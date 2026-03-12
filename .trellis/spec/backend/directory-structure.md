@@ -6,7 +6,8 @@
 
 ## Overview
 
-Two Deno backend apps share the same organizational pattern. A shared package provides schema-agnostic utilities. All backend apps deploy to Deno Deploy.
+Two Deno backend apps share the same organizational pattern. A shared package provides
+schema-agnostic utilities. All backend apps deploy to Deno Deploy.
 
 ---
 
@@ -91,19 +92,20 @@ export function createStripeTools() { return [...]; }
 
 ### Skill Directories
 
-A skill is a directory under `skills/` with these files: `index.ts`, `tools.ts`, `types.ts`, `prompt.ts`, and optionally domain-specific files like `pricing.ts`.
+A skill is a directory under `skills/` with these files: `index.ts`, `tools.ts`, `types.ts`,
+`prompt.ts`, and optionally domain-specific files like `pricing.ts`.
 
 ---
 
 ## Naming Conventions
 
-| Item | Convention | Example |
-|------|-----------|---------|
-| Files | `camelCase.ts` | `askUserQuestion.ts` |
-| Route files | Domain noun, lowercase | `estimates.ts`, `customers.ts` |
-| Tool files | Domain noun, lowercase | `stripe.ts`, `scheduling.ts` |
-| Entrypoint | `index.ts` (API) or `main.ts` (diagnostic) | — |
-| Middleware files | Feature name, lowercase | `auth.ts`, `credits.ts` |
+| Item             | Convention                                 | Example                        |
+| ---------------- | ------------------------------------------ | ------------------------------ |
+| Files            | `camelCase.ts`                             | `askUserQuestion.ts`           |
+| Route files      | Domain noun, lowercase                     | `estimates.ts`, `customers.ts` |
+| Tool files       | Domain noun, lowercase                     | `stripe.ts`, `scheduling.ts`   |
+| Entrypoint       | `index.ts` (API) or `main.ts` (diagnostic) | —                              |
+| Middleware files | Feature name, lowercase                    | `auth.ts`, `credits.ts`        |
 
 ---
 

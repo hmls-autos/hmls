@@ -1,29 +1,43 @@
 # Appointment System Implementation Plan (v2 — Post-Audit)
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan
+> task-by-task.
 
-**Goal:** Custom Supabase-backed appointment system with multi-mechanic support, overlap prevention via `tstzrange` exclusion constraints, full work order capture, rich chat UI components, and a hero quick-start widget. (Cal.com fully removed 2026-03-01.)
+**Goal:** Custom Supabase-backed appointment system with multi-mechanic support, overlap prevention
+via `tstzrange` exclusion constraints, full work order capture, rich chat UI components, and a hero
+quick-start widget. (Cal.com fully removed 2026-03-01.)
 
-**Architecture:** Supabase tables (`providers`, `provider_availability`, `provider_schedule_overrides`, `provider_services`, enhanced `bookings`) with a trigger-computed `blocked_range` and GiST exclusion constraint. Agent tools (`get_availability`, `create_booking`) handle scheduling. The frontend gets a hero booking widget, `SlotPicker`, and `BookingConfirmation` chat components via `onToolCallResultEvent`. Guest booking supported with optional login auto-fill.
+**Architecture:** Supabase tables (`providers`, `provider_availability`,
+`provider_schedule_overrides`, `provider_services`, enhanced `bookings`) with a trigger-computed
+`blocked_range` and GiST exclusion constraint. Agent tools (`get_availability`, `create_booking`)
+handle scheduling. The frontend gets a hero booking widget, `SlotPicker`, and `BookingConfirmation`
+chat components via `onToolCallResultEvent`. Guest booking supported with optional login auto-fill.
 
-**Tech Stack:** Supabase PostgreSQL (tstzrange, btree_gist, exclusion constraints), Drizzle ORM + raw SQL migrations, Deno/Hono API, Zod schemas, React 19 / Next.js 16 / Tailwind CSS 4 frontend, AG-UI protocol.
+**Tech Stack:** Supabase PostgreSQL (tstzrange, btree_gist, exclusion constraints), Drizzle ORM +
+raw SQL migrations, Deno/Hono API, Zod schemas, React 19 / Next.js 16 / Tailwind CSS 4 frontend,
+AG-UI protocol.
 
 **Design Doc:** `docs/plans/2026-02-22-appointment-system-design.md`
 
-**Audit Fixes Applied:** C1-C5 (all critical), I1-I8 (all important), O1-O4 (all ordering), M1-M9 (all minor). See `Audit Changelog` at bottom.
+**Audit Fixes Applied:** C1-C5 (all critical), I1-I8 (all important), O1-O4 (all ordering), M1-M9
+(all minor). See `Audit Changelog` at bottom.
 
 ---
 
 ### Task 1: Database Migration — Extension (Separate Transaction)
 
 **Files:**
+
 - Modify: `apps/api/src/db/migrate.ts`
 
-**Why separate:** The `btree_gist` extension must be committed before the exclusion constraint can reference it (audit C3).
+**Why separate:** The `btree_gist` extension must be committed before the exclusion constraint can
+reference it (audit C3).
 
 **Step 1: Refactor migrate.ts to support multiple migration steps**
 
-Change `migrate.ts` to run migrations as separate `await sql.unsafe()` calls instead of one big string. Keep the existing `migrations` string as `migrationStep1`, and add `migrationStep2` for the extension:
+Change `migrate.ts` to run migrations as separate `await sql.unsafe()` calls instead of one big
+string. Keep the existing `migrations` string as `migrationStep1`, and add `migrationStep2` for the
+extension:
 
 ```typescript
 // After the existing migrations string, add:
@@ -50,13 +64,14 @@ async function migrate() {
 
 **Step 2: Run and verify**
 
-Run: `deno task --cwd apps/api db:migrate`
-Expected: "Migrations completed successfully!"
+Run: `deno task --cwd apps/api db:migrate` Expected: "Migrations completed successfully!"
 
 Verify via Supabase MCP `execute_sql`:
+
 ```sql
 SELECT extname FROM pg_extension WHERE extname = 'btree_gist';
 ```
+
 Expected: 1 row.
 
 **Step 3: Commit**
@@ -71,6 +86,7 @@ git commit -m "feat(db): add btree_gist extension in separate migration step"
 ### Task 2: Database Migration — Provider Tables
 
 **Files:**
+
 - Modify: `apps/api/src/db/migrate.ts`
 
 **Step 1: Add provider tables as `migrationStep3`**
@@ -134,10 +150,10 @@ Add to `migrate()`: `console.log("Step 3: Provider tables..."); await sql.unsafe
 
 **Step 2: Run and verify**
 
-Run: `deno task --cwd apps/api db:migrate`
-Expected: "Migrations completed successfully!"
+Run: `deno task --cwd apps/api db:migrate` Expected: "Migrations completed successfully!"
 
-Verify: `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE 'provider%' ORDER BY table_name;`
+Verify:
+`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE 'provider%' ORDER BY table_name;`
 Expected: 4 rows.
 
 **Step 3: Commit**
@@ -152,11 +168,13 @@ git commit -m "feat(db): add provider tables with RLS for appointment system"
 ### Task 3: Database Migration — Enhanced Bookings + Trigger + Constraint
 
 **Files:**
+
 - Modify: `apps/api/src/db/migrate.ts`
 
 **Step 1: Add bookings enhancement as `migrationStep4`**
 
 Key fixes from audit:
+
 - Uses `scheduled_at` as appointment start (I1 — documented, not renamed)
 - Trigger computes `appointment_end` and `blocked_range` from `scheduled_at + duration_minutes`
 - Status constraint updated to include new statuses (I4)
@@ -286,7 +304,8 @@ ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
 `;
 ```
 
-**Step 2: Add exclusion constraint as `migrationStep5` (separate transaction — needs btree_gist committed)**
+**Step 2: Add exclusion constraint as `migrationStep5` (separate transaction — needs btree_gist
+committed)**
 
 ```typescript
 const migrationStep5 = `
@@ -320,6 +339,7 @@ CREATE INDEX IF NOT EXISTS idx_bookings_customer
 ```
 
 Add both to `migrate()`:
+
 ```
 console.log("Step 4: Enhanced bookings...");
 await sql.unsafe(migrationStep4);
@@ -332,10 +352,12 @@ await sql.unsafe(migrationStep5);
 Run: `deno task --cwd apps/api db:migrate`
 
 Verify trigger + constraint:
+
 ```sql
 SELECT tgname FROM pg_trigger WHERE tgrelid = 'bookings'::regclass AND tgname = 'trg_compute_blocked_range';
 SELECT conname FROM pg_constraint WHERE conrelid = 'bookings'::regclass AND conname = 'bookings_no_overlap';
 ```
+
 Expected: Both return 1 row.
 
 **Step 4: Commit**
@@ -350,18 +372,22 @@ git commit -m "feat(db): add enhanced bookings with tstzrange overlap prevention
 ### Task 4: Drizzle Schema Update
 
 **Files:**
+
 - Modify: `apps/api/src/db/schema.ts`
 
-**Audit fixes:** M1 (use native time type note), M2 (composite PK for providerServices), I1 (document scheduled_at = appointment start).
+**Audit fixes:** M1 (use native time type note), M2 (composite PK for providerServices), I1
+(document scheduled_at = appointment start).
 
 **Step 1: Add imports, custom type, and provider tables**
 
 Add `customType` import and `primaryKey` import:
+
 ```typescript
 import { customType, primaryKey } from "drizzle-orm/pg-core";
 ```
 
 Add `tstzrange` custom type:
+
 ```typescript
 const tstzrange = customType<{ data: string; driverParam: string }>({
   dataType() {
@@ -389,7 +415,8 @@ export const providers = pgTable("providers", {
 
 export const providerAvailability = pgTable("provider_availability", {
   id: serial("id").primaryKey(),
-  providerId: integer("provider_id").references(() => providers.id, { onDelete: "cascade" }).notNull(),
+  providerId: integer("provider_id").references(() => providers.id, { onDelete: "cascade" })
+    .notNull(),
   dayOfWeek: integer("day_of_week").notNull(),
   // Stored as TIME in DB; varchar here because Drizzle returns TIME as string
   startTime: varchar("start_time", { length: 8 }).notNull(),
@@ -398,7 +425,8 @@ export const providerAvailability = pgTable("provider_availability", {
 
 export const providerScheduleOverrides = pgTable("provider_schedule_overrides", {
   id: serial("id").primaryKey(),
-  providerId: integer("provider_id").references(() => providers.id, { onDelete: "cascade" }).notNull(),
+  providerId: integer("provider_id").references(() => providers.id, { onDelete: "cascade" })
+    .notNull(),
   overrideDate: varchar("override_date", { length: 10 }).notNull(),
   isAvailable: boolean("is_available").notNull().default(false),
   startTime: varchar("start_time", { length: 8 }),
@@ -407,7 +435,8 @@ export const providerScheduleOverrides = pgTable("provider_schedule_overrides", 
 });
 
 export const providerServices = pgTable("provider_services", {
-  providerId: integer("provider_id").references(() => providers.id, { onDelete: "cascade" }).notNull(),
+  providerId: integer("provider_id").references(() => providers.id, { onDelete: "cascade" })
+    .notNull(),
   serviceId: integer("service_id").references(() => services.id, { onDelete: "cascade" }).notNull(),
 }, (table) => ({
   pk: primaryKey({ columns: [table.providerId, table.serviceId] }),
@@ -457,8 +486,7 @@ export const bookings = pgTable("bookings", {
 
 **Step 3: Verify**
 
-Run: `deno task check:api`
-Expected: No errors.
+Run: `deno task check:api` Expected: No errors.
 
 **Step 4: Commit**
 
@@ -472,6 +500,7 @@ git commit -m "feat(db): add Drizzle schema for providers and enhanced bookings"
 ### Task 5: Seed Data — Provider + Schedule
 
 **Files:**
+
 - Create: `apps/api/src/db/seed-data/providers.json`
 - Modify: `apps/api/src/db/seed.ts`
 
@@ -504,12 +533,13 @@ git commit -m "feat(db): add Drizzle schema for providers and enhanced bookings"
 
 **Step 2: Update `apps/api/src/db/seed.ts`**
 
-Add import, cleanup, and seeding logic (see original plan Task 4 for code). Key addition: add cleanup for provider tables at top of `seed()` before existing clears, and add provider seeding after vehicle pricing.
+Add import, cleanup, and seeding logic (see original plan Task 4 for code). Key addition: add
+cleanup for provider tables at top of `seed()` before existing clears, and add provider seeding
+after vehicle pricing.
 
 **Step 3: Run and verify**
 
-Run: `deno task --cwd apps/api db:seed`
-Expected: Provider seeded with 6 schedule slots.
+Run: `deno task --cwd apps/api db:seed` Expected: Provider seeded with 6 schedule slots.
 
 **Step 4: Commit**
 
@@ -523,22 +553,25 @@ git commit -m "feat(db): add provider seed data with schedule and service links"
 ### Task 6: Update System Prompt — Work Order Flow (Moved Before Tools — O3)
 
 **Files:**
+
 - Modify: `apps/api/src/system-prompt.ts`
 
-**Why moved here:** Audit O3 — system prompt must be updated before building tools, so the agent uses the correct workflow during testing.
+**Why moved here:** Audit O3 — system prompt must be updated before building tools, so the agent
+uses the correct workflow during testing.
 
 **Step 1: Replace the "Booking Appointments" section**
 
 Replace with the work order flow (see original plan Task 8 for full text). Key additions from audit:
 
-- Add to prompt: "If no slots are available, apologize and ask the customer to call us at (949) 213-7073."
-- Add: "For authenticated customers, the system will automatically link your customer_id. For guests, collect name, email, and phone before booking."
+- Add to prompt: "If no slots are available, apologize and ask the customer to call us at (949)
+  213-7073."
+- Add: "For authenticated customers, the system will automatically link your customer_id. For
+  guests, collect name, email, and phone before booking."
 - Cal.com references removed (2026-03-01).
 
 **Step 2: Verify**
 
-Run: `deno task check:api`
-Expected: No errors.
+Run: `deno task check:api` Expected: No errors.
 
 **Step 3: Commit**
 
@@ -552,10 +585,13 @@ git commit -m "feat(api): update system prompt with work order booking flow"
 ### Task 7: Agent Tool — `get_availability` (With Audit Fixes)
 
 **Files:**
+
 - Create: `apps/api/src/tools/scheduling.ts`
 
 **Audit fixes applied:**
-- **C1:** Pass `serviceDurationMinutes` to `discretizeSlots`, not `totalBlockedMinutes`. Free ranges already subtract `blocked_range` (which includes buffers).
+
+- **C1:** Pass `serviceDurationMinutes` to `discretizeSlots`, not `totalBlockedMinutes`. Free ranges
+  already subtract `blocked_range` (which includes buffers).
 - **C2:** Timezone-aware timestamp construction using provider timezone.
 - **I3:** Batch all bookings in one query, group in memory.
 - **I6:** Guard against zero-increment infinite loop.
@@ -621,12 +657,12 @@ function discretizeSlots(
 lte(schema.providerScheduleOverrides.overrideDate, endDate),
 ```
 
-Also add: if no providers found and no slots, return a `message` field: "No availability found. Please call us at (949) 213-7073."
+Also add: if no providers found and no slots, return a `message` field: "No availability found.
+Please call us at (949) 213-7073."
 
 **Step 2: Verify**
 
-Run: `deno task check:api`
-Expected: No errors.
+Run: `deno task check:api` Expected: No errors.
 
 **Step 3: Commit**
 
@@ -640,10 +676,13 @@ git commit -m "feat(api): add get_availability tool with tz-aware slot computati
 ### Task 8: Agent Tool — `create_booking` + Customer Linking (With Audit Fixes)
 
 **Files:**
+
 - Modify: `apps/api/src/tools/scheduling.ts`
 
 **Audit fixes:**
-- **I2:** Accept `customerId` parameter (passed by the chat route from auth context). For guests, upsert customer from email.
+
+- **I2:** Accept `customerId` parameter (passed by the chat route from auth context). For guests,
+  upsert customer from email.
 - **I7:** Actually create/link customer record for guests.
 
 **Step 1: Add `create_booking` tool**
@@ -691,8 +730,7 @@ const [booking] = await db.insert(schema.bookings).values({
 
 **Step 2: Verify**
 
-Run: `deno task check:api`
-Expected: No errors.
+Run: `deno task check:api` Expected: No errors.
 
 **Step 3: Commit**
 
@@ -705,13 +743,15 @@ git commit -m "feat(api): add create_booking tool with customer linking and over
 
 ### Task 9: Wire Agent — Completed (Cal.com removed 2026-03-01)
 
-Cal.com integration (`calcom.ts`, env vars, AgentConfig fields) fully removed. Scheduling tools wired directly.
+Cal.com integration (`calcom.ts`, env vars, AgentConfig fields) fully removed. Scheduling tools
+wired directly.
 
 ---
 
 ### Task 10: Chat UI Components — SlotPicker + BookingConfirmation
 
 **Files:**
+
 - Create: `apps/web/components/SlotPicker.tsx`
 - Create: `apps/web/components/BookingConfirmation.tsx`
 
@@ -729,8 +769,7 @@ export type { BookingConfirmationData };
 
 **Step 3: Verify**
 
-Run: `cd apps/web && bun run typecheck`
-Expected: No errors.
+Run: `cd apps/web && bun run typecheck` Expected: No errors.
 
 **Step 4: Commit**
 
@@ -744,11 +783,14 @@ git commit -m "feat(web): add SlotPicker and BookingConfirmation chat components
 ### Task 11: Wire Chat UI — Tool Result Interception (With Audit Fixes)
 
 **Files:**
+
 - Modify: `apps/web/hooks/useAgentChat.ts`
 - Modify: `apps/web/app/chat/page.tsx`
 
 **Audit fixes:**
-- **C4:** Use `onToolCallResultEvent` (not `onToolCallEndEvent`) to get tool output. Field is `event.content` (string). Correlate with tool name via `toolCallId` tracking.
+
+- **C4:** Use `onToolCallResultEvent` (not `onToolCallEndEvent`) to get tool output. Field is
+  `event.content` (string). Correlate with tool name via `toolCallId` tracking.
 - **M6:** Wrap booking confirmations in `AnimatePresence`.
 - **M7:** Use exported types instead of `as any`.
 
@@ -809,21 +851,20 @@ Add `selectSlot` callback and update `clearMessages` (same as original).
 Import and wire components. Use typed props (no `as any`):
 
 ```tsx
-{pendingSlotPicker && (
-  <SlotPicker data={pendingSlotPicker} onSelect={selectSlot} disabled={isLoading} />
-)}
+{
+  pendingSlotPicker && (
+    <SlotPicker data={pendingSlotPicker} onSelect={selectSlot} disabled={isLoading} />
+  );
+}
 
 <AnimatePresence>
-  {bookingConfirmations.map((bc) => (
-    <BookingConfirmation key={bc.id} data={bc.data} />
-  ))}
-</AnimatePresence>
+  {bookingConfirmations.map((bc) => <BookingConfirmation key={bc.id} data={bc.data} />)}
+</AnimatePresence>;
 ```
 
 **Step 3: Verify**
 
-Run: `cd apps/web && bun run typecheck && bun run build`
-Expected: No errors.
+Run: `cd apps/web && bun run typecheck && bun run build` Expected: No errors.
 
 **Step 4: Commit**
 
@@ -837,19 +878,24 @@ git commit -m "feat(web): wire tool result interception for SlotPicker and Booki
 ### Task 12: Guest Chat Access + Hero Widget + Query Params (Merged — O4)
 
 **Files:**
+
 - Modify: `apps/web/app/chat/page.tsx` (remove login wall, add query params)
 - Create: `apps/web/components/BookingWidget.tsx`
 - Modify: `apps/web/components/sections/HeroNew.tsx`
 
-**Audit fix O4:** Merge guest access and hero widget into one task — the widget navigates to `/chat` which must already be guest-accessible.
+**Audit fix O4:** Merge guest access and hero widget into one task — the widget navigates to `/chat`
+which must already be guest-accessible.
 
-**Audit fix M4:** Use actual service names as query param values (not slugified). The agent matches against DB names.
+**Audit fix M4:** Use actual service names as query param values (not slugified). The agent matches
+against DB names.
 
 **Audit fix M5:** Wrap chat page in `<Suspense>` for `useSearchParams()`.
 
 **Step 1: Remove login wall in chat/page.tsx**
 
-Remove the `if (!user)` block that returns a login prompt. Let all users (guest + authenticated) access the chat. If authenticated, `accessToken` is passed to the agent; if not, it's `undefined` (already handled).
+Remove the `if (!user)` block that returns a login prompt. Let all users (guest + authenticated)
+access the chat. If authenticated, `accessToken` is passed to the agent; if not, it's `undefined`
+(already handled).
 
 **Step 2: Add query param reading**
 
@@ -873,7 +919,9 @@ useEffect(() => {
     if (service) parts.push(`I need ${/^[aeiou]/i.test(service) ? "an" : "a"} ${service}`);
     if (date) {
       const formatted = new Date(date + "T00:00:00").toLocaleDateString("en-US", {
-        weekday: "long", month: "long", day: "numeric",
+        weekday: "long",
+        month: "long",
+        day: "numeric",
       });
       parts.push(`on ${formatted}`);
     }
@@ -913,8 +961,7 @@ Import and render `<BookingWidget />` replacing the CTA buttons.
 
 **Step 5: Verify**
 
-Run: `cd apps/web && bun run lint && bun run typecheck && bun run build`
-Expected: No errors.
+Run: `cd apps/web && bun run lint && bun run typecheck && bun run build` Expected: No errors.
 
 **Step 6: Commit**
 
@@ -966,29 +1013,29 @@ Run `get_advisors` for security — verify RLS is enabled on all new tables.
 
 ## Audit Changelog
 
-| ID | Issue | Fix Applied |
-|----|-------|-------------|
-| **C1** | `discretizeSlots` double-counts buffers | Pass `serviceDurationMinutes` only; free ranges already buffer-aware |
-| **C2** | Timezone-naive timestamps | Added `toProviderTimestamp()` using provider timezone |
-| **C3** | btree_gist + constraint same transaction | Split into separate migration steps |
-| **C4** | Wrong AG-UI event for tool results | Use `onToolCallResultEvent` with `event.content`; track tool names via `toolCallId` |
-| **C5** | `23:59` end time truncates midnight | Use `24:00` (PostgreSQL accepts it) |
-| **I1** | `scheduled_at` vs `appointmentStart` naming | Documented in schema comments; not renamed |
-| **I2** | No `customer_id` for authenticated users | `create_booking` accepts `customerId` from auth context |
-| **I3** | N+1 queries in `get_availability` | Single batch query, group in memory |
-| **I4** | Missing status constraint update | Added status check in migration |
-| **I5** | No RLS on new tables | `ENABLE ROW LEVEL SECURITY` on all new tables |
-| **I6** | No zero-increment guard | Added `if (slotIncrementMinutes <= 0)` guard |
-| **I7** | Guest customer record not created | Guest upsert logic added to `create_booking` |
-| **I8** | Singular `pendingSlotPicker` overwritten | Documented: latest result shown; acceptable for v1 |
-| **M1** | `varchar` for TIME columns | Documented: Drizzle returns TIME as string |
-| **M2** | Missing composite PK | Added `primaryKey({ columns: [...] })` |
-| **M4** | Hardcoded service slugs | Use actual DB service names as values |
-| **M5** | Missing Suspense boundary | Wrap chat page in `<Suspense>` |
-| **M6** | Missing AnimatePresence on confirmations | Added |
-| **M7** | `as any` type assertions | Export and use typed interfaces |
-| **M8** | `lt` instead of `lte` for override end date | Changed to `lte` |
-| **M9** | Task 14 redundant after Task 7 | Merged into Task 9 |
-| **O1** | Delete calcom.ts too late | Completed — removed 2026-03-01 |
-| **O3** | System prompt after tools | Moved to Task 6 (before tools) |
-| **O4** | Guest access after hero widget | Merged into Task 12 |
+| ID     | Issue                                       | Fix Applied                                                                         |
+| ------ | ------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **C1** | `discretizeSlots` double-counts buffers     | Pass `serviceDurationMinutes` only; free ranges already buffer-aware                |
+| **C2** | Timezone-naive timestamps                   | Added `toProviderTimestamp()` using provider timezone                               |
+| **C3** | btree_gist + constraint same transaction    | Split into separate migration steps                                                 |
+| **C4** | Wrong AG-UI event for tool results          | Use `onToolCallResultEvent` with `event.content`; track tool names via `toolCallId` |
+| **C5** | `23:59` end time truncates midnight         | Use `24:00` (PostgreSQL accepts it)                                                 |
+| **I1** | `scheduled_at` vs `appointmentStart` naming | Documented in schema comments; not renamed                                          |
+| **I2** | No `customer_id` for authenticated users    | `create_booking` accepts `customerId` from auth context                             |
+| **I3** | N+1 queries in `get_availability`           | Single batch query, group in memory                                                 |
+| **I4** | Missing status constraint update            | Added status check in migration                                                     |
+| **I5** | No RLS on new tables                        | `ENABLE ROW LEVEL SECURITY` on all new tables                                       |
+| **I6** | No zero-increment guard                     | Added `if (slotIncrementMinutes <= 0)` guard                                        |
+| **I7** | Guest customer record not created           | Guest upsert logic added to `create_booking`                                        |
+| **I8** | Singular `pendingSlotPicker` overwritten    | Documented: latest result shown; acceptable for v1                                  |
+| **M1** | `varchar` for TIME columns                  | Documented: Drizzle returns TIME as string                                          |
+| **M2** | Missing composite PK                        | Added `primaryKey({ columns: [...] })`                                              |
+| **M4** | Hardcoded service slugs                     | Use actual DB service names as values                                               |
+| **M5** | Missing Suspense boundary                   | Wrap chat page in `<Suspense>`                                                      |
+| **M6** | Missing AnimatePresence on confirmations    | Added                                                                               |
+| **M7** | `as any` type assertions                    | Export and use typed interfaces                                                     |
+| **M8** | `lt` instead of `lte` for override end date | Changed to `lte`                                                                    |
+| **M9** | Task 14 redundant after Task 7              | Merged into Task 9                                                                  |
+| **O1** | Delete calcom.ts too late                   | Completed — removed 2026-03-01                                                      |
+| **O3** | System prompt after tools                   | Moved to Task 6 (before tools)                                                      |
+| **O4** | Guest access after hero widget              | Merged into Task 12                                                                 |

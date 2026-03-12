@@ -22,6 +22,7 @@ export const askUserQuestionTool = {
       .max(6)
       .describe("The choices the customer can pick from"),
   }),
+  // deno-lint-ignore require-await
   execute: async (
     _params: {
       question: string;

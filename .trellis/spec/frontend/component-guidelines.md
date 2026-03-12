@@ -6,7 +6,9 @@
 
 ## Overview
 
-Components use **React 19** with **Next.js App Router**. Server components are the default; client components explicitly declare `"use client"`. Props are defined as inline interfaces, never in separate type files.
+Components use **React 19** with **Next.js App Router**. Server components are the default; client
+components explicitly declare `"use client"`. Props are defined as inline interfaces, never in
+separate type files.
 
 ---
 

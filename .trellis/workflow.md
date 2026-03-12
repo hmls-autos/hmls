@@ -1,6 +1,7 @@
 # Development Workflow
 
-> Based on [Effective Harnesses for Long-Running Agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents)
+> Based on
+> [Effective Harnesses for Long-Running Agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents)
 
 ---
 
@@ -32,10 +33,12 @@
 ```
 
 This creates:
+
 - `.trellis/.developer` - Your identity file (gitignored, not committed)
 - `.trellis/workspace/<your-name>/` - Your personal workspace directory
 
 **Naming suggestions**:
+
 - Human developers: Use your name, e.g., `john-doe`
 - Cursor AI: `cursor-agent` or `cursor-<task>`
 - Claude Code: `claude-agent` or `claude-<task>`
@@ -65,6 +68,7 @@ cat .trellis/spec/backend/index.md
 ```
 
 **Why read both?**
+
 - Understand the full project architecture
 - Know coding standards for the entire codebase
 - See how frontend and backend interact
@@ -75,6 +79,7 @@ cat .trellis/spec/backend/index.md
 Based on your task, read the **detailed** guidelines:
 
 **Frontend Task**:
+
 ```bash
 cat .trellis/spec/frontend/hook-guidelines.md      # For hooks
 cat .trellis/spec/frontend/component-guidelines.md # For components
@@ -82,6 +87,7 @@ cat .trellis/spec/frontend/type-safety.md          # For types
 ```
 
 **Backend Task**:
+
 ```bash
 cat .trellis/spec/backend/database-guidelines.md   # For DB operations
 cat .trellis/spec/backend/type-safety.md           # For types
@@ -160,18 +166,21 @@ Use the unified context script:
 Based on what you'll develop, read the corresponding guidelines:
 
 **Frontend Development** (if applicable):
+
 ```bash
 # Read index first, then specific docs based on task
 cat .trellis/spec/frontend/index.md
 ```
 
 **Backend Development** (if applicable):
+
 ```bash
 # Read index first, then specific docs based on task
 cat .trellis/spec/backend/index.md
 ```
 
 **Cross-Layer Features**:
+
 ```bash
 # For features spanning multiple layers
 cat .trellis/spec/guides/cross-layer-thinking-guide.md
@@ -219,11 +228,13 @@ Use the task management script:
 ### Code Quality Checklist
 
 **Must pass before commit**:
+
 - [OK] Lint checks pass (project-specific command)
 - [OK] Type checks pass (if applicable)
 - [OK] Manual feature testing passes
 
 **Project-specific checks**:
+
 - See `.trellis/spec/frontend/quality-guidelines.md` for frontend
 - See `.trellis/spec/backend/quality-guidelines.md` for backend
 
@@ -243,6 +254,7 @@ After code is committed, use:
 ```
 
 This automatically:
+
 1. Detects current journal file
 2. Creates new file if 2000-line limit exceeded
 3. Appends session content
@@ -251,6 +263,7 @@ This automatically:
 ### Pre-end Checklist
 
 Use `/trellis:finish-work` command to run through:
+
 1. [OK] All code committed, commit message follows convention
 2. [OK] Session recorded via `add-session.sh`
 3. [OK] No lint/test errors
@@ -266,6 +279,7 @@ Use `/trellis:finish-work` command to run through:
 **Purpose**: Record each AI Agent session's work content
 
 **Structure** (Multi-developer support):
+
 ```
 workspace/
 |-- index.md              # Main index (Active Developers table)
@@ -275,6 +289,7 @@ workspace/
 ```
 
 **When to update**:
+
 - [OK] End of each session
 - [OK] Complete important task
 - [OK] Fix important bug
@@ -284,6 +299,7 @@ workspace/
 **Purpose**: Documented standards for consistent development
 
 **Structure** (Multi-doc format):
+
 ```
 spec/
 |-- frontend/           # Frontend docs (if applicable)
@@ -298,6 +314,7 @@ spec/
 ```
 
 **When to update**:
+
 - [OK] New pattern discovered
 - [OK] Bug fixed that reveals missing guidance
 - [OK] New convention established
@@ -317,6 +334,7 @@ tasks/
 ```
 
 **Commands**:
+
 ```bash
 ./.trellis/scripts/task.sh create "<title>" [--slug <name>]   # Create task directory
 ./.trellis/scripts/task.sh archive <name>  # Archive to archive/{year-month}/
@@ -361,10 +379,10 @@ tasks/
 
 ### Must-read Before Development
 
-| Task Type | Must-read Document |
-|-----------|-------------------|
-| Frontend work | `frontend/index.md` → relevant docs |
-| Backend work | `backend/index.md` → relevant docs |
+| Task Type           | Must-read Document                     |
+| ------------------- | -------------------------------------- |
+| Frontend work       | `frontend/index.md` → relevant docs    |
+| Backend work        | `backend/index.md` → relevant docs     |
 | Cross-Layer Feature | `guides/cross-layer-thinking-guide.md` |
 
 ### Commit Convention
@@ -373,8 +391,7 @@ tasks/
 git commit -m "type(scope): description"
 ```
 
-**Type**: feat, fix, docs, refactor, test, chore
-**Scope**: Module name (e.g., auth, api, ui)
+**Type**: feat, fix, docs, refactor, test, chore **Scope**: Module name (e.g., auth, api, ui)
 
 ### Common Commands
 
@@ -398,6 +415,7 @@ git commit -m "type(scope): description"
 ## Summary
 
 Following this workflow ensures:
+
 - [OK] Continuity across multiple sessions
 - [OK] Consistent code quality
 - [OK] Trackable progress

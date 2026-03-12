@@ -4,11 +4,11 @@ Mobile mechanic service platform — AI-powered estimates, Stripe payments, prov
 
 ## Architecture
 
-| App | Stack | Deploy |
-|-----|-------|--------|
-| `apps/web` | Next.js | Vercel |
-| `apps/api` | Deno + Hono | Deno Deploy |
-| `apps/diagnostic-web` | Next.js | Vercel |
+| App                     | Stack       | Deploy      |
+| ----------------------- | ----------- | ----------- |
+| `apps/web`              | Next.js     | Vercel      |
+| `apps/api`              | Deno + Hono | Deno Deploy |
+| `apps/diagnostic-web`   | Next.js     | Vercel      |
 | `apps/diagnostic-agent` | Deno + Hono | Deno Deploy |
 
 **Shared:** Supabase (Postgres), Drizzle ORM, Stripe, Resend, AG-UI protocol

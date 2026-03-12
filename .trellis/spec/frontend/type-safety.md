@@ -6,7 +6,8 @@
 
 ## Overview
 
-TypeScript strict mode is enabled. Types are always co-located with their consumers. The frontend uses **no Zod** — all types are compile-time only.
+TypeScript strict mode is enabled. Types are always co-located with their consumers. The frontend
+uses **no Zod** — all types are compile-time only.
 
 ---
 
@@ -29,7 +30,7 @@ import type { Metadata } from "next";
 import type { Session, User } from "@supabase/supabase-js";
 
 // Mixed import with inline type keyword
-import { type Message as AgentMessage, HttpAgent } from "@ag-ui/client";
+import { HttpAgent, type Message as AgentMessage } from "@ag-ui/client";
 import { type ReactNode, useEffect, useRef } from "react";
 ```
 

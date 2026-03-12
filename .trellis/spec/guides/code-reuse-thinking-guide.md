@@ -9,6 +9,7 @@
 **Duplicated code is the #1 source of inconsistency bugs.**
 
 When you copy-paste or rewrite existing logic:
+
 - Bug fixes don't propagate
 - Behavior diverges over time
 - Codebase becomes harder to understand
@@ -29,11 +30,11 @@ grep -r "keyword" .
 
 ### Step 2: Ask These Questions
 
-| Question | If Yes... |
-|----------|-----------|
-| Does a similar function exist? | Use or extend it |
-| Is this pattern used elsewhere? | Follow the existing pattern |
-| Could this be a shared utility? | Create it in the right place |
+| Question                             | If Yes...                    |
+| ------------------------------------ | ---------------------------- |
+| Does a similar function exist?       | Use or extend it             |
+| Is this pattern used elsewhere?      | Follow the existing pattern  |
+| Could this be a shared utility?      | Create it in the right place |
 | Am I copying code from another file? | **STOP** - extract to shared |
 
 ---
@@ -63,11 +64,13 @@ grep -r "keyword" .
 ## When to Abstract
 
 **Abstract when**:
+
 - Same code appears 3+ times
 - Logic is complex enough to have bugs
 - Multiple people might need this
 
 **Don't abstract when**:
+
 - Only used once
 - Trivial one-liner
 - Abstraction would be more complex than duplication

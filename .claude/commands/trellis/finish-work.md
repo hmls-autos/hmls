@@ -27,6 +27,7 @@ pnpm test
 ### 2. Documentation Sync
 
 **Structure Docs**:
+
 - [ ] Does `.trellis/spec/backend/` need updates?
   - New patterns, new modules, new conventions
 - [ ] Does `.trellis/spec/frontend/` need updates?
@@ -34,8 +35,10 @@ pnpm test
 - [ ] Does `.trellis/spec/guides/` need updates?
   - New cross-layer flows, lessons from bugs
 
-**Key Question**: 
-> "If I fixed a bug or discovered something non-obvious, should I document it so future me (or others) won't hit the same issue?"
+**Key Question**:
+
+> "If I fixed a bug or discovered something non-obvious, should I document it so future me (or
+> others) won't hit the same issue?"
 
 If YES -> Update the relevant spec doc.
 
@@ -92,13 +95,13 @@ git diff --name-only
 
 ## Common Oversights
 
-| Oversight | Consequence | Check |
-|-----------|-------------|-------|
-| Structure docs not updated | Others don't know the change | Check .trellis/spec/ |
-| Migration not created | Schema out of sync | Check db/migrations/ |
-| Types not synced | Runtime errors | Check shared types |
-| Tests not updated | False confidence | Run full test suite |
-| Console.log left in | Noisy production logs | Search for console.log |
+| Oversight                  | Consequence                  | Check                  |
+| -------------------------- | ---------------------------- | ---------------------- |
+| Structure docs not updated | Others don't know the change | Check .trellis/spec/   |
+| Migration not created      | Schema out of sync           | Check db/migrations/   |
+| Types not synced           | Runtime errors               | Check shared types     |
+| Tests not updated          | False confidence             | Run full test suite    |
+| Console.log left in        | Noisy production logs        | Search for console.log |
 
 ---
 

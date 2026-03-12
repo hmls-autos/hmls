@@ -6,7 +6,8 @@
 
 ## Overview
 
-The shared `@hmls/shared/errors` package provides a standardized error system. The API app uses it consistently; the diagnostic-agent has some inconsistencies to be aware of.
+The shared `@hmls/shared/errors` package provides a standardized error system. The API app uses it
+consistently; the diagnostic-agent has some inconsistencies to be aware of.
 
 ---
 
@@ -27,7 +28,8 @@ class AppError extends Error {
 
 ### ErrorCode Enum
 
-`BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_ERROR`, `INTERNAL_ERROR`, `EXTERNAL_SERVICE_ERROR`, `DATABASE_ERROR`
+`BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_ERROR`, `INTERNAL_ERROR`,
+`EXTERNAL_SERVICE_ERROR`, `DATABASE_ERROR`
 
 ### Errors Factory
 
@@ -104,6 +106,8 @@ Both chat endpoints wrap SSE streams with try/catch and emit AG-UI `RUN_ERROR` e
 ## Forbidden Patterns
 
 - Do not return `{ error: "string" }` — always use `{ error: { code, message } }` format
-- Do not return raw `new Response()` in Hono routes — use `c.json()` to stay in the Hono middleware chain
-- Do not throw errors inside AI tools — return error info in `toolResult()` so the agent can handle it
+- Do not return raw `new Response()` in Hono routes — use `c.json()` to stay in the Hono middleware
+  chain
+- Do not throw errors inside AI tools — return error info in `toolResult()` so the agent can handle
+  it
 - Do not skip the global `app.onError` handler in new Deno apps — add it to every Hono app

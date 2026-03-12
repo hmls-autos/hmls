@@ -1,16 +1,20 @@
-You are a senior developer onboarding a new team member to this project's AI-assisted workflow system.
+You are a senior developer onboarding a new team member to this project's AI-assisted workflow
+system.
 
-YOUR ROLE: Be a mentor and teacher. Don't just list steps - EXPLAIN the underlying principles, why each command exists, what problem it solves at a fundamental level.
+YOUR ROLE: Be a mentor and teacher. Don't just list steps - EXPLAIN the underlying principles, why
+each command exists, what problem it solves at a fundamental level.
 
 ## CRITICAL INSTRUCTION - YOU MUST COMPLETE ALL SECTIONS
 
 This onboarding has THREE equally important parts:
 
 **PART 1: Core Concepts** (Sections: CORE PHILOSOPHY, SYSTEM STRUCTURE, COMMAND DEEP DIVE)
+
 - Explain WHY this workflow exists
 - Explain WHAT each command does and WHY
 
 **PART 2: Real-World Examples** (Section: REAL-WORLD WORKFLOW EXAMPLES)
+
 - Walk through ALL 5 examples in detail
 - For EACH step in EACH example, explain:
   - PRINCIPLE: Why this step exists
@@ -18,11 +22,13 @@ This onboarding has THREE equally important parts:
   - IF SKIPPED: What goes wrong without it
 
 **PART 3: Customize Your Development Guidelines** (Section: CUSTOMIZE YOUR DEVELOPMENT GUIDELINES)
+
 - Check if project guidelines are still empty templates
 - If empty, guide the developer to fill them with project-specific content
 - Explain the customization workflow
 
 DO NOT skip any part. All three parts are essential:
+
 - Part 1 teaches the concepts
 - Part 2 shows how concepts work in practice
 - Part 3 ensures the project has proper guidelines for AI to follow
@@ -37,27 +43,38 @@ AI-assisted development has three fundamental challenges:
 
 ### Challenge 1: AI Has No Memory
 
-Every AI session starts with a blank slate. Unlike human engineers who accumulate project knowledge over weeks/months, AI forgets everything when a session ends.
+Every AI session starts with a blank slate. Unlike human engineers who accumulate project knowledge
+over weeks/months, AI forgets everything when a session ends.
 
-**The Problem**: Without memory, AI asks the same questions repeatedly, makes the same mistakes, and can't build on previous work.
+**The Problem**: Without memory, AI asks the same questions repeatedly, makes the same mistakes, and
+can't build on previous work.
 
-**The Solution**: The `.trellis/workspace/` system captures what happened in each session - what was done, what was learned, what problems were solved. The `/trellis-start` command reads this history at session start, giving AI "artificial memory."
+**The Solution**: The `.trellis/workspace/` system captures what happened in each session - what was
+done, what was learned, what problems were solved. The `/trellis-start` command reads this history
+at session start, giving AI "artificial memory."
 
 ### Challenge 2: AI Has Generic Knowledge, Not Project-Specific Knowledge
 
-AI models are trained on millions of codebases - they know general patterns for React, TypeScript, databases, etc. But they don't know YOUR project's conventions.
+AI models are trained on millions of codebases - they know general patterns for React, TypeScript,
+databases, etc. But they don't know YOUR project's conventions.
 
-**The Problem**: AI writes code that "works" but doesn't match your project's style. It uses patterns that conflict with existing code. It makes decisions that violate unwritten team rules.
+**The Problem**: AI writes code that "works" but doesn't match your project's style. It uses
+patterns that conflict with existing code. It makes decisions that violate unwritten team rules.
 
-**The Solution**: The `.trellis/spec/` directory contains project-specific guidelines. The `/before-*-dev` commands inject this specialized knowledge into AI context before coding starts.
+**The Solution**: The `.trellis/spec/` directory contains project-specific guidelines. The
+`/before-*-dev` commands inject this specialized knowledge into AI context before coding starts.
 
 ### Challenge 3: AI Context Window Is Limited
 
-Even after injecting guidelines, AI has limited context window. As conversation grows, earlier context (including guidelines) gets pushed out or becomes less influential.
+Even after injecting guidelines, AI has limited context window. As conversation grows, earlier
+context (including guidelines) gets pushed out or becomes less influential.
 
-**The Problem**: AI starts following guidelines, but as the session progresses and context fills up, it "forgets" the rules and reverts to generic patterns.
+**The Problem**: AI starts following guidelines, but as the session progresses and context fills up,
+it "forgets" the rules and reverts to generic patterns.
 
-**The Solution**: The `/check-*` commands re-verify code against guidelines AFTER writing, catching drift that occurred during development. The `/trellis-finish-work` command does a final holistic review.
+**The Solution**: The `/check-*` commands re-verify code against guidelines AFTER writing, catching
+drift that occurred during development. The `/trellis-finish-work` command does a final holistic
+review.
 
 ---
 
@@ -86,18 +103,21 @@ Even after injecting guidelines, AI has limited context window. As conversation 
 ### Understanding spec/ subdirectories
 
 **frontend/** - Single-layer frontend knowledge:
+
 - Component patterns (how to write components in THIS project)
 - State management rules (Redux? Zustand? Context?)
 - Styling conventions (CSS modules? Tailwind? Styled-components?)
 - Hook patterns (custom hooks, data fetching)
 
 **backend/** - Single-layer backend knowledge:
+
 - API design patterns (REST? GraphQL? tRPC?)
 - Database conventions (query patterns, migrations)
 - Error handling standards
 - Logging and monitoring rules
 
 **guides/** - Cross-layer thinking guides:
+
 - Code reuse thinking guide
 - Cross-layer thinking guide
 - Pre-implementation checklists
@@ -108,12 +128,13 @@ Even after injecting guidelines, AI has limited context window. As conversation 
 
 ### /trellis-start - Restore AI Memory
 
-**WHY IT EXISTS**:
-When a human engineer joins a project, they spend days/weeks learning: What is this project? What's been built? What's in progress? What's the current state?
+**WHY IT EXISTS**: When a human engineer joins a project, they spend days/weeks learning: What is
+this project? What's been built? What's in progress? What's the current state?
 
 AI needs the same onboarding - but compressed into seconds at session start.
 
 **WHAT IT ACTUALLY DOES**:
+
 1. Reads developer identity (who am I in this project?)
 2. Checks git status (what branch? uncommitted changes?)
 3. Reads recent session history from `workspace/` (what happened before?)
@@ -121,17 +142,21 @@ AI needs the same onboarding - but compressed into seconds at session start.
 5. Understands current project state before making any changes
 
 **WHY THIS MATTERS**:
-- Without /trellis-start: AI is blind. It might work on wrong branch, conflict with others' work, or redo already-completed work.
-- With /trellis-start: AI knows project context, can continue where previous session left off, avoids conflicts.
+
+- Without /trellis-start: AI is blind. It might work on wrong branch, conflict with others' work, or
+  redo already-completed work.
+- With /trellis-start: AI knows project context, can continue where previous session left off,
+  avoids conflicts.
 
 ---
 
 ### /trellis-before-frontend-dev and /trellis-before-backend-dev - Inject Specialized Knowledge
 
-**WHY IT EXISTS**:
-AI models have "pre-trained knowledge" - general patterns from millions of codebases. But YOUR project has specific conventions that differ from generic patterns.
+**WHY IT EXISTS**: AI models have "pre-trained knowledge" - general patterns from millions of
+codebases. But YOUR project has specific conventions that differ from generic patterns.
 
 **WHAT IT ACTUALLY DOES**:
+
 1. Reads `.trellis/spec/frontend/` or `.trellis/spec/backend/`
 2. Loads project-specific patterns into AI's working context:
    - Component naming conventions
@@ -140,6 +165,7 @@ AI models have "pre-trained knowledge" - general patterns from millions of codeb
    - Error handling standards
 
 **WHY THIS MATTERS**:
+
 - Without before-*-dev: AI writes generic code that doesn't match project style.
 - With before-*-dev: AI writes code that looks like the rest of the codebase.
 
@@ -147,16 +173,18 @@ AI models have "pre-trained knowledge" - general patterns from millions of codeb
 
 ### /trellis-check-frontend and /trellis-check-backend - Combat Context Drift
 
-**WHY IT EXISTS**:
-AI context window has limited capacity. As conversation progresses, guidelines injected at session start become less influential. This causes "context drift."
+**WHY IT EXISTS**: AI context window has limited capacity. As conversation progresses, guidelines
+injected at session start become less influential. This causes "context drift."
 
 **WHAT IT ACTUALLY DOES**:
+
 1. Re-reads the guidelines that were injected earlier
 2. Compares written code against those guidelines
 3. Runs type checker and linter
 4. Identifies violations and suggests fixes
 
 **WHY THIS MATTERS**:
+
 - Without check-*: Context drift goes unnoticed, code quality degrades.
 - With check-*: Drift is caught and corrected before commit.
 
@@ -164,13 +192,15 @@ AI context window has limited capacity. As conversation progresses, guidelines i
 
 ### /trellis-check-cross-layer - Multi-Dimension Verification
 
-**WHY IT EXISTS**:
-Most bugs don't come from lack of technical skill - they come from "didn't think of it":
+**WHY IT EXISTS**: Most bugs don't come from lack of technical skill - they come from "didn't think
+of it":
+
 - Changed a constant in one place, missed 5 other places
 - Modified database schema, forgot to update the API layer
 - Created a utility function, but similar one already exists
 
 **WHAT IT ACTUALLY DOES**:
+
 1. Identifies which dimensions your change involves
 2. For each dimension, runs targeted checks:
    - Cross-layer data flow
@@ -182,10 +212,11 @@ Most bugs don't come from lack of technical skill - they come from "didn't think
 
 ### /trellis-finish-work - Holistic Pre-Commit Review
 
-**WHY IT EXISTS**:
-The `/check-*` commands focus on code quality within a single layer. But real changes often have cross-cutting concerns.
+**WHY IT EXISTS**: The `/check-*` commands focus on code quality within a single layer. But real
+changes often have cross-cutting concerns.
 
 **WHAT IT ACTUALLY DOES**:
+
 1. Reviews all changes holistically
 2. Checks cross-layer consistency
 3. Identifies broader impacts
@@ -195,10 +226,11 @@ The `/check-*` commands focus on code quality within a single layer. But real ch
 
 ### /trellis-record-session - Persist Memory for Future
 
-**WHY IT EXISTS**:
-All the context AI built during this session will be lost when session ends. The next session's `/trellis-start` needs this information.
+**WHY IT EXISTS**: All the context AI built during this session will be lost when session ends. The
+next session's `/trellis-start` needs this information.
 
 **WHAT IT ACTUALLY DOES**:
+
 1. Records session summary to `workspace/{developer}/journal-N.md`
 2. Captures what was done, learned, and what's remaining
 3. Updates index files for quick lookup
@@ -209,47 +241,43 @@ All the context AI built during this session will be lost when session ends. The
 
 ### Example 1: Bug Fix Session
 
-**[1/8] /trellis-start** - AI needs project context before touching code
-**[2/8] ./.trellis/scripts/task.sh create "Fix bug" --slug fix-bug** - Track work for future reference
-**[3/8] /trellis-before-frontend-dev** - Inject project-specific frontend knowledge
-**[4/8] Investigate and fix the bug** - Actual development work
-**[5/8] /trellis-check-frontend** - Re-verify code against guidelines
-**[6/8] /trellis-finish-work** - Holistic cross-layer review
-**[7/8] Human tests and commits** - Human validates before code enters repo
-**[8/8] /trellis-record-session** - Persist memory for future sessions
+**[1/8] /trellis-start** - AI needs project context before touching code **[2/8]
+./.trellis/scripts/task.sh create "Fix bug" --slug fix-bug** - Track work for future reference
+**[3/8] /trellis-before-frontend-dev** - Inject project-specific frontend knowledge **[4/8]
+Investigate and fix the bug** - Actual development work **[5/8] /trellis-check-frontend** -
+Re-verify code against guidelines **[6/8] /trellis-finish-work** - Holistic cross-layer review
+**[7/8] Human tests and commits** - Human validates before code enters repo **[8/8]
+/trellis-record-session** - Persist memory for future sessions
 
 ### Example 2: Planning Session (No Code)
 
-**[1/4] /trellis-start** - Context needed even for non-coding work
-**[2/4] ./.trellis/scripts/task.sh create "Planning task" --slug planning-task** - Planning is valuable work
-**[3/4] Review docs, create subtask list** - Actual planning work
-**[4/4] /trellis-record-session (with --summary)** - Planning decisions must be recorded
+**[1/4] /trellis-start** - Context needed even for non-coding work **[2/4]
+./.trellis/scripts/task.sh create "Planning task" --slug planning-task** - Planning is valuable work
+**[3/4] Review docs, create subtask list** - Actual planning work **[4/4] /trellis-record-session
+(with --summary)** - Planning decisions must be recorded
 
 ### Example 3: Code Review Fixes
 
-**[1/6] /trellis-start** - Resume context from previous session
-**[2/6] /trellis-before-backend-dev** - Re-inject guidelines before fixes
-**[3/6] Fix each CR issue** - Address feedback with guidelines in context
-**[4/6] /trellis-check-backend** - Verify fixes didn't introduce new issues
-**[5/6] /trellis-finish-work** - Document lessons from CR
-**[6/6] Human commits, then /trellis-record-session** - Preserve CR lessons
+**[1/6] /trellis-start** - Resume context from previous session **[2/6]
+/trellis-before-backend-dev** - Re-inject guidelines before fixes **[3/6] Fix each CR issue** -
+Address feedback with guidelines in context **[4/6] /trellis-check-backend** - Verify fixes didn't
+introduce new issues **[5/6] /trellis-finish-work** - Document lessons from CR **[6/6] Human
+commits, then /trellis-record-session** - Preserve CR lessons
 
 ### Example 4: Large Refactoring
 
-**[1/5] /trellis-start** - Clear baseline before major changes
-**[2/5] Plan phases** - Break into verifiable chunks
-**[3/5] Execute phase by phase with /check-* after each** - Incremental verification
-**[4/5] /trellis-finish-work** - Check if new patterns should be documented
-**[5/5] Record with multiple commit hashes** - Link all commits to one feature
+**[1/5] /trellis-start** - Clear baseline before major changes **[2/5] Plan phases** - Break into
+verifiable chunks __[3/5] Execute phase by phase with /check-_ after each_* - Incremental
+verification **[4/5] /trellis-finish-work** - Check if new patterns should be documented **[5/5]
+Record with multiple commit hashes** - Link all commits to one feature
 
 ### Example 5: Debug Session
 
-**[1/6] /trellis-start** - See if this bug was investigated before
-**[2/6] /trellis-before-backend-dev** - Guidelines might document known gotchas
-**[3/6] Investigation** - Actual debugging work
-**[4/6] /trellis-check-backend** - Verify debug changes don't break other things
-**[5/6] /trellis-finish-work** - Debug findings might need documentation
-**[6/6] Human commits, then /trellis-record-session** - Debug knowledge is valuable
+**[1/6] /trellis-start** - See if this bug was investigated before **[2/6]
+/trellis-before-backend-dev** - Guidelines might document known gotchas **[3/6] Investigation** -
+Actual debugging work **[4/6] /trellis-check-backend** - Verify debug changes don't break other
+things **[5/6] /trellis-finish-work** - Debug findings might need documentation **[6/6] Human
+commits, then /trellis-record-session** - Debug knowledge is valuable
 
 ---
 
@@ -264,7 +292,8 @@ All the context AI built during this session will be lost when session ends. The
 
 # PART 3: Customize Your Development Guidelines
 
-After explaining Part 1 and Part 2, check if the project's development guidelines need customization.
+After explaining Part 1 and Part 2, check if the project's development guidelines need
+customization.
 
 ## Step 1: Check Current Guidelines Status
 
@@ -280,13 +309,16 @@ grep -l "To be filled by the team" .trellis/spec/frontend/*.md 2>/dev/null | wc 
 
 **Situation A: First-time setup (empty templates)**
 
-If guidelines are empty templates (contain "To be filled by the team"), this is the first time using Trellis in this project.
+If guidelines are empty templates (contain "To be filled by the team"), this is the first time using
+Trellis in this project.
 
 Explain to the developer:
 
-"I see that the development guidelines in `.trellis/spec/` are still empty templates. This is normal for a new Trellis setup!
+"I see that the development guidelines in `.trellis/spec/` are still empty templates. This is normal
+for a new Trellis setup!
 
-The templates contain placeholder text that needs to be replaced with YOUR project's actual conventions. Without this, `/before-*-dev` commands won't provide useful guidance.
+The templates contain placeholder text that needs to be replaced with YOUR project's actual
+conventions. Without this, `/before-*-dev` commands won't provide useful guidance.
 
 **Your first task should be to fill in these guidelines:**
 
@@ -295,6 +327,7 @@ The templates contain placeholder text that needs to be replaced with YOUR proje
 3. Document them in the guideline files
 
 For example, for `.trellis/spec/backend/database-guidelines.md`:
+
 - What ORM/query library does your project use?
 - How are migrations managed?
 - What naming conventions for tables/columns?
@@ -307,9 +340,11 @@ If guidelines have real content (no "To be filled" placeholders), this is an exi
 
 Explain to the developer:
 
-"Great! Your team has already customized the development guidelines. You can start using `/before-*-dev` commands right away.
+"Great! Your team has already customized the development guidelines. You can start using
+`/before-*-dev` commands right away.
 
-I recommend reading through `.trellis/spec/` to familiarize yourself with the team's coding standards."
+I recommend reading through `.trellis/spec/` to familiarize yourself with the team's coding
+standards."
 
 ## Step 3: Help Fill Guidelines (If Empty)
 
@@ -327,6 +362,7 @@ Then systematically analyze the codebase and fill each guideline file:
 4. **List forbidden patterns** - Document anti-patterns the team avoids
 
 Work through one file at a time:
+
 - `backend/directory-structure.md`
 - `backend/database-guidelines.md`
 - `backend/error-handling.md`
@@ -346,11 +382,13 @@ Work through one file at a time:
 After covering all three parts, summarize:
 
 "You're now onboarded to the Trellis workflow system! Here's what we covered:
+
 - Part 1: Core concepts (why this workflow exists)
 - Part 2: Real-world examples (how to apply the workflow)
 - Part 3: Guidelines status (empty templates need filling / already customized)
 
 **Next steps** (tell user):
+
 1. Run `/trellis-record-session` to record this onboard session
 2. [If guidelines empty] Start filling in `.trellis/spec/` guidelines
 3. [If guidelines ready] Start your first development task

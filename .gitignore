@@ -24,3 +24,4 @@ build
 .pr-body.tmp
 .vercel
 .env*.local
+apps/fixo-web/.env.vercel

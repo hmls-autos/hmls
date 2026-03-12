@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, eq, gte, ilike, inArray, lte, sql } from "drizzle-orm";
+import { and, gte, ilike, inArray, lte, sql } from "drizzle-orm";
 import { db, schema } from "../../db/client.ts";
 import { toolResult } from "@hmls/shared/tool-result";
 

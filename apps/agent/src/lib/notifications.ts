@@ -26,7 +26,9 @@ const STATUS_EMAILS: Record<string, EmailTemplate> = {
     body: (ctx) =>
       `Hi ${ctx.customerName},\n\nYour estimate${
         ctx.estimateTotal ? ` (~${ctx.estimateTotal})` : ""
-      } is ready for review.\n\nView details and approve or decline with one tap:\n${ctx.reviewUrl ?? `${ctx.portalUrl}/orders`}\n\nThanks,\nHMLS Team`,
+      } is ready for review.\n\nView details and approve or decline with one tap:\n${
+        ctx.reviewUrl ?? `${ctx.portalUrl}/orders`
+      }\n\nThanks,\nHMLS Team`,
   },
   customer_approved: {
     subject: "Estimate Approved — We're Preparing Your Quote",
@@ -156,8 +158,7 @@ export async function notifyOrderStatusChange(
         ctx.estimateTotal = `$${(estimate.priceRangeLow / 100).toFixed(0)}–$${
           (estimate.priceRangeHigh / 100).toFixed(0)
         }`;
-        ctx.reviewUrl =
-          `https://hmls.autos/estimate/${estimate.id}?token=${estimate.shareToken}`;
+        ctx.reviewUrl = `https://hmls.autos/estimate/${estimate.id}?token=${estimate.shareToken}`;
       }
     }
 

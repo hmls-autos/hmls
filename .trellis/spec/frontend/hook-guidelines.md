@@ -6,7 +6,8 @@
 
 ## Overview
 
-All custom hooks live in `apps/web/hooks/`. Data fetching uses **SWR** with a shared `fetcher` that auto-injects Supabase auth tokens. Exception: `useAuth` is co-located with `AuthProvider`.
+All custom hooks live in `apps/web/hooks/`. Data fetching uses **SWR** with a shared `fetcher` that
+auto-injects Supabase auth tokens. Exception: `useAuth` is co-located with `AuthProvider`.
 
 ---
 
@@ -38,7 +39,7 @@ interface Customer {
 
 export function useCustomer(id: number | null) {
   const { data, error, isLoading, mutate } = useSWR<Customer>(
-    id ? `/api/customers/${id}` : null,  // null key = don't fetch
+    id ? `/api/customers/${id}` : null, // null key = don't fetch
     fetcher,
   );
 

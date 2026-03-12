@@ -1,14 +1,13 @@
 # Custom Appointment System Design
 
-**Date:** 2026-02-22
-**Status:** Implemented — Cal.com fully removed 2026-03-01
-**Replaces:** Former Cal.com integration (deleted)
+**Date:** 2026-02-22 **Status:** Implemented — Cal.com fully removed 2026-03-01 **Replaces:** Former
+Cal.com integration (deleted)
 
 ## Overview
 
-Custom Supabase-backed appointment
-system. The system is fully agentic — the AI chat agent drives the booking flow using rich UI
-components. A hero quick-start widget on the landing page pre-seeds the conversation with context.
+Custom Supabase-backed appointment system. The system is fully agentic — the AI chat agent drives
+the booking flow using rich UI components. A hero quick-start widget on the landing page pre-seeds
+the conversation with context.
 
 ### Key Requirements
 
@@ -193,14 +192,14 @@ CREATE INDEX idx_bookings_customer
 
 ### Design Decisions
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Time representation | `tstzrange` closed-open `[)` | Eliminates off-by-one overlaps; enables exclusion constraints |
-| Overlap prevention | `EXCLUDE USING gist` | Database-enforced; handles race conditions automatically |
-| Slot generation | Continuous ranges, discretized at query time | Accommodates variable-duration services (30-min to 4-hr) |
-| Buffer/travel time | Per-booking `buffer_before/after`, trigger-computed | Customer sees clean times; DB blocks expanded window |
-| Availability model | Recurring schedule + date overrides | Matches industry standard (Calendly pattern) |
-| Race condition handling | Optimistic insert, catch `23P01` error | Simplest correct approach for low-medium concurrency |
+| Decision                | Choice                                              | Rationale                                                     |
+| ----------------------- | --------------------------------------------------- | ------------------------------------------------------------- |
+| Time representation     | `tstzrange` closed-open `[)`                        | Eliminates off-by-one overlaps; enables exclusion constraints |
+| Overlap prevention      | `EXCLUDE USING gist`                                | Database-enforced; handles race conditions automatically      |
+| Slot generation         | Continuous ranges, discretized at query time        | Accommodates variable-duration services (30-min to 4-hr)      |
+| Buffer/travel time      | Per-booking `buffer_before/after`, trigger-computed | Customer sees clean times; DB blocks expanded window          |
+| Availability model      | Recurring schedule + date overrides                 | Matches industry standard (Calendly pattern)                  |
+| Race condition handling | Optimistic insert, catch `23P01` error              | Simplest correct approach for low-medium concurrency          |
 
 ## Agent Tools
 
@@ -209,12 +208,14 @@ CREATE INDEX idx_bookings_customer
 Custom availability query tool.
 
 **Input:**
+
 - `serviceType` (string, required) — service to look up duration
 - `date` (string, required) — YYYY-MM-DD, or date range start
 - `endDate` (string, optional) — defaults to 7 days from `date`
 - `preferredMechanicId` (number, optional) — try this mechanic first
 
 **Logic:**
+
 1. Look up service duration from `services` table
 2. Query `provider_availability` for each day in range, filtered by `provider_services`
 3. Exclude providers blocked by `provider_schedule_overrides`
@@ -224,6 +225,7 @@ Custom availability query tool.
 7. Return slots grouped by provider
 
 **Output:**
+
 ```json
 {
   "slots": [
@@ -250,6 +252,7 @@ Custom availability query tool.
 Custom booking creation tool.
 
 **Input:**
+
 ```typescript
 {
   // Vehicle
@@ -296,6 +299,7 @@ Custom booking creation tool.
 ```
 
 **Logic:**
+
 1. Compute `appointment_end` from `appointmentStart + durationMinutes`
 2. Insert into `bookings` with `status: 'requested'`
 3. Trigger auto-computes `blocked_range` with buffer
@@ -304,6 +308,7 @@ Custom booking creation tool.
 6. Return booking confirmation
 
 **Output:**
+
 ```json
 {
   "success": true,
@@ -336,8 +341,8 @@ Replaces the current two-button CTA in `HeroNew.tsx`.
 - **Submit**: Navigates to `/chat?service=oil_change&date=2026-02-24&location=92612`
 - **Mobile**: Stacks vertically, full-width inputs
 
-The chat page reads query params and the agent opens with pre-seeded context:
-*"I see you're looking for an oil change on Feb 24 near 92612. Let me check availability..."*
+The chat page reads query params and the agent opens with pre-seeded context: _"I see you're looking
+for an oil change on Feb 24 near 92612. Let me check availability..."_
 
 Guest-friendly — no login required to start the conversation.
 
@@ -376,7 +381,7 @@ Rendered when `create_booking` succeeds.
 ```typescript
 // In useAgentChat hook — extend existing tool interception
 if (toolName === "get_availability") {
-  setPendingSlotPicker(toolResult);  // renders <SlotPicker>
+  setPendingSlotPicker(toolResult); // renders <SlotPicker>
 }
 if (toolName === "create_booking") {
   addBookingConfirmation(toolResult); // renders <BookingConfirmation>

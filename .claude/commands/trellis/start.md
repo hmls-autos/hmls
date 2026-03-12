@@ -6,10 +6,10 @@ Initialize your AI development session and begin working on tasks.
 
 ## Operation Types
 
-| Marker | Meaning | Executor |
-|--------|---------|----------|
-| `[AI]` | Bash scripts or Task calls executed by AI | You (AI) |
-| `[USER]` | Slash commands executed by user | User |
+| Marker   | Meaning                                   | Executor |
+| -------- | ----------------------------------------- | -------- |
+| `[AI]`   | Bash scripts or Task calls executed by AI | You (AI) |
+| `[USER]` | Slash commands executed by user           | User     |
 
 ---
 
@@ -24,6 +24,7 @@ cat .trellis/workflow.md
 ```
 
 **Follow the instructions in workflow.md** - it contains:
+
 - Core principles (Read Before Write, Follow Standards, etc.)
 - File system structure
 - Development process
@@ -55,18 +56,18 @@ Report what you learned and ask: "What would you like to work on?"
 
 When user describes a task, classify it:
 
-| Type | Criteria | Workflow |
-|------|----------|----------|
-| **Question** | User asks about code, architecture, or how something works | Answer directly |
-| **Trivial Fix** | Typo fix, comment update, single-line change, < 5 minutes | Direct Edit |
+| Type                 | Criteria                                                                                | Workflow          |
+| -------------------- | --------------------------------------------------------------------------------------- | ----------------- |
+| **Question**         | User asks about code, architecture, or how something works                              | Answer directly   |
+| **Trivial Fix**      | Typo fix, comment update, single-line change, < 5 minutes                               | Direct Edit       |
 | **Development Task** | Any code change that: modifies logic, adds features, fixes bugs, touches multiple files | **Task Workflow** |
 
 ### Decision Rule
 
 > **If in doubt, use Task Workflow.**
 >
-> Task Workflow ensures specs are injected to agents, resulting in higher quality code.
-> The overhead is minimal, but the benefit is significant.
+> Task Workflow ensures specs are injected to agents, resulting in higher quality code. The overhead
+> is minimal, but the benefit is significant.
 
 ---
 
@@ -82,6 +83,7 @@ For questions or trivial fixes, work directly:
 ## Task Workflow (Development Tasks)
 
 **Why this workflow?**
+
 - Research Agent analyzes what specs are needed
 - Specs are configured in jsonl files
 - Implement Agent receives specs via Hook injection
@@ -91,6 +93,7 @@ For questions or trivial fixes, work directly:
 ### Step 1: Understand the Task `[AI]`
 
 Before creating anything, understand what user wants:
+
 - What is the goal?
 - What type of development? (frontend / backend / fullstack)
 - Any specific requirements or constraints?
@@ -163,17 +166,21 @@ Create `prd.md` in the task directory with:
 # <Task Title>
 
 ## Goal
+
 <What we're trying to achieve>
 
 ## Requirements
+
 - <Requirement 1>
 - <Requirement 2>
 
 ## Acceptance Criteria
+
 - [ ] <Criterion 1>
 - [ ] <Criterion 2>
 
 ## Technical Notes
+
 <Any technical decisions or constraints>
 ```
 
@@ -242,33 +249,33 @@ If yes, resume from the appropriate step (usually Step 7 or 8).
 
 ### User Commands `[USER]`
 
-| Command | When to Use |
-|---------|-------------|
-| `/trellis:start` | Begin a session (this command) |
-| `/trellis:parallel` | Complex tasks needing isolated worktree |
-| `/trellis:finish-work` | Before committing changes |
-| `/trellis:record-session` | After completing a task |
+| Command                   | When to Use                             |
+| ------------------------- | --------------------------------------- |
+| `/trellis:start`          | Begin a session (this command)          |
+| `/trellis:parallel`       | Complex tasks needing isolated worktree |
+| `/trellis:finish-work`    | Before committing changes               |
+| `/trellis:record-session` | After completing a task                 |
 
 ### AI Scripts `[AI]`
 
-| Script | Purpose |
-|--------|---------|
-| `get-context.sh` | Get session context |
-| `task.sh create` | Create task directory |
+| Script                 | Purpose                |
+| ---------------------- | ---------------------- |
+| `get-context.sh`       | Get session context    |
+| `task.sh create`       | Create task directory  |
 | `task.sh init-context` | Initialize jsonl files |
-| `task.sh add-context` | Add spec to jsonl |
-| `task.sh start` | Set current task |
-| `task.sh finish` | Clear current task |
-| `task.sh archive` | Archive completed task |
+| `task.sh add-context`  | Add spec to jsonl      |
+| `task.sh start`        | Set current task       |
+| `task.sh finish`       | Clear current task     |
+| `task.sh archive`      | Archive completed task |
 
 ### Sub Agents `[AI]`
 
-| Agent | Purpose | Hook Injection |
-|-------|---------|----------------|
-| research | Analyze codebase | No (reads directly) |
-| implement | Write code | Yes (implement.jsonl) |
-| check | Review & fix | Yes (check.jsonl) |
-| debug | Fix specific issues | Yes (debug.jsonl) |
+| Agent     | Purpose             | Hook Injection        |
+| --------- | ------------------- | --------------------- |
+| research  | Analyze codebase    | No (reads directly)   |
+| implement | Write code          | Yes (implement.jsonl) |
+| check     | Review & fix        | Yes (check.jsonl)     |
+| debug     | Fix specific issues | Yes (debug.jsonl)     |
 
 ---
 
@@ -276,5 +283,5 @@ If yes, resume from the appropriate step (usually Step 7 or 8).
 
 > **Specs are injected, not remembered.**
 >
-> The Task Workflow ensures agents receive relevant specs automatically.
-> This is more reliable than hoping the AI "remembers" conventions.
+> The Task Workflow ensures agents receive relevant specs automatically. This is more reliable than
+> hoping the AI "remembers" conventions.

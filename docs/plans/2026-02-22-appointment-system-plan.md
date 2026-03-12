@@ -1,12 +1,21 @@
 # Appointment System Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan
+> task-by-task.
 
-**Goal:** Custom Supabase-backed appointment system with multi-mechanic support, overlap prevention via `tstzrange` exclusion constraints, full work order capture, rich chat UI components, and a hero quick-start widget. (Cal.com fully removed 2026-03-01.)
+**Goal:** Custom Supabase-backed appointment system with multi-mechanic support, overlap prevention
+via `tstzrange` exclusion constraints, full work order capture, rich chat UI components, and a hero
+quick-start widget. (Cal.com fully removed 2026-03-01.)
 
-**Architecture:** Supabase tables (`providers`, `provider_availability`, `provider_schedule_overrides`, `provider_services`, enhanced `bookings`) with a trigger-computed `blocked_range` and GiST exclusion constraint. Agent tools (`get_availability`, `create_booking`) handle scheduling. The frontend gets a hero booking widget, `SlotPicker`, and `BookingConfirmation` chat components. Guest booking supported with optional login auto-fill.
+**Architecture:** Supabase tables (`providers`, `provider_availability`,
+`provider_schedule_overrides`, `provider_services`, enhanced `bookings`) with a trigger-computed
+`blocked_range` and GiST exclusion constraint. Agent tools (`get_availability`, `create_booking`)
+handle scheduling. The frontend gets a hero booking widget, `SlotPicker`, and `BookingConfirmation`
+chat components. Guest booking supported with optional login auto-fill.
 
-**Tech Stack:** Supabase PostgreSQL (tstzrange, btree_gist, exclusion constraints), Drizzle ORM + raw SQL migrations, Deno/Hono API, Zod schemas, React 19 / Next.js 16 / Tailwind CSS 4 frontend, AG-UI protocol.
+**Tech Stack:** Supabase PostgreSQL (tstzrange, btree_gist, exclusion constraints), Drizzle ORM +
+raw SQL migrations, Deno/Hono API, Zod schemas, React 19 / Next.js 16 / Tailwind CSS 4 frontend,
+AG-UI protocol.
 
 **Design Doc:** `docs/plans/2026-02-22-appointment-system-design.md`
 
@@ -15,11 +24,13 @@
 ### Task 1: Database Migration — Extension + Provider Tables
 
 **Files:**
+
 - Modify: `apps/api/src/db/migrate.ts` (append new migration SQL)
 
 **Step 1: Add the btree_gist extension and provider tables to the migration file**
 
-Append this SQL to the `migrations` string in `apps/api/src/db/migrate.ts`, after the existing `invoices` table:
+Append this SQL to the `migrations` string in `apps/api/src/db/migrate.ts`, after the existing
+`invoices` table:
 
 ```sql
 -- ══════════════════════════════════════════════════════════════
@@ -76,17 +87,18 @@ CREATE TABLE IF NOT EXISTS provider_services (
 
 **Step 2: Run the migration**
 
-Run: `deno task --cwd apps/api db:migrate`
-Expected: "Migrations completed successfully!"
+Run: `deno task --cwd apps/api db:migrate` Expected: "Migrations completed successfully!"
 
 **Step 3: Verify tables exist**
 
 Run the Supabase MCP `execute_sql` tool:
+
 ```sql
 SELECT table_name FROM information_schema.tables
 WHERE table_schema = 'public' AND table_name IN ('providers', 'provider_availability', 'provider_schedule_overrides', 'provider_services')
 ORDER BY table_name;
 ```
+
 Expected: 4 rows returned.
 
 **Step 4: Commit**
@@ -101,11 +113,13 @@ git commit -m "feat(db): add provider tables for appointment system"
 ### Task 2: Database Migration — Enhanced Bookings Table
 
 **Files:**
+
 - Modify: `apps/api/src/db/migrate.ts` (append bookings migration)
 
 **Step 1: Add the bookings enhancement migration**
 
-Append this SQL to `migrations` in `apps/api/src/db/migrate.ts`, after the provider tables from Task 1:
+Append this SQL to `migrations` in `apps/api/src/db/migrate.ts`, after the provider tables from Task
+1:
 
 ```sql
 -- ══════════════════════════════════════════════════════════════
@@ -271,20 +285,23 @@ BEGIN
 END $$;
 ```
 
-**Note:** We use `scheduled_at` (the existing column) as the appointment start time rather than renaming it to `appointment_start`. This avoids breaking existing data. The trigger computes `appointment_end` and `blocked_range` from `scheduled_at + duration_minutes`.
+**Note:** We use `scheduled_at` (the existing column) as the appointment start time rather than
+renaming it to `appointment_start`. This avoids breaking existing data. The trigger computes
+`appointment_end` and `blocked_range` from `scheduled_at + duration_minutes`.
 
 **Step 2: Run the migration**
 
-Run: `deno task --cwd apps/api db:migrate`
-Expected: "Migrations completed successfully!"
+Run: `deno task --cwd apps/api db:migrate` Expected: "Migrations completed successfully!"
 
 **Step 3: Verify the trigger and constraint**
 
 Run via Supabase MCP `execute_sql`:
+
 ```sql
 SELECT tgname FROM pg_trigger WHERE tgrelid = 'bookings'::regclass AND tgname = 'trg_compute_blocked_range';
 SELECT conname FROM pg_constraint WHERE conrelid = 'bookings'::regclass AND conname = 'bookings_no_overlap';
 ```
+
 Expected: Both return 1 row.
 
 **Step 4: Commit**
@@ -299,16 +316,19 @@ git commit -m "feat(db): add enhanced bookings with tstzrange overlap prevention
 ### Task 3: Drizzle Schema Update
 
 **Files:**
+
 - Modify: `apps/api/src/db/schema.ts` (add provider tables, update bookings)
 
 **Step 1: Add provider table definitions and update bookings in schema.ts**
 
 Add imports at the top of `apps/api/src/db/schema.ts`:
+
 ```typescript
 import { customType } from "drizzle-orm/pg-core";
 ```
 
 Add the `tstzrange` custom type (Drizzle doesn't support it natively):
+
 ```typescript
 const tstzrange = customType<{ data: string; driverParam: string }>({
   dataType() {
@@ -336,7 +356,8 @@ export const providers = pgTable("providers", {
 
 export const providerAvailability = pgTable("provider_availability", {
   id: serial("id").primaryKey(),
-  providerId: integer("provider_id").references(() => providers.id, { onDelete: "cascade" }).notNull(),
+  providerId: integer("provider_id").references(() => providers.id, { onDelete: "cascade" })
+    .notNull(),
   dayOfWeek: integer("day_of_week").notNull(),
   startTime: varchar("start_time", { length: 8 }).notNull(),
   endTime: varchar("end_time", { length: 8 }).notNull(),
@@ -344,7 +365,8 @@ export const providerAvailability = pgTable("provider_availability", {
 
 export const providerScheduleOverrides = pgTable("provider_schedule_overrides", {
   id: serial("id").primaryKey(),
-  providerId: integer("provider_id").references(() => providers.id, { onDelete: "cascade" }).notNull(),
+  providerId: integer("provider_id").references(() => providers.id, { onDelete: "cascade" })
+    .notNull(),
   overrideDate: varchar("override_date", { length: 10 }).notNull(),
   isAvailable: boolean("is_available").notNull().default(false),
   startTime: varchar("start_time", { length: 8 }),
@@ -353,7 +375,8 @@ export const providerScheduleOverrides = pgTable("provider_schedule_overrides", 
 });
 
 export const providerServices = pgTable("provider_services", {
-  providerId: integer("provider_id").references(() => providers.id, { onDelete: "cascade" }).notNull(),
+  providerId: integer("provider_id").references(() => providers.id, { onDelete: "cascade" })
+    .notNull(),
   serviceId: integer("service_id").references(() => services.id, { onDelete: "cascade" }).notNull(),
 });
 ```
@@ -399,8 +422,7 @@ export const bookings = pgTable("bookings", {
 
 **Step 2: Verify types compile**
 
-Run: `deno task check:api`
-Expected: No errors.
+Run: `deno task check:api` Expected: No errors.
 
 **Step 3: Commit**
 
@@ -414,6 +436,7 @@ git commit -m "feat(db): add Drizzle schema for providers and enhanced bookings"
 ### Task 4: Seed Data — Initial Provider + Schedule
 
 **Files:**
+
 - Create: `apps/api/src/db/seed-data/providers.json`
 - Modify: `apps/api/src/db/seed.ts` (add provider seeding)
 
@@ -446,7 +469,8 @@ Create `apps/api/src/db/seed-data/providers.json`:
 
 **Step 2: Add provider seeding logic to seed.ts**
 
-Add to `apps/api/src/db/seed.ts` — import the provider data and add seeding after the existing vehicle pricing seed:
+Add to `apps/api/src/db/seed.ts` — import the provider data and add seeding after the existing
+vehicle pricing seed:
 
 ```typescript
 import providersRaw from "./seed-data/providers.json" with { type: "json" };
@@ -502,12 +526,13 @@ await db.delete(schema.providers);
 
 **Step 3: Run the seed**
 
-Run: `deno task --cwd apps/api db:seed`
-Expected: "Inserting 1 providers...", provider listed with schedule slots.
+Run: `deno task --cwd apps/api db:seed` Expected: "Inserting 1 providers...", provider listed with
+schedule slots.
 
 **Step 4: Verify data**
 
 Run via Supabase MCP `execute_sql`:
+
 ```sql
 SELECT p.name, count(pa.id) as schedule_slots, count(ps.service_id) as services
 FROM providers p
@@ -515,6 +540,7 @@ LEFT JOIN provider_availability pa ON pa.provider_id = p.id
 LEFT JOIN provider_services ps ON ps.provider_id = p.id
 GROUP BY p.name;
 ```
+
 Expected: Spencer with 6 schedule slots and all services linked.
 
 **Step 5: Commit**
@@ -529,6 +555,7 @@ git commit -m "feat(db): add provider seed data with schedule and service links"
 ### Task 5: Agent Tool — `get_availability`
 
 **Files:**
+
 - Create: `apps/api/src/tools/scheduling.ts`
 
 **Step 1: Create the scheduling tools file**
@@ -605,9 +632,7 @@ export const getAvailabilityTool = {
       .where(eq(schema.services.name, params.serviceType))
       .limit(1);
 
-    const serviceDurationMinutes = service
-      ? Math.ceil(Number(service.laborHours) * 60)
-      : 60;
+    const serviceDurationMinutes = service ? Math.ceil(Number(service.laborHours) * 60) : 60;
 
     // Get active providers who can perform this service
     let providerIds: number[] = [];
@@ -783,8 +808,7 @@ export const getAvailabilityTool = {
 
 **Step 2: Verify types compile**
 
-Run: `deno task check:api`
-Expected: No errors.
+Run: `deno task check:api` Expected: No errors.
 
 **Step 3: Commit**
 
@@ -798,6 +822,7 @@ git commit -m "feat(api): add get_availability tool with multi-provider slot com
 ### Task 6: Agent Tool — `create_booking`
 
 **Files:**
+
 - Modify: `apps/api/src/tools/scheduling.ts` (add create_booking)
 
 **Step 1: Add `create_booking` tool to scheduling.ts**
@@ -956,8 +981,7 @@ export const createBookingTool = {
         vehicle: `${params.vehicleYear} ${params.vehicleMake} ${params.vehicleModel}`,
         serviceType: params.serviceType,
         location: params.address,
-        message:
-          `Booking requested! ${provider.name} will confirm your appointment shortly.`,
+        message: `Booking requested! ${provider.name} will confirm your appointment shortly.`,
       });
     } catch (error: unknown) {
       // Check for exclusion constraint violation (overlap)
@@ -980,8 +1004,7 @@ export const schedulingTools = [getAvailabilityTool, createBookingTool];
 
 **Step 2: Verify types compile**
 
-Run: `deno task check:api`
-Expected: No errors.
+Run: `deno task check:api` Expected: No errors.
 
 **Step 3: Commit**
 
@@ -994,13 +1017,15 @@ git commit -m "feat(api): add create_booking work order tool with overlap protec
 
 ### Task 7: Wire Agent — Completed (Cal.com removed 2026-03-01)
 
-Cal.com integration (`calcom.ts`, env vars, AgentConfig fields) fully removed. Scheduling tools wired directly.
+Cal.com integration (`calcom.ts`, env vars, AgentConfig fields) fully removed. Scheduling tools
+wired directly.
 
 ---
 
 ### Task 8: Update System Prompt — Work Order Flow
 
 **Files:**
+
 - Modify: `apps/api/src/system-prompt.ts`
 
 **Step 1: Update the booking workflow section**
@@ -1033,8 +1058,7 @@ Cal.com references in system prompt removed (2026-03-01).
 
 **Step 2: Verify types compile**
 
-Run: `deno task check:api`
-Expected: No errors.
+Run: `deno task check:api` Expected: No errors.
 
 **Step 3: Commit**
 
@@ -1048,6 +1072,7 @@ git commit -m "feat(api): update system prompt with work order booking flow"
 ### Task 9: Chat UI — SlotPicker Component
 
 **Files:**
+
 - Create: `apps/web/components/SlotPicker.tsx`
 
 **Step 1: Create the SlotPicker component**
@@ -1173,8 +1198,7 @@ export function SlotPicker({ data, onSelect, disabled }: SlotPickerProps) {
                               provider.providerId,
                               provider.providerName,
                               time,
-                            )
-                          }
+                            )}
                           className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border bg-surface text-sm text-text hover:border-red-primary/50 hover:bg-red-light/30 transition-colors disabled:opacity-50"
                         >
                           <Clock className="w-3 h-3 text-text-secondary" />
@@ -1200,8 +1224,7 @@ export function SlotPicker({ data, onSelect, disabled }: SlotPickerProps) {
 
 **Step 2: Verify types compile**
 
-Run: `cd apps/web && bun run typecheck`
-Expected: No errors.
+Run: `cd apps/web && bun run typecheck` Expected: No errors.
 
 **Step 3: Commit**
 
@@ -1215,6 +1238,7 @@ git commit -m "feat(web): add SlotPicker chat component for availability display
 ### Task 10: Chat UI — BookingConfirmation Component
 
 **Files:**
+
 - Create: `apps/web/components/BookingConfirmation.tsx`
 
 **Step 1: Create the BookingConfirmation component**
@@ -1347,8 +1371,7 @@ export function BookingConfirmation({ data }: BookingConfirmationProps) {
 
 **Step 2: Verify types compile**
 
-Run: `cd apps/web && bun run typecheck`
-Expected: No errors.
+Run: `cd apps/web && bun run typecheck` Expected: No errors.
 
 **Step 3: Commit**
 
@@ -1362,6 +1385,7 @@ git commit -m "feat(web): add BookingConfirmation chat component"
 ### Task 11: Wire Chat UI — Intercept Tool Results
 
 **Files:**
+
 - Modify: `apps/web/hooks/useAgentChat.ts` (add slot picker + booking confirmation state)
 - Modify: `apps/web/app/chat/page.tsx` (render new components)
 
@@ -1373,7 +1397,9 @@ In `apps/web/hooks/useAgentChat.ts`:
 
 ```typescript
 const [pendingSlotPicker, setPendingSlotPicker] = useState<Record<string, unknown> | null>(null);
-const [bookingConfirmations, setBookingConfirmations] = useState<Array<{ id: string; data: Record<string, unknown> }>>([]);
+const [bookingConfirmations, setBookingConfirmations] = useState<
+  Array<{ id: string; data: Record<string, unknown> }>
+>([]);
 ```
 
 2. In the `onToolCallEndEvent` handler, add interception for the new tools:
@@ -1501,19 +1527,17 @@ const {
       disabled={isLoading}
     />
   )}
-</AnimatePresence>
+</AnimatePresence>;
 
 {/* Booking confirmations */}
-{bookingConfirmations.map((bc) => (
-  <BookingConfirmation key={bc.id} data={bc.data as any} />
-))}
+{
+  bookingConfirmations.map((bc) => <BookingConfirmation key={bc.id} data={bc.data as any} />);
+}
 ```
 
 **Step 3: Verify types compile and build**
 
-Run: `cd apps/web && bun run typecheck`
-Run: `cd apps/web && bun run build`
-Expected: No errors.
+Run: `cd apps/web && bun run typecheck` Run: `cd apps/web && bun run build` Expected: No errors.
 
 **Step 4: Commit**
 
@@ -1527,18 +1551,21 @@ git commit -m "feat(web): wire SlotPicker and BookingConfirmation into chat UI"
 ### Task 12: Hero Quick-Start Widget
 
 **Files:**
+
 - Modify: `apps/web/components/sections/HeroNew.tsx` (replace CTA buttons with booking widget)
 
 **Step 1: Replace the CTA buttons with the booking widget**
 
-Replace the `<div className="flex flex-col sm:flex-row gap-4 justify-center">` section in `HeroNew.tsx` with:
+Replace the `<div className="flex flex-col sm:flex-row gap-4 justify-center">` section in
+`HeroNew.tsx` with:
 
 ```tsx
 {/* Booking Widget */}
-<BookingWidget />
+<BookingWidget />;
 ```
 
-Create the `BookingWidget` as a client component within the file or as a separate file. Since HeroNew is a server component, create `apps/web/components/BookingWidget.tsx`:
+Create the `BookingWidget` as a client component within the file or as a separate file. Since
+HeroNew is a server component, create `apps/web/components/BookingWidget.tsx`:
 
 ```tsx
 "use client";
@@ -1633,9 +1660,7 @@ Replace the two Link buttons section with `<BookingWidget />`.
 
 **Step 2: Verify types compile and build**
 
-Run: `cd apps/web && bun run typecheck`
-Run: `cd apps/web && bun run build`
-Expected: No errors.
+Run: `cd apps/web && bun run typecheck` Run: `cd apps/web && bun run build` Expected: No errors.
 
 **Step 3: Commit**
 
@@ -1649,6 +1674,7 @@ git commit -m "feat(web): add hero booking widget with service/date/location qui
 ### Task 13: Chat Page — Read Query Params for Pre-Seeded Context
 
 **Files:**
+
 - Modify: `apps/web/app/chat/page.tsx` (read URL params, send auto-message)
 
 **Step 1: Read query params and auto-send initial message**
@@ -1689,12 +1715,14 @@ useEffect(() => {
 
 **Step 2: Remove the login wall for guest access**
 
-The current chat page shows a login prompt if `!user`. For guest booking support, change this to show the chat interface regardless of auth status (the agent handles guest info collection). Remove or modify the `if (!user)` block to allow anonymous access. The `useAgentChat` hook already passes `accessToken` which is optional.
+The current chat page shows a login prompt if `!user`. For guest booking support, change this to
+show the chat interface regardless of auth status (the agent handles guest info collection). Remove
+or modify the `if (!user)` block to allow anonymous access. The `useAgentChat` hook already passes
+`accessToken` which is optional.
 
 **Step 3: Verify build**
 
-Run: `cd apps/web && bun run build`
-Expected: No errors.
+Run: `cd apps/web && bun run build` Expected: No errors.
 
 **Step 4: Commit**
 
@@ -1745,7 +1773,8 @@ Run `get_advisors` for security — check that new tables have appropriate RLS i
 1. Start the dev servers: `cd apps/web && bun run dev` and `deno task dev:api`
 2. Open `http://localhost:3000`
 3. Verify the hero widget appears with service/date/location inputs
-4. Fill in the widget and click "Book Now" — should navigate to `/chat?service=...&date=...&location=...`
+4. Fill in the widget and click "Book Now" — should navigate to
+   `/chat?service=...&date=...&location=...`
 5. Verify the chat auto-sends the initial message
 6. Interact with the agent through a full booking flow
 7. Verify SlotPicker renders when availability is checked

@@ -1,18 +1,25 @@
 # Ask User Question Tool — Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan
+> task-by-task.
 
-**Goal:** Add an `ask_user_question` tool so the HMLS agent can present structured, clickable question cards in the chat UI.
+**Goal:** Add an `ask_user_question` tool so the HMLS agent can present structured, clickable
+question cards in the chat UI.
 
-**Architecture:** The agent calls an `ask_user_question` tool with question/option data. AG-UI streams the tool call args to the frontend. The frontend intercepts the tool name, renders an interactive card instead of a spinner, and sends the user's selection as the next message. No protocol changes needed.
+**Architecture:** The agent calls an `ask_user_question` tool with question/option data. AG-UI
+streams the tool call args to the frontend. The frontend intercepts the tool name, renders an
+interactive card instead of a spinner, and sends the user's selection as the next message. No
+protocol changes needed.
 
-**Tech Stack:** Zod (tool schema), Zypher (agent tools), React 19 + Framer Motion (card UI), AG-UI client (event interception)
+**Tech Stack:** Zod (tool schema), Zypher (agent tools), React 19 + Framer Motion (card UI), AG-UI
+client (event interception)
 
 ---
 
 ### Task 1: Create the backend tool
 
 **Files:**
+
 - Create: `apps/api/src/tools/ask-user-question.ts`
 
 **Step 1: Create the tool file**
@@ -65,8 +72,7 @@ export const askUserQuestionTools = [askUserQuestionTool];
 
 **Step 2: Verify the file compiles**
 
-Run: `deno check apps/api/src/tools/ask-user-question.ts`
-Expected: No errors
+Run: `deno check apps/api/src/tools/ask-user-question.ts` Expected: No errors
 
 **Step 3: Commit**
 
@@ -80,6 +86,7 @@ git commit -m "feat(api): add ask_user_question tool definition"
 ### Task 2: Register the tool in the agent
 
 **Files:**
+
 - Modify: `apps/api/src/agent.ts` (lines 9, 43)
 
 **Step 1: Add the import**
@@ -106,8 +113,7 @@ const allTools = [
 
 **Step 3: Verify compilation**
 
-Run: `deno task check:api`
-Expected: No errors
+Run: `deno task check:api` Expected: No errors
 
 **Step 4: Commit**
 
@@ -121,6 +127,7 @@ git commit -m "feat(api): register ask_user_question tool in agent"
 ### Task 3: Add system prompt guidance
 
 **Files:**
+
 - Modify: `apps/api/src/system-prompt.ts`
 
 **Step 1: Add ask_user_question guidance**
@@ -144,8 +151,7 @@ Do NOT use it for:
 
 **Step 2: Verify compilation**
 
-Run: `deno task check:api`
-Expected: No errors
+Run: `deno task check:api` Expected: No errors
 
 **Step 3: Commit**
 
@@ -159,6 +165,7 @@ git commit -m "feat(api): add system prompt guidance for ask_user_question"
 ### Task 4: Add tool display name
 
 **Files:**
+
 - Modify: `apps/web/lib/agent-tools.ts` (line 11)
 
 **Step 1: Add the display name**
@@ -181,6 +188,7 @@ git commit -m "feat(web): add ask_user_question display name"
 ### Task 5: Create the QuestionCard component
 
 **Files:**
+
 - Create: `apps/web/components/QuestionCard.tsx`
 
 **Step 1: Create the component**
@@ -251,8 +259,7 @@ export function QuestionCard({ data, onSelect, disabled }: QuestionCardProps) {
 
 **Step 2: Verify compilation**
 
-Run: `cd apps/web && bun run typecheck`
-Expected: No errors
+Run: `cd apps/web && bun run typecheck` Expected: No errors
 
 **Step 3: Commit**
 
@@ -266,6 +273,7 @@ git commit -m "feat(web): add QuestionCard component"
 ### Task 6: Wire up the hook to intercept tool calls
 
 **Files:**
+
 - Modify: `apps/web/hooks/useAgentChat.ts`
 
 **Step 1: Add QuestionData import and state**
@@ -336,8 +344,7 @@ function clearMessages() {
 
 **Step 6: Verify compilation**
 
-Run: `cd apps/web && bun run typecheck`
-Expected: No errors
+Run: `cd apps/web && bun run typecheck` Expected: No errors
 
 **Step 7: Commit**
 
@@ -351,6 +358,7 @@ git commit -m "feat(web): intercept ask_user_question tool calls in useAgentChat
 ### Task 7: Render the QuestionCard in the chat page
 
 **Files:**
+
 - Modify: `apps/web/app/chat/page.tsx`
 
 **Step 1: Add import**
@@ -381,7 +389,8 @@ const {
 
 **Step 3: Render question card after messages, before tool indicator**
 
-Insert between the `messages.map(...)` block and the `{/* Tool indicator */}` comment (around line 256):
+Insert between the `messages.map(...)` block and the `{/* Tool indicator */}` comment (around line
+256):
 
 ```tsx
 {/* Question card */}
@@ -393,7 +402,7 @@ Insert between the `messages.map(...)` block and the `{/* Tool indicator */}` co
       disabled={isLoading}
     />
   )}
-</AnimatePresence>
+</AnimatePresence>;
 ```
 
 **Step 4: Disable text input while question is pending**
@@ -412,13 +421,11 @@ disabled={!isConnected || isLoading || !input.trim() || !!pendingQuestion}
 
 **Step 5: Verify compilation**
 
-Run: `cd apps/web && bun run typecheck`
-Expected: No errors
+Run: `cd apps/web && bun run typecheck` Expected: No errors
 
 **Step 6: Run full build**
 
-Run: `cd apps/web && bun run build`
-Expected: Build succeeds
+Run: `cd apps/web && bun run build` Expected: Build succeeds
 
 **Step 7: Commit**
 
@@ -455,4 +462,5 @@ deno task dev:api
 cd apps/web && bun run dev
 ```
 
-Open chat, send "What services do you offer?" — the agent should call `ask_user_question` with service options rendered as clickable buttons.
+Open chat, send "What services do you offer?" — the agent should call `ask_user_question` with
+service options rendered as clickable buttons.

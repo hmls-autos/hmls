@@ -75,7 +75,7 @@ interface NavnodeFetchResponse {
 
 async function navnodeFetch(
   jsn: Record<string, unknown>,
-  maxGroupIndex = 500,
+  _maxGroupIndex = 500,
 ): Promise<NavnodeFetchResponse> {
   // Rate limit
   const now = Date.now();

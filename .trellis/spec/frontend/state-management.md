@@ -6,7 +6,9 @@
 
 ## Overview
 
-The codebase deliberately uses **no external state management library** (no Zustand, Redux, Jotai). State is managed through three mechanisms: React Context for global auth, SWR for server state, and `useState` for component-local state.
+The codebase deliberately uses **no external state management library** (no Zustand, Redux, Jotai).
+State is managed through three mechanisms: React Context for global auth, SWR for server state, and
+`useState` for component-local state.
 
 ---
 
@@ -33,7 +35,7 @@ Provider wraps the app at `apps/web/app/layout.tsx`:
   <Navbar />
   {children}
   <ChatWidget />
-</AuthProvider>
+</AuthProvider>;
 ```
 
 Consumer hook with guard:

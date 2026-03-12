@@ -4,8 +4,8 @@
 
 Welcome to Trellis! This is your first task.
 
-AI agents use `.trellis/spec/` to understand YOUR project's coding conventions.
-**Empty templates = AI writes generic code that doesn't match your project style.**
+AI agents use `.trellis/spec/` to understand YOUR project's coding conventions. **Empty templates =
+AI writes generic code that doesn't match your project style.**
 
 Filling these guidelines is a one-time setup that pays off for every future AI session.
 
@@ -17,29 +17,29 @@ Fill in the guideline files based on your **existing codebase**.
 
 ### Backend Guidelines
 
-| File | What to Document |
-|------|------------------|
+| File                                           | What to Document                                        |
+| ---------------------------------------------- | ------------------------------------------------------- |
 | `.trellis/spec/backend/directory-structure.md` | Where different file types go (routes, services, utils) |
-| `.trellis/spec/backend/database-guidelines.md` | ORM, migrations, query patterns, naming conventions |
-| `.trellis/spec/backend/error-handling.md` | How errors are caught, logged, and returned |
-| `.trellis/spec/backend/logging-guidelines.md` | Log levels, format, what to log |
-| `.trellis/spec/backend/quality-guidelines.md` | Code review standards, testing requirements |
+| `.trellis/spec/backend/database-guidelines.md` | ORM, migrations, query patterns, naming conventions     |
+| `.trellis/spec/backend/error-handling.md`      | How errors are caught, logged, and returned             |
+| `.trellis/spec/backend/logging-guidelines.md`  | Log levels, format, what to log                         |
+| `.trellis/spec/backend/quality-guidelines.md`  | Code review standards, testing requirements             |
 
 ### Frontend Guidelines
 
-| File | What to Document |
-|------|------------------|
-| `.trellis/spec/frontend/directory-structure.md` | Component/page/hook organization |
-| `.trellis/spec/frontend/component-guidelines.md` | Component patterns, props conventions |
-| `.trellis/spec/frontend/hook-guidelines.md` | Custom hook naming, patterns |
-| `.trellis/spec/frontend/state-management.md` | State library, patterns, what goes where |
-| `.trellis/spec/frontend/type-safety.md` | TypeScript conventions, type organization |
-| `.trellis/spec/frontend/quality-guidelines.md` | Linting, testing, accessibility |
+| File                                             | What to Document                          |
+| ------------------------------------------------ | ----------------------------------------- |
+| `.trellis/spec/frontend/directory-structure.md`  | Component/page/hook organization          |
+| `.trellis/spec/frontend/component-guidelines.md` | Component patterns, props conventions     |
+| `.trellis/spec/frontend/hook-guidelines.md`      | Custom hook naming, patterns              |
+| `.trellis/spec/frontend/state-management.md`     | State library, patterns, what goes where  |
+| `.trellis/spec/frontend/type-safety.md`          | TypeScript conventions, type organization |
+| `.trellis/spec/frontend/quality-guidelines.md`   | Linting, testing, accessibility           |
 
 ### Thinking Guides (Optional)
 
-The `.trellis/spec/guides/` directory contains thinking guides that are already
-filled with general best practices. You can customize them for your project if needed.
+The `.trellis/spec/guides/` directory contains thinking guides that are already filled with general
+best practices. You can customize them for your project if needed.
 
 ---
 
@@ -47,8 +47,8 @@ filled with general best practices. You can customize them for your project if n
 
 ### Principle: Document Reality, Not Ideals
 
-Write what your codebase **actually does**, not what you wish it did.
-AI needs to match existing patterns, not introduce new ones.
+Write what your codebase **actually does**, not what you wish it did. AI needs to match existing
+patterns, not introduce new ones.
 
 ### Steps
 

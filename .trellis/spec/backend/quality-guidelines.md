@@ -6,7 +6,8 @@
 
 ## Overview
 
-Backend apps use Deno's built-in toolchain for formatting, linting, and type checking. The web app (Next.js) uses Biome. A pre-commit hook enforces all checks before push.
+Backend apps use Deno's built-in toolchain for formatting, linting, and type checking. The web app
+(Next.js) uses Biome. A pre-commit hook enforces all checks before push.
 
 ---
 
@@ -16,12 +17,12 @@ Backend apps use Deno's built-in toolchain for formatting, linting, and type che
 
 Configured in root `deno.json`:
 
-| Setting | Value |
-|---------|-------|
-| Indent | 2 spaces |
+| Setting    | Value          |
+| ---------- | -------------- |
+| Indent     | 2 spaces       |
 | Line width | 100 characters |
-| Quotes | Double |
-| Semicolons | Enabled |
+| Quotes     | Double         |
+| Semicolons | Enabled        |
 
 ```bash
 deno fmt                    # Format
@@ -107,7 +108,8 @@ Applied to: DB client, Supabase client, Stripe client, R2 S3Client.
 
 Minimal test infrastructure currently exists:
 
-- **Diagnostic agent**: Integration tests in `apps/diagnostic-agent/src/test/integration.test.ts` using `@std/assert`
+- **Diagnostic agent**: Integration tests in `apps/diagnostic-agent/src/test/integration.test.ts`
+  using `@std/assert`
 - Run with: `deno task --cwd apps/diagnostic-agent test`
 - **API app**: No test files
 

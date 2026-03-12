@@ -6,19 +6,20 @@
 
 ## Overview
 
-This directory contains guidelines for backend development. Fill in each file with your project's specific conventions.
+This directory contains guidelines for backend development. Fill in each file with your project's
+specific conventions.
 
 ---
 
 ## Guidelines Index
 
-| Guide | Description | Status |
-|-------|-------------|--------|
-| [Directory Structure](./directory-structure.md) | Module organization and file layout | Done |
-| [Database Guidelines](./database-guidelines.md) | ORM patterns, queries, migrations | Done |
-| [Error Handling](./error-handling.md) | Error types, handling strategies | Done |
-| [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | Done |
-| [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | Done |
+| Guide                                           | Description                         | Status |
+| ----------------------------------------------- | ----------------------------------- | ------ |
+| [Directory Structure](./directory-structure.md) | Module organization and file layout | Done   |
+| [Database Guidelines](./database-guidelines.md) | ORM patterns, queries, migrations   | Done   |
+| [Error Handling](./error-handling.md)           | Error types, handling strategies    | Done   |
+| [Quality Guidelines](./quality-guidelines.md)   | Code standards, forbidden patterns  | Done   |
+| [Logging Guidelines](./logging-guidelines.md)   | Structured logging, log levels      | Done   |
 
 ---
 

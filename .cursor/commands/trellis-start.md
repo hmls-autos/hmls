@@ -8,10 +8,10 @@ Initialize your AI development session and begin working on tasks.
 
 Operations in this document are categorized as:
 
-| Marker | Meaning | Executor |
-|--------|---------|----------|
-| `[AI]` | Bash scripts or file reads executed by AI | You (AI) |
-| `[USER]` | Slash commands executed by user | User |
+| Marker   | Meaning                                   | Executor |
+| -------- | ----------------------------------------- | -------- |
+| `[AI]`   | Bash scripts or file reads executed by AI | You (AI) |
+| `[USER]` | Slash commands executed by user           | User     |
 
 ---
 
@@ -32,6 +32,7 @@ cat .trellis/workflow.md  # Development process, conventions, and quick start gu
 ```
 
 This returns:
+
 - Developer identity
 - Git status (branch, uncommitted changes)
 - Recent commits
@@ -43,16 +44,19 @@ This returns:
 Based on the upcoming task, read appropriate spec docs:
 
 **For Frontend Work**:
+
 ```bash
 cat .trellis/spec/frontend/index.md
 ```
 
 **For Backend Work**:
+
 ```bash
 cat .trellis/spec/backend/index.md
 ```
 
 **For Cross-Layer Features**:
+
 ```bash
 cat .trellis/spec/guides/index.md
 cat .trellis/spec/guides/cross-layer-thinking-guide.md
@@ -73,13 +77,13 @@ Output a summary:
 ```markdown
 ## Session Initialized
 
-| Item | Status |
-|------|--------|
-| Developer | {name} |
-| Branch | {branch} |
-| Uncommitted | {count} file(s) |
-| Journal | {file} ({lines}/2000 lines) |
-| Active Tasks | {count} |
+| Item         | Status                      |
+| ------------ | --------------------------- |
+| Developer    | {name}                      |
+| Branch       | {branch}                    |
+| Uncommitted  | {count} file(s)             |
+| Journal      | {file} ({lines}/2000 lines) |
+| Active Tasks | {count}                     |
 
 Ready for your task. What would you like to work on?
 ```
@@ -125,27 +129,27 @@ Ready for your task. What would you like to work on?
 
 The following slash commands are for users (not AI):
 
-| Command | Description |
-|---------|-------------|
-| `/trellis-start` | Start development session (this command) |
-| `/trellis-before-frontend-dev` | Read frontend guidelines |
-| `/trellis-before-backend-dev` | Read backend guidelines |
-| `/trellis-check-frontend` | Check frontend code |
-| `/trellis-check-backend` | Check backend code |
-| `/trellis-check-cross-layer` | Cross-layer verification |
-| `/trellis-finish-work` | Pre-commit checklist |
-| `/trellis-record-session` | Record session progress |
+| Command                        | Description                              |
+| ------------------------------ | ---------------------------------------- |
+| `/trellis-start`               | Start development session (this command) |
+| `/trellis-before-frontend-dev` | Read frontend guidelines                 |
+| `/trellis-before-backend-dev`  | Read backend guidelines                  |
+| `/trellis-check-frontend`      | Check frontend code                      |
+| `/trellis-check-backend`       | Check backend code                       |
+| `/trellis-check-cross-layer`   | Cross-layer verification                 |
+| `/trellis-finish-work`         | Pre-commit checklist                     |
+| `/trellis-record-session`      | Record session progress                  |
 
 ---
 
 ## AI Executed Scripts `[AI]`
 
-| Script | Purpose |
-|--------|---------|
+| Script                                     | Purpose               |
+| ------------------------------------------ | --------------------- |
 | `task.sh create "<title>" [--slug <name>]` | Create task directory |
-| `task.sh list` | List active tasks |
-| `task.sh archive <name>` | Archive task |
-| `get-context.sh` | Get session context |
+| `task.sh list`                             | List active tasks     |
+| `task.sh archive <name>`                   | Archive task          |
+| `get-context.sh`                           | Get session context   |
 
 ---
 
