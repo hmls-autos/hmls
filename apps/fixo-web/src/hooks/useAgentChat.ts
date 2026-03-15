@@ -24,6 +24,8 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
   const [error, setError] = useState<string | null>(null);
   const [currentTool, setCurrentTool] = useState<string | null>(null);
   const agentRef = useRef<HttpAgent | null>(null);
+  const agentTokenRef = useRef<string | null | undefined>(null);
+  const messagesRef = useRef<Message[]>([]);
   const tokenRef = useRef(accessToken);
   tokenRef.current = accessToken;
 
@@ -74,12 +76,28 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
   }, []);
 
   const getAgent = useCallback(() => {
+    // Only recreate when token changes — agent accumulates messages naturally
+    if (agentRef.current && agentTokenRef.current === tokenRef.current) {
+      return agentRef.current;
+    }
     const headers: Record<string, string> = {};
     if (tokenRef.current) {
       headers.Authorization = `Bearer ${tokenRef.current}`;
     }
-    agentRef.current = new HttpAgent({ url: `${AGENT_URL}/task`, headers });
-    return agentRef.current;
+    const agent = new HttpAgent({ url: `${AGENT_URL}/task`, headers });
+    // Replay existing messages into the new agent so context isn't lost
+    for (const msg of messagesRef.current) {
+      if (msg.role === "user" || msg.role === "assistant") {
+        agent.addMessage({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+        } as AgentMessage);
+      }
+    }
+    agentRef.current = agent;
+    agentTokenRef.current = tokenRef.current;
+    return agent;
   }, []);
 
   const sendMessage = useCallback(
@@ -90,21 +108,16 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
         content,
         imageUrl: options?.imageUrl,
       };
-      setMessages((prev) => [...prev, userMsg]);
+      setMessages((prev) => {
+        const next = [...prev, userMsg];
+        messagesRef.current = next;
+        return next;
+      });
       setIsLoading(true);
       setError(null);
       setTimeout(scrollToBottom, 0);
 
       const agent = getAgent();
-
-      // Re-add all previous messages so the backend has full conversation context
-      for (const msg of messages) {
-        agent.addMessage({
-          id: msg.id,
-          role: msg.role,
-          content: msg.content,
-        } as AgentMessage);
-      }
 
       agent.addMessage({
         id: userMsg.id,
@@ -165,12 +178,14 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
         focusInput();
       }
     },
-    [scrollToBottom, focusInput, getAgent, drainBuffer, flushBuffer, messages],
+    [scrollToBottom, focusInput, getAgent, drainBuffer, flushBuffer],
   );
 
   const clearMessages = useCallback(() => {
     setMessages([]);
+    messagesRef.current = [];
     agentRef.current = null;
+    agentTokenRef.current = null;
   }, []);
 
   const clearError = useCallback(() => {
