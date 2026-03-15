@@ -35,6 +35,7 @@ export interface Estimate {
   subtotal: number;
   priceRangeLow: number;
   priceRangeHigh: number;
+  vehicleInfo: { year?: number; make?: string; model?: string } | null;
   notes: string | null;
   shareToken: string;
   validDays: number;
@@ -65,6 +66,19 @@ export interface Quote {
   createdAt: string;
 }
 
+export interface OrderItem {
+  id: string;
+  category: "labor" | "parts" | "fee" | "discount";
+  name: string;
+  description?: string;
+  quantity: number;
+  unitPriceCents: number;
+  totalCents: number;
+  laborHours?: number;
+  partNumber?: string;
+  taxable: boolean;
+}
+
 export interface Order {
   id: number;
   customerId: number;
@@ -75,6 +89,18 @@ export interface Order {
   statusHistory: { status: string; timestamp: string; actor: string }[];
   adminNotes: string | null;
   cancellationReason: string | null;
+  items: OrderItem[];
+  notes: string | null;
+  subtotalCents: number;
+  priceRangeLowCents: number | null;
+  priceRangeHighCents: number | null;
+  vehicleInfo: { year?: number; make?: string; model?: string } | null;
+  validDays: number;
+  expiresAt: string | null;
+  shareToken: string | null;
+  revisionNumber: number;
+  stripeQuoteId: string | null;
+  stripeInvoiceId: string | null;
   createdAt: string;
   updatedAt: string;
 }

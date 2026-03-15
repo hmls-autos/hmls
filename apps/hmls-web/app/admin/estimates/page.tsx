@@ -1,19 +1,179 @@
 "use client";
 
-import { ExternalLink, FileText, Trash2 } from "lucide-react";
+import {
+  ExternalLink,
+  FileText,
+  Pencil,
+  Plus,
+  Save,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useState } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Spinner } from "@/components/ui/Spinner";
+import type { AdminEstimate } from "@/hooks/useAdmin";
 import { useAdminEstimates } from "@/hooks/useAdmin";
 import { AGENT_URL } from "@/lib/config";
 import { authFetch } from "@/lib/fetcher";
 import { formatCents, formatDate } from "@/lib/format";
+import type { LineItem } from "@/lib/types";
+
+function EditForm({
+  estimate,
+  onSave,
+  onCancel,
+}: {
+  estimate: AdminEstimate;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  const [items, setItems] = useState<LineItem[]>(
+    estimate.items.map((i) => ({ ...i })),
+  );
+  const [notes, setNotes] = useState(estimate.notes ?? "");
+  const [saving, setSaving] = useState(false);
+
+  function updateItem(
+    index: number,
+    field: keyof LineItem,
+    value: string | number,
+  ) {
+    setItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
+    );
+  }
+
+  function removeItem(index: number) {
+    setItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function addItem() {
+    setItems((prev) => [...prev, { name: "", description: "", price: 0 }]);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await authFetch(`/api/admin/estimates/${estimate.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          items: items.map((i) => ({
+            ...i,
+            price:
+              typeof i.price === "string"
+                ? Math.round(Number(i.price) * 100)
+                : i.price,
+          })),
+          notes: notes || null,
+        }),
+      });
+      onSave();
+    } catch {
+      alert("Failed to save estimate.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-text-secondary uppercase tracking-wide">
+            Line Items
+          </span>
+          <button
+            type="button"
+            onClick={addItem}
+            className="flex items-center gap-1 text-xs text-red-primary hover:text-red-600"
+          >
+            <Plus className="w-3 h-3" /> Add item
+          </button>
+        </div>
+        {items.map((item, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: editable list items without stable IDs
+          <div key={i} className="flex items-start gap-2">
+            <div className="flex-1 grid grid-cols-[1fr_1fr_auto] gap-2">
+              <input
+                type="text"
+                value={item.name}
+                onChange={(e) => updateItem(i, "name", e.target.value)}
+                placeholder="Service name"
+                className="text-xs px-2.5 py-1.5 bg-background border border-border rounded-md text-text focus:outline-none focus:ring-1 focus:ring-red-primary"
+              />
+              <input
+                type="text"
+                value={item.description}
+                onChange={(e) => updateItem(i, "description", e.target.value)}
+                placeholder="Description"
+                className="text-xs px-2.5 py-1.5 bg-background border border-border rounded-md text-text focus:outline-none focus:ring-1 focus:ring-red-primary"
+              />
+              <input
+                type="number"
+                value={item.price / 100}
+                onChange={(e) =>
+                  updateItem(
+                    i,
+                    "price",
+                    Math.round(Number(e.target.value) * 100),
+                  )
+                }
+                step="0.01"
+                className="text-xs px-2.5 py-1.5 bg-background border border-border rounded-md text-text w-24 focus:outline-none focus:ring-1 focus:ring-red-primary"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => removeItem(i)}
+              className="text-text-secondary hover:text-red-500 mt-1.5"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div>
+        <span className="text-xs font-medium text-text-secondary uppercase tracking-wide">
+          Notes
+        </span>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          className="mt-1 w-full text-xs px-2.5 py-1.5 bg-background border border-border rounded-md text-text focus:outline-none focus:ring-1 focus:ring-red-primary resize-none"
+        />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 bg-red-primary text-white rounded-md hover:bg-red-600 disabled:opacity-50"
+        >
+          <Save className="w-3 h-3" />
+          {saving ? "Saving..." : "Save"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-xs text-text-secondary hover:text-text px-3 py-1.5"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function EstimatesPage() {
   const { estimates, isLoading, mutate } = useAdminEstimates();
   const [deleting, setDeleting] = useState<number | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [batchDeleting, setBatchDeleting] = useState(false);
+  const [editing, setEditing] = useState<number | null>(null);
 
   function toggleSelect(id: number) {
     setSelected((prev) => {
@@ -137,6 +297,7 @@ export default function EstimatesPage() {
             {estimates.map((e) => {
               const isExpired = new Date(e.expiresAt) < new Date();
               const isSelected = selected.has(e.id);
+              const isEditing = editing === e.id;
               return (
                 <div
                   key={e.id}
@@ -160,6 +321,17 @@ export default function EstimatesPage() {
                             {formatCents(e.priceRangeLow)} &ndash;{" "}
                             {formatCents(e.priceRangeHigh)}
                           </h3>
+                          {e.vehicleInfo && (
+                            <span className="text-xs text-text-secondary">
+                              {[
+                                e.vehicleInfo.year,
+                                e.vehicleInfo.make,
+                                e.vehicleInfo.model,
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                            </span>
+                          )}
                           <a
                             href={`${AGENT_URL}/api/estimates/${e.id}/pdf?token=${e.shareToken}`}
                             target="_blank"
@@ -169,6 +341,14 @@ export default function EstimatesPage() {
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
                           </a>
+                          <button
+                            type="button"
+                            onClick={() => setEditing(isEditing ? null : e.id)}
+                            className="text-text-secondary hover:text-blue-500 transition-colors"
+                            title="Edit estimate"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleDelete(e.id)}
@@ -218,35 +398,50 @@ export default function EstimatesPage() {
                     </div>
                   )}
 
-                  {/* Line items */}
-                  <div className="space-y-1 mb-3 ml-7">
-                    {e.items.map((item) => (
-                      <div
-                        key={item.name}
-                        className="flex items-center justify-between text-xs"
-                      >
-                        <span className="text-text-secondary truncate">
-                          {item.name}
-                        </span>
-                        <span className="text-text shrink-0 ml-2">
-                          {formatCents(item.price)}
+                  {isEditing ? (
+                    <div className="ml-7">
+                      <EditForm
+                        estimate={e}
+                        onSave={() => {
+                          setEditing(null);
+                          mutate();
+                        }}
+                        onCancel={() => setEditing(null)}
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      {/* Line items */}
+                      <div className="space-y-1 mb-3 ml-7">
+                        {e.items.map((item) => (
+                          <div
+                            key={item.name}
+                            className="flex items-center justify-between text-xs"
+                          >
+                            <span className="text-text-secondary truncate">
+                              {item.name}
+                            </span>
+                            <span className="text-text shrink-0 ml-2">
+                              {formatCents(item.price)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex items-center gap-4 text-xs text-text-secondary ml-7">
+                        <span>Created {formatDate(e.createdAt)}</span>
+                        <span>
+                          {isExpired ? "Expired" : "Expires"}{" "}
+                          {formatDate(e.expiresAt)}
                         </span>
                       </div>
-                    ))}
-                  </div>
 
-                  <div className="flex items-center gap-4 text-xs text-text-secondary ml-7">
-                    <span>Created {formatDate(e.createdAt)}</span>
-                    <span>
-                      {isExpired ? "Expired" : "Expires"}{" "}
-                      {formatDate(e.expiresAt)}
-                    </span>
-                  </div>
-
-                  {e.notes && (
-                    <p className="mt-3 text-xs text-text-secondary border-t border-border pt-3 ml-7">
-                      {e.notes}
-                    </p>
+                      {e.notes && (
+                        <p className="mt-3 text-xs text-text-secondary border-t border-border pt-3 ml-7">
+                          {e.notes}
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               );

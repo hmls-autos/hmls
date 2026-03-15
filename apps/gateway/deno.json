@@ -12,7 +12,7 @@
     "app": "hmls-api"
   },
   "tasks": {
-    "dev": "deno run --env=../../.env.local --allow-net --allow-env --allow-read --allow-write --allow-run --allow-sys --watch src/index.ts",
-    "start": "deno run --env=../../.env.local --allow-net --allow-env --allow-read --allow-write --allow-run --allow-sys src/index.ts"
+    "dev": "deno run --env=../../.env.local --allow-net --allow-env --allow-read --allow-write --allow-run --allow-sys --allow-ffi --watch src/index.ts",
+    "start": "deno run --env=../../.env.local --allow-net --allow-env --allow-read --allow-write --allow-run --allow-sys --allow-ffi src/index.ts"
   }
 }

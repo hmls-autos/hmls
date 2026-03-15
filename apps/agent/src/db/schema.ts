@@ -139,20 +139,66 @@ export const bookings = pgTable("bookings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-// --- Orders (central entity linking estimate → quote → booking) ---
+// --- OrderItem type (unified item model across estimate/invoice/PDF) ---
+
+export interface OrderItem {
+  id: string;
+  category: "labor" | "parts" | "fee" | "discount";
+  name: string;
+  description?: string;
+  quantity: number;
+  unitPriceCents: number;
+  totalCents: number;
+  laborHours?: number;
+  partNumber?: string;
+  taxable: boolean;
+}
+
+// --- Orders (central entity — single source of truth for lifecycle) ---
 
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   customerId: integer("customer_id").references(() => customers.id).notNull(),
-  estimateId: integer("estimate_id").references(() => estimates.id, { onDelete: "cascade" }),
+  estimateId: integer("estimate_id").references(() => estimates.id, { onDelete: "set null" }),
   quoteId: integer("quote_id").references(() => quotes.id),
   bookingId: integer("booking_id").references(() => bookings.id),
-  status: varchar("status", { length: 30 }).notNull().default("estimated"),
+  status: varchar("status", { length: 30 }).notNull().default("draft"),
   statusHistory: jsonb("status_history").notNull().default([]),
+  // Unified items — replaces estimate.items and quote.items
+  items: jsonb("items").notNull().default([]),
+  notes: text("notes"),
+  subtotalCents: integer("subtotal_cents").notNull().default(0),
+  priceRangeLowCents: integer("price_range_low_cents"),
+  priceRangeHighCents: integer("price_range_high_cents"),
+  vehicleInfo: jsonb("vehicle_info"),
+  validDays: integer("valid_days").default(30),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  shareToken: varchar("share_token", { length: 64 }),
+  revisionNumber: integer("revision_number").notNull().default(1),
+  stripeQuoteId: varchar("stripe_quote_id", { length: 255 }),
+  stripeInvoiceId: varchar("stripe_invoice_id", { length: 255 }),
   adminNotes: text("admin_notes"),
   cancellationReason: text("cancellation_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  estimateIdx: index("orders_estimate_id_idx").on(table.estimateId),
+  shareTokenIdx: index("orders_share_token_idx").on(table.shareToken),
+  statusIdx: index("orders_status_idx").on(table.status),
+  customerIdx: index("orders_customer_id_idx").on(table.customerId),
+}));
+
+// --- Order Events (audit log) ---
+
+export const orderEvents = pgTable("order_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orderId: integer("order_id").references(() => orders.id, { onDelete: "cascade" }).notNull(),
+  eventType: varchar("event_type", { length: 50 }).notNull(),
+  fromStatus: varchar("from_status", { length: 50 }),
+  toStatus: varchar("to_status", { length: 50 }),
+  actor: varchar("actor", { length: 100 }),
+  metadata: jsonb("metadata").default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 // --- OLP (Open Labor Project) reference data ---

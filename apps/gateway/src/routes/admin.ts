@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { db, schema } from "@hmls/agent/db";
-import { count, desc, eq, gte, sql } from "drizzle-orm";
+import { count, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { type AdminEnv, requireAdmin } from "../middleware/admin.ts";
 
 const admin = new Hono<AdminEnv>();
@@ -49,12 +49,12 @@ admin.get("/dashboard", async (c) => {
       .limit(5),
   ]);
 
-  // Revenue: sum of paid quotes in last 30 days
+  // Revenue: sum of paid orders in last 30 days
   const [revenueResult] = await db
-    .select({ total: sql<number>`COALESCE(SUM(${schema.quotes.totalAmount}), 0)` })
-    .from(schema.quotes)
+    .select({ total: sql<number>`COALESCE(SUM(${schema.orders.subtotalCents}), 0)` })
+    .from(schema.orders)
     .where(
-      sql`${schema.quotes.status} = 'paid' AND ${schema.quotes.createdAt} >= ${thirtyDaysAgo.toISOString()}`,
+      sql`${schema.orders.status} IN ('paid', 'scheduled', 'in_progress', 'completed', 'archived') AND ${schema.orders.createdAt} >= ${thirtyDaysAgo.toISOString()}`,
     );
 
   return c.json({
@@ -191,6 +191,71 @@ admin.get("/estimates", async (c) => {
   );
 });
 
+// PATCH /estimates/:id — redirects to orders table (estimates are now managed via orders)
+admin.patch("/estimates/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id <= 0) {
+    return c.json({ error: { code: "BAD_REQUEST", message: "Invalid estimate ID" } }, 400);
+  }
+
+  // Find the order linked to this estimate
+  const [order] = await db
+    .select()
+    .from(schema.orders)
+    .where(eq(schema.orders.estimateId, id))
+    .limit(1);
+
+  if (!order) {
+    return c.json({ error: { code: "NOT_FOUND", message: "No order found for this estimate" } }, 404);
+  }
+
+  const body = await c.req.json<{
+    items?: { name: string; description: string; price: number }[];
+    notes?: string | null;
+    vehicleInfo?: { year?: number; make?: string; model?: string } | null;
+    validDays?: number;
+    expiresAt?: string | null;
+  }>();
+
+  const updates: Record<string, unknown> = {};
+  if (body.items !== undefined) {
+    // Convert legacy format to OrderItem format
+    updates.items = body.items.map((item, i) => ({
+      id: `item-${i}`,
+      category: "labor" as const,
+      name: item.name,
+      description: item.description,
+      quantity: 1,
+      unitPriceCents: item.price,
+      totalCents: item.price,
+      taxable: true,
+    }));
+    const subtotal = body.items.reduce((sum, item) => sum + item.price, 0);
+    updates.subtotalCents = subtotal;
+    updates.priceRangeLowCents = Math.round(subtotal * 0.9);
+    updates.priceRangeHighCents = Math.round(subtotal * 1.1);
+  }
+  if (body.notes !== undefined) updates.notes = body.notes;
+  if (body.vehicleInfo !== undefined) updates.vehicleInfo = body.vehicleInfo;
+  if (body.validDays !== undefined) updates.validDays = body.validDays;
+  if (body.expiresAt !== undefined) {
+    updates.expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
+  }
+  updates.updatedAt = new Date();
+
+  if (Object.keys(updates).length <= 1) {
+    return c.json({ error: { code: "BAD_REQUEST", message: "No fields to update" } }, 400);
+  }
+
+  const [updated] = await db
+    .update(schema.orders)
+    .set(updates)
+    .where(eq(schema.orders.id, order.id))
+    .returning();
+
+  return c.json(updated);
+});
+
 // DELETE /estimates/batch — bulk delete
 admin.delete("/estimates/batch", async (c) => {
   const body = await c.req.json<{ ids: number[] }>();
@@ -202,7 +267,7 @@ admin.delete("/estimates/batch", async (c) => {
       error: { code: "BAD_REQUEST", message: "ids must be a non-empty array of positive integers" },
     }, 400);
   }
-  await db.delete(schema.estimates).where(sql`${schema.estimates.id} IN ${body.ids}`);
+  await db.delete(schema.estimates).where(inArray(schema.estimates.id, body.ids));
   return c.json({ success: true, deleted: body.ids.length });
 });
 

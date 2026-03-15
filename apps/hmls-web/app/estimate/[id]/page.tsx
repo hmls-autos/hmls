@@ -140,7 +140,9 @@ export default function EstimateReviewPage() {
   const items = estimate.items as LineItem[];
   const vehicle = estimate.vehicleInfo;
   const expired = new Date(estimate.expiresAt) < new Date();
-  const alreadyActed = orderStatus !== "estimated";
+  const alreadyActed =
+    orderStatus !== null &&
+    !["draft", "estimated", "sent", "revised"].includes(orderStatus);
 
   if (result) {
     return (
@@ -274,9 +276,9 @@ export default function EstimateReviewPage() {
         <div className="text-center py-4">
           <p className="text-sm text-text-secondary">
             This estimate has already been{" "}
-            {orderStatus === "customer_approved"
+            {orderStatus === "approved"
               ? "approved"
-              : orderStatus === "customer_declined"
+              : orderStatus === "declined"
                 ? "declined"
                 : "processed"}
             .

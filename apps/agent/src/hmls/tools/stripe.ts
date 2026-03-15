@@ -146,14 +146,14 @@ export function createStripeTools(secretKey: string) {
         })
         .returning();
 
-      // Link quote to existing order (find the most recent customer_approved order for this customer)
+      // Link quote to existing order (find the most recent approved order for this customer)
       const [existingOrder] = await db
         .select()
         .from(schema.orders)
         .where(
           and(
             eq(schema.orders.customerId, params.customerId),
-            eq(schema.orders.status, "customer_approved"),
+            eq(schema.orders.status, "approved"),
             isNull(schema.orders.quoteId),
           ),
         )
@@ -168,16 +168,16 @@ export function createStripeTools(secretKey: string) {
           .update(schema.orders)
           .set({
             quoteId: dbQuote.id,
-            status: "quoted",
+            status: "invoiced",
             statusHistory: [
               ...history,
-              { status: "quoted", timestamp: new Date().toISOString(), actor: "system" },
+              { status: "invoiced", timestamp: new Date().toISOString(), actor: "system" },
             ],
             updatedAt: new Date(),
           })
           .where(eq(schema.orders.id, existingOrder.id));
 
-        notifyOrderStatusChange(existingOrder.id, "quoted");
+        notifyOrderStatusChange(existingOrder.id, "invoiced");
       }
 
       return toolResult({

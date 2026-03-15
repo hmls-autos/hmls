@@ -1,14 +1,13 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { db, schema } from "@hmls/agent/db";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { Errors } from "@hmls/shared/errors";
 import { type AuthEnv, requireAuth } from "../middleware/auth.ts";
 import { notifyOrderStatusChange } from "@hmls/agent";
 
 const portal = new Hono<AuthEnv>();
 
-// All portal routes require authentication
 portal.use("*", requireAuth);
 
 // GET /me — current customer profile
@@ -83,47 +82,7 @@ portal.get("/me/bookings", async (c) => {
   return c.json(rows);
 });
 
-// GET /me/estimates — customer's estimates (with linked order info)
-portal.get("/me/estimates", async (c) => {
-  const customerId = c.get("customerId");
-  const rows = await db
-    .select({
-      id: schema.estimates.id,
-      customerId: schema.estimates.customerId,
-      items: schema.estimates.items,
-      subtotal: schema.estimates.subtotal,
-      priceRangeLow: schema.estimates.priceRangeLow,
-      priceRangeHigh: schema.estimates.priceRangeHigh,
-      notes: schema.estimates.notes,
-      shareToken: schema.estimates.shareToken,
-      validDays: schema.estimates.validDays,
-      expiresAt: schema.estimates.expiresAt,
-      convertedToQuoteId: schema.estimates.convertedToQuoteId,
-      createdAt: schema.estimates.createdAt,
-      orderId: sql<number | null>`${schema.orders.id}`.as("orderId"),
-      orderStatus: sql<string | null>`${schema.orders.status}`.as("orderStatus"),
-    })
-    .from(schema.estimates)
-    .leftJoin(schema.orders, eq(schema.orders.estimateId, schema.estimates.id))
-    .where(eq(schema.estimates.customerId, customerId))
-    .orderBy(desc(schema.estimates.createdAt));
-
-  return c.json(rows);
-});
-
-// GET /me/quotes — customer's quotes
-portal.get("/me/quotes", async (c) => {
-  const customerId = c.get("customerId");
-  const rows = await db
-    .select()
-    .from(schema.quotes)
-    .where(eq(schema.quotes.customerId, customerId))
-    .orderBy(desc(schema.quotes.createdAt));
-
-  return c.json(rows);
-});
-
-// GET /me/orders — customer's orders
+// GET /me/orders — customer's orders (unified — replaces estimates + quotes)
 portal.get("/me/orders", async (c) => {
   const customerId = c.get("customerId");
   const rows = await db
@@ -135,7 +94,31 @@ portal.get("/me/orders", async (c) => {
   return c.json(rows);
 });
 
-// POST /me/orders/:id/approve — customer approves an estimate
+// GET /me/estimates — backward compat redirect to orders
+portal.get("/me/estimates", async (c) => {
+  const customerId = c.get("customerId");
+  const rows = await db
+    .select()
+    .from(schema.orders)
+    .where(eq(schema.orders.customerId, customerId))
+    .orderBy(desc(schema.orders.createdAt));
+
+  return c.json(rows);
+});
+
+// GET /me/quotes — backward compat redirect to orders
+portal.get("/me/quotes", async (c) => {
+  const customerId = c.get("customerId");
+  const rows = await db
+    .select()
+    .from(schema.orders)
+    .where(eq(schema.orders.customerId, customerId))
+    .orderBy(desc(schema.orders.createdAt));
+
+  return c.json(rows);
+});
+
+// POST /me/orders/:id/approve — customer approves estimate (status: sent → approved)
 portal.post("/me/orders/:id/approve", async (c) => {
   const customerId = c.get("customerId");
   const id = Number(c.req.param("id"));
@@ -153,9 +136,9 @@ portal.post("/me/orders/:id/approve", async (c) => {
     return c.json({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
   }
 
-  if (order.status !== "estimated") {
+  if (order.status !== "sent") {
     return c.json(
-      { error: { code: "BAD_REQUEST", message: `Order is '${order.status}', not 'estimated'` } },
+      { error: { code: "BAD_REQUEST", message: `Order is '${order.status}', not 'sent'` } },
       400,
     );
   }
@@ -164,22 +147,37 @@ portal.post("/me/orders/:id/approve", async (c) => {
   const [updated] = await db
     .update(schema.orders)
     .set({
-      status: "customer_approved",
+      status: "approved",
       statusHistory: [
         ...history,
-        { status: "customer_approved", timestamp: new Date().toISOString(), actor: "customer" },
+        { status: "approved", timestamp: new Date().toISOString(), actor: "customer" },
       ],
       updatedAt: new Date(),
     })
-    .where(eq(schema.orders.id, id))
+    .where(and(eq(schema.orders.id, id), eq(schema.orders.status, "sent")))
     .returning();
 
-  notifyOrderStatusChange(id, "customer_approved");
+  if (!updated) {
+    return c.json(
+      { error: { code: "CONFLICT", message: "Order status changed concurrently" } },
+      409,
+    );
+  }
 
+  await db.insert(schema.orderEvents).values({
+    orderId: id,
+    eventType: "status_change",
+    fromStatus: "sent",
+    toStatus: "approved",
+    actor: "customer",
+    metadata: {},
+  });
+
+  notifyOrderStatusChange(id, "approved");
   return c.json(updated);
 });
 
-// POST /me/orders/:id/decline — customer declines an estimate
+// POST /me/orders/:id/decline — customer declines estimate (status: sent → declined)
 portal.post("/me/orders/:id/decline", async (c) => {
   const customerId = c.get("customerId");
   const id = Number(c.req.param("id"));
@@ -197,9 +195,9 @@ portal.post("/me/orders/:id/decline", async (c) => {
     return c.json({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
   }
 
-  if (order.status !== "estimated") {
+  if (order.status !== "sent") {
     return c.json(
-      { error: { code: "BAD_REQUEST", message: `Order is '${order.status}', not 'estimated'` } },
+      { error: { code: "BAD_REQUEST", message: `Order is '${order.status}', not 'sent'` } },
       400,
     );
   }
@@ -209,19 +207,34 @@ portal.post("/me/orders/:id/decline", async (c) => {
   const [updated] = await db
     .update(schema.orders)
     .set({
-      status: "customer_declined",
+      status: "declined",
       statusHistory: [
         ...history,
-        { status: "customer_declined", timestamp: new Date().toISOString(), actor: "customer" },
+        { status: "declined", timestamp: new Date().toISOString(), actor: "customer" },
       ],
       cancellationReason: (body as { reason?: string }).reason ?? null,
       updatedAt: new Date(),
     })
-    .where(eq(schema.orders.id, id))
+    .where(and(eq(schema.orders.id, id), eq(schema.orders.status, "sent")))
     .returning();
 
-  notifyOrderStatusChange(id, "customer_declined");
+  if (!updated) {
+    return c.json(
+      { error: { code: "CONFLICT", message: "Order status changed concurrently" } },
+      409,
+    );
+  }
 
+  await db.insert(schema.orderEvents).values({
+    orderId: id,
+    eventType: "status_change",
+    fromStatus: "sent",
+    toStatus: "declined",
+    actor: "customer",
+    metadata: {},
+  });
+
+  notifyOrderStatusChange(id, "declined");
   return c.json(updated);
 });
 

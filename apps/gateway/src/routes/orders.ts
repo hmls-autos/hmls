@@ -1,38 +1,50 @@
 import { Hono } from "hono";
 import { db, schema } from "@hmls/agent/db";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { type AdminEnv, requireAdmin } from "../middleware/admin.ts";
 import { notifyOrderStatusChange } from "@hmls/agent";
+import type { OrderItem } from "@hmls/agent/db";
 
-// Valid status transitions
+// New status machine
 const TRANSITIONS: Record<string, string[]> = {
-  estimated: ["customer_approved", "customer_declined", "cancelled"],
-  customer_approved: ["quoted", "cancelled"],
-  quoted: ["accepted", "declined", "cancelled"],
-  accepted: ["scheduled", "cancelled"],
+  draft: ["estimated", "cancelled"],
+  estimated: ["sent", "cancelled"],
+  sent: ["approved", "declined", "cancelled"],
+  approved: ["invoiced", "cancelled"],
+  declined: ["revised"],
+  revised: ["sent", "cancelled"],
+  invoiced: ["paid", "void", "cancelled"],
+  paid: ["scheduled", "cancelled"],
   scheduled: ["in_progress", "cancelled"],
   in_progress: ["completed", "cancelled"],
-  // Terminal states — no transitions out
-  customer_declined: [],
-  declined: [],
-  completed: [],
+  completed: ["archived"],
+  // terminal
+  archived: [],
   cancelled: [],
+  void: [],
 };
 
-function appendStatusHistory(
-  current: unknown[],
-  newStatus: string,
+// Editable statuses
+const EDITABLE_STATUSES = new Set(["draft", "estimated", "revised"]);
+
+async function logOrderEvent(
+  orderId: number,
+  eventType: string,
   actor: string,
-): unknown[] {
-  return [
-    ...(Array.isArray(current) ? current : []),
-    { status: newStatus, timestamp: new Date().toISOString(), actor },
-  ];
+  opts?: { fromStatus?: string; toStatus?: string; metadata?: Record<string, unknown> },
+) {
+  await db.insert(schema.orderEvents).values({
+    orderId,
+    eventType,
+    fromStatus: opts?.fromStatus ?? null,
+    toStatus: opts?.toStatus ?? null,
+    actor,
+    metadata: opts?.metadata ?? {},
+  });
 }
 
 const orders = new Hono<AdminEnv>();
 
-// All order admin routes require admin role
 orders.use("*", requireAdmin);
 
 // GET /orders — list all orders with customer info
@@ -67,7 +79,7 @@ orders.get("/", async (c) => {
   );
 });
 
-// GET /orders/:id — single order with related entities
+// GET /orders/:id — single order with related entities + events
 orders.get("/:id", async (c) => {
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id) || id <= 0) {
@@ -84,29 +96,93 @@ orders.get("/:id", async (c) => {
     return c.json({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
   }
 
-  // Fetch related entities in parallel
-  const [customer, estimate, quote, booking] = await Promise.all([
+  const [customer, booking, events] = await Promise.all([
     db.select().from(schema.customers).where(eq(schema.customers.id, order.customerId)).limit(1)
       .then((r) => r[0]),
-    order.estimateId
-      ? db.select().from(schema.estimates).where(eq(schema.estimates.id, order.estimateId)).limit(1)
-        .then((r) => r[0])
-      : null,
-    order.quoteId
-      ? db.select().from(schema.quotes).where(eq(schema.quotes.id, order.quoteId)).limit(1).then((
-        r,
-      ) => r[0])
-      : null,
     order.bookingId
       ? db.select().from(schema.bookings).where(eq(schema.bookings.id, order.bookingId)).limit(1)
         .then((r) => r[0])
       : null,
+    db.select().from(schema.orderEvents).where(eq(schema.orderEvents.orderId, id))
+      .orderBy(desc(schema.orderEvents.createdAt)),
   ]);
 
-  return c.json({ order, customer, estimate, quote, booking });
+  return c.json({ order, customer, booking, events });
 });
 
-// PATCH /orders/:id/status — transition order status
+// PATCH /orders/:id — edit order items/notes (only in editable statuses)
+orders.patch("/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id <= 0) {
+    return c.json({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
+  }
+
+  const [order] = await db
+    .select()
+    .from(schema.orders)
+    .where(eq(schema.orders.id, id))
+    .limit(1);
+
+  if (!order) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
+  }
+
+  if (!EDITABLE_STATUSES.has(order.status)) {
+    return c.json({
+      error: {
+        code: "BAD_REQUEST",
+        message: `Cannot edit order in '${order.status}' status. Editable statuses: ${
+          [...EDITABLE_STATUSES].join(", ")
+        }`,
+      },
+    }, 400);
+  }
+
+  const currentStatus = order.status;
+
+  const body = await c.req.json<{
+    items?: OrderItem[];
+    notes?: string | null;
+    vehicleInfo?: Record<string, unknown> | null;
+    validDays?: number;
+    expiresAt?: string | null;
+  }>();
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+
+  if (body.items !== undefined) {
+    updates.items = body.items;
+    const subtotal = body.items.reduce((sum, item) => sum + item.totalCents, 0);
+    updates.subtotalCents = subtotal;
+    updates.priceRangeLowCents = Math.round(subtotal * 0.9);
+    updates.priceRangeHighCents = Math.round(subtotal * 1.1);
+  }
+  if (body.notes !== undefined) updates.notes = body.notes;
+  if (body.vehicleInfo !== undefined) updates.vehicleInfo = body.vehicleInfo;
+  if (body.validDays !== undefined) updates.validDays = body.validDays;
+  if (body.expiresAt !== undefined) {
+    updates.expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
+  }
+
+  const [updated] = await db
+    .update(schema.orders)
+    .set(updates)
+    .where(and(eq(schema.orders.id, id), eq(schema.orders.status, currentStatus)))
+    .returning();
+
+  if (!updated) {
+    return c.json({
+      error: { code: "CONFLICT", message: "Order status changed concurrently — refresh and retry" },
+    }, 409);
+  }
+
+  const authUser = c.get("authUser");
+  await logOrderEvent(id, "items_edited", authUser.email ?? "admin");
+
+  return c.json(updated);
+});
+
+// PATCH /orders/:id/status — transition order status (atomic)
 orders.patch("/:id/status", async (c) => {
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id) || id <= 0) {
@@ -128,43 +204,162 @@ orders.patch("/:id/status", async (c) => {
 
   const allowed = TRANSITIONS[order.status] ?? [];
   if (!allowed.includes(newStatus)) {
-    return c.json(
-      {
-        error: {
-          code: "BAD_REQUEST",
-          message: `Cannot transition from '${order.status}' to '${newStatus}'. Allowed: ${
-            allowed.join(", ") || "none (terminal state)"
-          }`,
-        },
+    return c.json({
+      error: {
+        code: "BAD_REQUEST",
+        message: `Cannot transition from '${order.status}' to '${newStatus}'. Allowed: ${
+          allowed.join(", ") || "none (terminal state)"
+        }`,
       },
-      400,
-    );
+    }, 400);
   }
 
   const authUser = c.get("authUser");
-  const updates: Record<string, unknown> = {
+  const actor = authUser.email ?? "admin";
+
+  const updateFields: Record<string, unknown> = {
     status: newStatus,
-    statusHistory: appendStatusHistory(
-      order.statusHistory as unknown[],
-      newStatus,
-      authUser.email ?? "admin",
-    ),
+    statusHistory: [
+      ...(Array.isArray(order.statusHistory) ? order.statusHistory : []),
+      { status: newStatus, timestamp: new Date().toISOString(), actor },
+    ],
     updatedAt: new Date(),
   };
 
-  if (body.notes) updates.adminNotes = body.notes;
+  if (body.notes) updateFields.adminNotes = body.notes;
   if (newStatus === "cancelled" && body.cancellationReason) {
-    updates.cancellationReason = body.cancellationReason;
+    updateFields.cancellationReason = body.cancellationReason;
   }
 
+  // Atomic transition: only update if status hasn't changed
   const [updated] = await db
     .update(schema.orders)
-    .set(updates)
-    .where(eq(schema.orders.id, id))
+    .set(updateFields)
+    .where(and(eq(schema.orders.id, id), eq(schema.orders.status, order.status)))
     .returning();
+
+  if (!updated) {
+    return c.json({
+      error: { code: "CONFLICT", message: "Order status changed concurrently. Please retry." },
+    }, 409);
+  }
+
+  await logOrderEvent(id, "status_change", actor, {
+    fromStatus: order.status,
+    toStatus: newStatus,
+  });
 
   // Fire-and-forget notification
   notifyOrderStatusChange(id, newStatus);
+
+  return c.json(updated);
+});
+
+// POST /orders/:id/send — transition to 'sent' + trigger notification
+orders.post("/:id/send", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id <= 0) {
+    return c.json({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
+  }
+
+  const [order] = await db
+    .select()
+    .from(schema.orders)
+    .where(eq(schema.orders.id, id))
+    .limit(1);
+
+  if (!order) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
+  }
+
+  const validFrom = ["estimated", "revised"];
+  if (!validFrom.includes(order.status)) {
+    return c.json({
+      error: { code: "BAD_REQUEST", message: `Cannot send order in '${order.status}' status` },
+    }, 400);
+  }
+
+  const authUser = c.get("authUser");
+  const actor = authUser.email ?? "admin";
+
+  const [updated] = await db
+    .update(schema.orders)
+    .set({
+      status: "sent",
+      statusHistory: [
+        ...(Array.isArray(order.statusHistory) ? order.statusHistory : []),
+        { status: "sent", timestamp: new Date().toISOString(), actor },
+      ],
+      updatedAt: new Date(),
+    })
+    .where(and(eq(schema.orders.id, id), eq(schema.orders.status, order.status)))
+    .returning();
+
+  if (!updated) {
+    return c.json(
+      { error: { code: "CONFLICT", message: "Order status changed concurrently" } },
+      409,
+    );
+  }
+
+  await logOrderEvent(id, "status_change", actor, { fromStatus: order.status, toStatus: "sent" });
+  notifyOrderStatusChange(id, "sent");
+
+  return c.json(updated);
+});
+
+// POST /orders/:id/revise — create revision from declined order
+orders.post("/:id/revise", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id <= 0) {
+    return c.json({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
+  }
+
+  const [order] = await db
+    .select()
+    .from(schema.orders)
+    .where(eq(schema.orders.id, id))
+    .limit(1);
+
+  if (!order) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
+  }
+
+  if (order.status !== "declined") {
+    return c.json({
+      error: {
+        code: "BAD_REQUEST",
+        message: `Cannot revise order in '${order.status}' status. Must be 'declined'.`,
+      },
+    }, 400);
+  }
+
+  const authUser = c.get("authUser");
+  const actor = authUser.email ?? "admin";
+
+  const [updated] = await db
+    .update(schema.orders)
+    .set({
+      status: "revised",
+      revisionNumber: (order.revisionNumber ?? 1) + 1,
+      statusHistory: [
+        ...(Array.isArray(order.statusHistory) ? order.statusHistory : []),
+        { status: "revised", timestamp: new Date().toISOString(), actor },
+      ],
+      updatedAt: new Date(),
+    })
+    .where(and(eq(schema.orders.id, id), eq(schema.orders.status, "declined")))
+    .returning();
+
+  if (!updated) {
+    return c.json(
+      { error: { code: "CONFLICT", message: "Order status changed concurrently" } },
+      409,
+    );
+  }
+
+  await logOrderEvent(id, "status_change", actor, { fromStatus: "declined", toStatus: "revised" });
+  notifyOrderStatusChange(id, "revised");
 
   return c.json(updated);
 });

@@ -18,10 +18,11 @@ interface NotificationContext {
   reviewUrl?: string; // one-click estimate review link
 }
 
-const PORTAL_URL = "https://hmls.autos/portal";
+/** Base portal URL — works for both hmls.autos and fixo.hmls.autos */
+const PORTAL_URL = Deno.env.get("PORTAL_URL") || "https://hmls.autos/portal";
 
 const STATUS_EMAILS: Record<string, EmailTemplate> = {
-  estimated: {
+  sent: {
     subject: "Your HMLS Estimate is Ready",
     body: (ctx) =>
       `Hi ${ctx.customerName},\n\nYour estimate${
@@ -30,19 +31,33 @@ const STATUS_EMAILS: Record<string, EmailTemplate> = {
         ctx.reviewUrl ?? `${ctx.portalUrl}/orders`
       }\n\nThanks,\nHMLS Team`,
   },
-  customer_approved: {
-    subject: "Estimate Approved — We're Preparing Your Quote",
+  approved: {
+    subject: "Estimate Approved — We'll Prepare Your Invoice",
     body: (ctx) =>
-      `Hi ${ctx.customerName},\n\nThanks for approving your estimate! We're now preparing a detailed quote with the final pricing.\n\nWe'll notify you as soon as it's ready.\n\nThanks,\nHMLS Team`,
+      `Hi ${ctx.customerName},\n\nThanks for approving your estimate! We're now preparing your invoice with the final pricing.\n\nWe'll notify you as soon as it's ready.\n\nThanks,\nHMLS Team`,
   },
-  quoted: {
-    subject: "Your HMLS Quote is Ready",
+  declined: {
+    subject: "Estimate Declined",
     body: (ctx) =>
-      `Hi ${ctx.customerName},\n\nYour official quote${
+      `Hi ${ctx.customerName},\n\nWe received your decision to decline the estimate for order #${ctx.orderId}. If you change your mind or have questions, feel free to reach out.\n\nThanks,\nHMLS Team`,
+  },
+  revised: {
+    subject: "Your Revised HMLS Estimate is Ready",
+    body: (ctx) =>
+      `Hi ${ctx.customerName},\n\nA revised estimate${
+        ctx.estimateTotal ? ` (~${ctx.estimateTotal})` : ""
+      } is available for your review.\n\nView the updated details:\n${
+        ctx.reviewUrl ?? `${ctx.portalUrl}/orders`
+      }\n\nThanks,\nHMLS Team`,
+  },
+  invoiced: {
+    subject: "Your HMLS Invoice is Ready",
+    body: (ctx) =>
+      `Hi ${ctx.customerName},\n\nYour invoice${
         ctx.quoteTotal ? ` ($${ctx.quoteTotal})` : ""
       } is ready. You can review and pay directly through the secure payment link in your portal.\n\n${ctx.portalUrl}/orders\n\nThanks,\nHMLS Team`,
   },
-  accepted: {
+  paid: {
     subject: "Payment Received — Let's Schedule Your Service",
     body: (ctx) =>
       `Hi ${ctx.customerName},\n\nPayment received! The next step is scheduling your service appointment.\n\nVisit your portal to pick a time:\n${ctx.portalUrl}/orders\n\nThanks,\nHMLS Team`,
@@ -72,8 +87,9 @@ const STATUS_EMAILS: Record<string, EmailTemplate> = {
 // --- Admin notification statuses (notify admin, not customer) ---
 
 const ADMIN_NOTIFY_STATUSES = new Set([
-  "customer_approved", // customer approved → admin should create quote
-  "customer_declined", // customer declined → admin should know
+  "approved", // customer approved estimate → admin should create invoice
+  "declined", // customer declined → admin should know
+  "revised", // revised estimate sent → admin awareness
 ]);
 
 // --- Email sending via Resend ---
@@ -147,31 +163,21 @@ export async function notifyOrderStatusChange(
       portalUrl: PORTAL_URL,
     };
 
-    // Add estimate total + review URL if available
-    if (order.estimateId) {
-      const [estimate] = await db
-        .select()
-        .from(schema.estimates)
-        .where(eq(schema.estimates.id, order.estimateId))
-        .limit(1);
-      if (estimate) {
-        ctx.estimateTotal = `$${(estimate.priceRangeLow / 100).toFixed(0)}–$${
-          (estimate.priceRangeHigh / 100).toFixed(0)
-        }`;
-        ctx.reviewUrl = `https://hmls.autos/estimate/${estimate.id}?token=${estimate.shareToken}`;
-      }
+    // Use order's own pricing data (no separate estimates/quotes lookup)
+    if (order.priceRangeLowCents && order.priceRangeHighCents) {
+      ctx.estimateTotal = `$${(order.priceRangeLowCents / 100).toFixed(0)}–$${
+        (order.priceRangeHighCents / 100).toFixed(0)
+      }`;
+    } else if (order.subtotalCents) {
+      ctx.estimateTotal = `$${(order.subtotalCents / 100).toFixed(2)}`;
     }
 
-    // Add quote total if available
-    if (order.quoteId) {
-      const [quote] = await db
-        .select()
-        .from(schema.quotes)
-        .where(eq(schema.quotes.id, order.quoteId))
-        .limit(1);
-      if (quote) {
-        ctx.quoteTotal = (quote.totalAmount / 100).toFixed(2);
-      }
+    if (order.subtotalCents) {
+      ctx.quoteTotal = (order.subtotalCents / 100).toFixed(2);
+    }
+
+    if (order.shareToken) {
+      ctx.reviewUrl = `${PORTAL_URL}/estimate/${order.id}?token=${order.shareToken}`;
     }
 
     // Send customer email
@@ -187,7 +193,7 @@ export async function notifyOrderStatusChange(
         const adminSubject = `[HMLS Admin] Order #${order.id} → ${newStatus}`;
         const adminBody = `Order #${order.id} (${
           customer.name || customer.email
-        }) changed to: ${newStatus}\n\nAction may be required.\n\nAdmin portal: https://hmls.autos/admin/orders`;
+        }) changed to: ${newStatus}\n\nAction may be required.\n\nAdmin portal: ${PORTAL_URL}/admin/orders`;
         await sendEmail(adminEmail, adminSubject, adminBody);
       }
     }

@@ -1,4 +1,7 @@
 // apps/agent/src/skills/estimate/tools.ts
+//
+// Order-lifecycle refactor: writes directly to `orders` table (status "draft")
+// with items stored as OrderItem[] JSONB.  No more `estimates` table inserts.
 
 import { z } from "zod";
 import { nanoid } from "nanoid";
@@ -7,7 +10,7 @@ import { eq } from "drizzle-orm";
 import { buildFeeItems, calculateDiscount, calculatePrice, getPricingConfig } from "./pricing.ts";
 import { toolResult } from "@hmls/shared/tool-result";
 import type { DiscountType, LineItem, ServiceInput } from "./types.ts";
-import { notifyOrderStatusChange } from "../../../lib/notifications.ts";
+import type { OrderItem } from "../../../db/schema.ts";
 
 const discountEnum = z.enum([
   "returning_customer",
@@ -17,6 +20,34 @@ const discountEnum = z.enum([
   "military",
   "first_responder",
 ]);
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Convert a legacy LineItem into the unified OrderItem format. */
+function toOrderItem(
+  item: LineItem,
+  category: OrderItem["category"],
+  opts?: { laborHours?: number; quantity?: number },
+): OrderItem {
+  const quantity = opts?.quantity ?? 1;
+  return {
+    id: crypto.randomUUID(),
+    category,
+    name: item.name,
+    description: item.description || undefined,
+    quantity,
+    unitPriceCents: item.price,
+    totalCents: item.price * quantity,
+    taxable: category !== "discount",
+    ...(opts?.laborHours ? { laborHours: opts.laborHours } : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// create_estimate  →  creates an order in "draft" status
+// ---------------------------------------------------------------------------
 
 export const createEstimateTool = {
   name: "create_estimate",
@@ -163,7 +194,7 @@ export const createEstimateTool = {
     }
 
     // 2. Calculate service line items (labor + parts)
-    const serviceItems = await Promise.all(
+    const serviceLineItems = await Promise.all(
       params.services.map((s) => calculatePrice(s)),
     );
 
@@ -181,7 +212,7 @@ export const createEstimateTool = {
     );
 
     // 3. Build fee line items
-    const feeItems = buildFeeItems(config, {
+    const feeLineItems = buildFeeItems(config, {
       isRush: params.isRush,
       isAfterHours: params.isAfterHours,
       isWeekend: params.isWeekend,
@@ -193,12 +224,18 @@ export const createEstimateTool = {
       services: params.services,
     });
 
-    // 4. Combine all items
-    const allItems = [...serviceItems, ...customLineItems, ...feeItems];
+    // 4. Convert LineItems → OrderItem[] (unified item model)
+    const orderItems: OrderItem[] = [
+      ...serviceLineItems.map((li, i) =>
+        toOrderItem(li, "labor", { laborHours: params.services[i]?.laborHours })
+      ),
+      ...customLineItems.map((li) => toOrderItem(li, "labor")),
+      ...feeLineItems.map((li) => toOrderItem(li, "fee")),
+    ];
 
     // 5. Calculate subtotal before discount
-    const subtotalBeforeDiscount = allItems.reduce(
-      (sum, item) => sum + item.price,
+    const subtotalBeforeDiscount = orderItems.reduce(
+      (sum, item) => sum + item.totalCents,
       0,
     );
 
@@ -211,15 +248,20 @@ export const createEstimateTool = {
     );
 
     if (discount && discount.amount > 0) {
-      allItems.push({
+      orderItems.push({
+        id: crypto.randomUUID(),
+        category: "discount",
         name: "Discount",
         description: discount.label,
-        price: -discount.amount,
+        quantity: 1,
+        unitPriceCents: -discount.amount,
+        totalCents: -discount.amount,
+        taxable: false,
       });
     }
 
     // 7. Final subtotal (enforce minimum service fee)
-    let subtotal = allItems.reduce((sum, item) => sum + item.price, 0);
+    let subtotal = orderItems.reduce((sum, item) => sum + item.totalCents, 0);
     if (subtotal < config.minimumServiceFee) {
       subtotal = config.minimumServiceFee;
     }
@@ -236,56 +278,59 @@ export const createEstimateTool = {
 
     // 9. Save to DB if we have a customer, otherwise return pricing only
     if (customer) {
-      const [estimate] = await db
-        .insert(schema.estimates)
+      // Create order directly — no separate estimates row
+      const [order] = await db
+        .insert(schema.orders)
         .values({
           customerId: customer.id,
-          items: allItems,
-          vehicleInfo: params.vehicle
-            ? {
-              year: String(params.vehicle.year),
-              make: params.vehicle.make,
-              model: params.vehicle.model,
-            }
-            : null,
-          subtotal,
-          priceRangeLow: rangeLow,
-          priceRangeHigh: rangeHigh,
-          notes: params.notes,
+          status: "draft",
+          statusHistory: [
+            { status: "draft", timestamp: new Date().toISOString(), actor: "system" },
+          ],
+          items: orderItems,
+          notes: params.notes ?? null,
+          subtotalCents: subtotal,
+          priceRangeLowCents: rangeLow,
+          priceRangeHighCents: rangeHigh,
+          vehicleInfo: {
+            year: String(params.vehicle.year),
+            make: params.vehicle.make,
+            model: params.vehicle.model,
+          },
           shareToken,
           validDays,
           expiresAt,
         })
         .returning();
 
-      // Auto-create order linked to this estimate
-      const [order] = await db
-        .insert(schema.orders)
-        .values({
-          customerId: customer.id,
-          estimateId: estimate.id,
-          status: "estimated",
-          statusHistory: [
-            { status: "estimated", timestamp: new Date().toISOString(), actor: "system" },
-          ],
-        })
-        .returning();
+      // Record creation event in audit log
+      await db.insert(schema.orderEvents).values({
+        orderId: order.id,
+        eventType: "status_change",
+        fromStatus: null,
+        toStatus: "draft",
+        actor: "system",
+        metadata: {
+          vehicleInfo: params.vehicle,
+          itemCount: orderItems.length,
+        },
+      });
 
-      notifyOrderStatusChange(order.id, "estimated");
-
-      const baseUrl = "/api/estimates";
+      const baseUrl = "/api/orders";
 
       return toolResult({
         success: true,
-        estimateId: estimate.id,
         orderId: order.id,
         vehicle: `${params.vehicle.year} ${params.vehicle.make} ${params.vehicle.model}`,
-        downloadUrl: `${baseUrl}/${estimate.id}/pdf`,
-        shareUrl: `${baseUrl}/${estimate.id}/pdf?token=${shareToken}`,
-        items: allItems.map((i) => ({
+        downloadUrl: `${baseUrl}/${order.id}/pdf`,
+        shareUrl: `${baseUrl}/${order.id}/pdf?token=${shareToken}`,
+        items: orderItems.map((i) => ({
           name: i.name,
           description: i.description,
-          price: i.price / 100,
+          unitPriceCents: i.unitPriceCents,
+          totalCents: i.totalCents,
+          quantity: i.quantity,
+          category: i.category,
         })),
         subtotal: subtotal / 100,
         priceRange: `$${(rangeLow / 100).toFixed(2)} - $${(rangeHigh / 100).toFixed(2)}`,
@@ -297,10 +342,13 @@ export const createEstimateTool = {
     return toolResult({
       success: true,
       vehicle: `${params.vehicle.year} ${params.vehicle.make} ${params.vehicle.model}`,
-      items: allItems.map((i) => ({
+      items: orderItems.map((i) => ({
         name: i.name,
         description: i.description,
-        price: i.price / 100,
+        unitPriceCents: i.unitPriceCents,
+        totalCents: i.totalCents,
+        quantity: i.quantity,
+        category: i.category,
       })),
       subtotal: subtotal / 100,
       priceRange: `$${(rangeLow / 100).toFixed(2)} - $${(rangeHigh / 100).toFixed(2)}`,
@@ -309,40 +357,57 @@ export const createEstimateTool = {
   },
 };
 
+// ---------------------------------------------------------------------------
+// get_estimate  →  reads from orders table
+// ---------------------------------------------------------------------------
+
 export const getEstimateTool = {
   name: "get_estimate",
-  description: "Retrieve an existing estimate by ID to check status or details",
+  description: "Retrieve an existing order/estimate by ID to check status, items, or details. " +
+    "Reads from the orders table.",
   schema: z.object({
-    estimateId: z.number().describe("Estimate ID from database"),
+    orderId: z.number().describe("Order ID from database"),
   }),
-  execute: async (params: { estimateId: number }, _ctx: unknown) => {
-    const [estimate] = await db
+  execute: async (params: { orderId: number }, _ctx: unknown) => {
+    const [order] = await db
       .select()
-      .from(schema.estimates)
-      .where(eq(schema.estimates.id, params.estimateId))
+      .from(schema.orders)
+      .where(eq(schema.orders.id, params.orderId))
       .limit(1);
 
-    if (!estimate) {
-      return toolResult({ found: false, message: "Estimate not found" });
+    if (!order) {
+      return toolResult({ found: false, message: "Order not found" });
     }
 
-    const isExpired = new Date() > estimate.expiresAt;
+    const isExpired = order.expiresAt ? new Date() > order.expiresAt : false;
+    const items = (order.items ?? []) as OrderItem[];
 
     return toolResult({
       found: true,
-      estimate: {
-        id: estimate.id,
-        items: estimate.items,
-        subtotal: estimate.subtotal / 100,
-        priceRange: `$${(estimate.priceRangeLow / 100).toFixed(2)} - $${
-          (estimate.priceRangeHigh / 100).toFixed(2)
-        }`,
-        notes: estimate.notes,
-        expiresAt: estimate.expiresAt,
+      order: {
+        id: order.id,
+        status: order.status,
+        items: items.map((i) => ({
+          name: i.name,
+          description: i.description,
+          unitPriceCents: i.unitPriceCents,
+          totalCents: i.totalCents,
+          quantity: i.quantity,
+          category: i.category,
+        })),
+        subtotal: (order.subtotalCents ?? 0) / 100,
+        priceRange: order.priceRangeLowCents && order.priceRangeHighCents
+          ? `$${(order.priceRangeLowCents / 100).toFixed(2)} - $${
+            (order.priceRangeHighCents / 100).toFixed(2)
+          }`
+          : null,
+        notes: order.notes,
+        vehicleInfo: order.vehicleInfo,
+        expiresAt: order.expiresAt,
         isExpired,
-        convertedToQuote: estimate.convertedToQuoteId !== null,
-        downloadUrl: `/api/estimates/${estimate.id}/pdf`,
-        shareUrl: `/api/estimates/${estimate.id}/pdf?token=${estimate.shareToken}`,
+        revisionNumber: order.revisionNumber,
+        downloadUrl: `/api/orders/${order.id}/pdf`,
+        shareUrl: order.shareToken ? `/api/orders/${order.id}/pdf?token=${order.shareToken}` : null,
       },
     });
   },

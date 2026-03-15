@@ -1,19 +1,8 @@
 import { Hono } from "hono";
 import Stripe from "stripe";
 import { db, schema } from "@hmls/agent/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { notifyOrderStatusChange } from "@hmls/agent";
-
-function appendStatusHistory(
-  current: unknown[],
-  newStatus: string,
-  actor: string,
-): unknown[] {
-  return [
-    ...(Array.isArray(current) ? current : []),
-    { status: newStatus, timestamp: new Date().toISOString(), actor },
-  ];
-}
 
 export function createWebhookRoute(stripeSecretKey: string) {
   const stripe = new Stripe(stripeSecretKey, {
@@ -68,7 +57,6 @@ export function createWebhookRoute(stripeSecretKey: string) {
       }
     } catch (err) {
       console.error(`[webhook] Error handling ${event.type}:`, err);
-      // Return 200 anyway to prevent Stripe retries on application errors
     }
 
     return c.json({ received: true });
@@ -78,7 +66,42 @@ export function createWebhookRoute(stripeSecretKey: string) {
     const stripeQuoteId = stripeQuote.id;
     console.log(`[webhook] Quote accepted: ${stripeQuoteId}`);
 
-    // Find our local quote
+    // Find order by stripe_quote_id (new flow)
+    const [order] = await db
+      .select()
+      .from(schema.orders)
+      .where(eq(schema.orders.stripeQuoteId, stripeQuoteId))
+      .limit(1);
+
+    if (order) {
+      if (order.status !== "invoiced") {
+        console.warn(`[webhook] Order ${order.id} is '${order.status}', expected 'invoiced'`);
+        return;
+      }
+
+      const history = Array.isArray(order.statusHistory) ? order.statusHistory : [];
+      const [updated] = await db
+        .update(schema.orders)
+        .set({
+          status: "paid",
+          statusHistory: [
+            ...history,
+            { status: "paid", timestamp: new Date().toISOString(), actor: "stripe_webhook" },
+          ],
+          updatedAt: new Date(),
+        })
+        .where(and(eq(schema.orders.id, order.id), eq(schema.orders.status, "invoiced")))
+        .returning();
+
+      if (updated) {
+        await logWebhookEvent(order.id, "invoiced", "paid", stripeQuoteId);
+        notifyOrderStatusChange(order.id, "paid");
+        console.log(`[webhook] Order ${order.id} → paid`);
+      }
+      return;
+    }
+
+    // Legacy: find via quotes table
     const [quote] = await db
       .select()
       .from(schema.quotes)
@@ -86,56 +109,78 @@ export function createWebhookRoute(stripeSecretKey: string) {
       .limit(1);
 
     if (!quote) {
-      console.warn(`[webhook] No local quote found for Stripe quote ${stripeQuoteId}`);
+      console.warn(`[webhook] No order or quote found for Stripe quote ${stripeQuoteId}`);
       return;
     }
 
-    // Update quote status
     await db
       .update(schema.quotes)
       .set({ status: "accepted" })
       .where(eq(schema.quotes.id, quote.id));
 
-    // Find and update the linked order
-    const [order] = await db
+    const [legacyOrder] = await db
       .select()
       .from(schema.orders)
       .where(eq(schema.orders.quoteId, quote.id))
       .limit(1);
 
-    if (!order) {
-      console.warn(`[webhook] No order linked to quote ${quote.id}`);
-      return;
+    if (legacyOrder) {
+      const history = Array.isArray(legacyOrder.statusHistory) ? legacyOrder.statusHistory : [];
+      const [updated] = await db
+        .update(schema.orders)
+        .set({
+          status: "paid",
+          statusHistory: [
+            ...history,
+            { status: "paid", timestamp: new Date().toISOString(), actor: "stripe_webhook" },
+          ],
+          updatedAt: new Date(),
+        })
+        .where(and(eq(schema.orders.id, legacyOrder.id), eq(schema.orders.status, "invoiced")))
+        .returning();
+
+      if (updated) {
+        notifyOrderStatusChange(legacyOrder.id, "paid");
+      }
     }
-
-    if (order.status !== "quoted") {
-      console.warn(
-        `[webhook] Order ${order.id} is '${order.status}', expected 'quoted' — skipping`,
-      );
-      return;
-    }
-
-    await db
-      .update(schema.orders)
-      .set({
-        status: "accepted",
-        statusHistory: appendStatusHistory(
-          order.statusHistory as unknown[],
-          "accepted",
-          "stripe_webhook",
-        ),
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.orders.id, order.id));
-
-    console.log(`[webhook] Order ${order.id} → accepted`);
-    notifyOrderStatusChange(order.id, "accepted");
   }
 
   async function handleInvoicePaid(invoice: Stripe.Invoice) {
     console.log(`[webhook] Invoice paid: ${invoice.id}`);
 
-    // Stripe quotes generate an invoice — try to link it
+    // Try to find order by stripe_invoice_id (new flow)
+    const [order] = await db
+      .select()
+      .from(schema.orders)
+      .where(eq(schema.orders.stripeInvoiceId, invoice.id))
+      .limit(1);
+
+    if (order) {
+      if (order.status === "invoiced") {
+        const history = Array.isArray(order.statusHistory) ? order.statusHistory : [];
+        const [updated] = await db
+          .update(schema.orders)
+          .set({
+            status: "paid",
+            statusHistory: [
+              ...history,
+              { status: "paid", timestamp: new Date().toISOString(), actor: "stripe_webhook" },
+            ],
+            updatedAt: new Date(),
+          })
+          .where(and(eq(schema.orders.id, order.id), eq(schema.orders.status, "invoiced")))
+          .returning();
+
+        if (updated) {
+          await logWebhookEvent(order.id, "invoiced", "paid", invoice.id);
+          notifyOrderStatusChange(order.id, "paid");
+          console.log(`[webhook] Order ${order.id} → paid (invoice: ${invoice.id})`);
+        }
+      }
+      return;
+    }
+
+    // Legacy: link via quote
     const quoteId = (invoice as unknown as Record<string, unknown>).quote as string | null;
     if (!quoteId) return;
 
@@ -147,13 +192,9 @@ export function createWebhookRoute(stripeSecretKey: string) {
 
     if (!quote) return;
 
-    // Store the invoice ID on the quote
     await db
       .update(schema.quotes)
-      .set({
-        stripeInvoiceId: invoice.id,
-        status: "paid",
-      })
+      .set({ stripeInvoiceId: invoice.id, status: "paid" })
       .where(eq(schema.quotes.id, quote.id));
 
     console.log(`[webhook] Quote ${quote.id} marked as paid (invoice: ${invoice.id})`);
@@ -162,6 +203,30 @@ export function createWebhookRoute(stripeSecretKey: string) {
   async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     console.log(`[webhook] Invoice payment failed: ${invoice.id}`);
 
+    // Try order by stripe_invoice_id (new flow)
+    const [order] = await db
+      .select()
+      .from(schema.orders)
+      .where(eq(schema.orders.stripeInvoiceId, invoice.id))
+      .limit(1);
+
+    if (order && order.status === "invoiced") {
+      await db
+        .update(schema.orders)
+        .set({
+          adminNotes: `${
+            order.adminNotes ? order.adminNotes + "\n" : ""
+          }Payment failed for invoice ${invoice.id}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.orders.id, order.id));
+
+      await logWebhookEvent(order.id, "invoiced", "payment_failed", invoice.id);
+      console.log(`[webhook] Order ${order.id}: payment failed for invoice ${invoice.id}`);
+      return;
+    }
+
+    // Legacy
     const quoteId = (invoice as unknown as Record<string, unknown>).quote as string | null;
     if (!quoteId) return;
 
@@ -173,33 +238,39 @@ export function createWebhookRoute(stripeSecretKey: string) {
 
     if (!quote) return;
 
-    // Find the linked order and mark it as declined
-    const [order] = await db
+    const [legacyOrder] = await db
       .select()
       .from(schema.orders)
       .where(eq(schema.orders.quoteId, quote.id))
       .limit(1);
 
-    if (order && order.status === "accepted") {
+    if (legacyOrder) {
       await db
         .update(schema.orders)
         .set({
-          status: "declined",
-          statusHistory: appendStatusHistory(
-            order.statusHistory as unknown[],
-            "declined",
-            "stripe_webhook",
-          ),
           adminNotes: `${
-            order.adminNotes ? order.adminNotes + "\n" : ""
+            legacyOrder.adminNotes ? legacyOrder.adminNotes + "\n" : ""
           }Payment failed for invoice ${invoice.id}`,
           updatedAt: new Date(),
         })
-        .where(eq(schema.orders.id, order.id));
-
-      console.log(`[webhook] Order ${order.id} → declined (payment failed)`);
-      notifyOrderStatusChange(order.id, "declined");
+        .where(eq(schema.orders.id, legacyOrder.id));
     }
+  }
+
+  async function logWebhookEvent(
+    orderId: number,
+    fromStatus: string,
+    toStatus: string,
+    stripeId: string,
+  ) {
+    await db.insert(schema.orderEvents).values({
+      orderId,
+      eventType: "status_change",
+      fromStatus,
+      toStatus,
+      actor: "stripe_webhook",
+      metadata: { stripeId },
+    });
   }
 
   return webhook;
