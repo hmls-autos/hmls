@@ -108,10 +108,19 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
 
       const agent = getAgent();
 
-      // Add the new user message to the agent's internal state.
-      // Don't use setMessages — it would overwrite the full message history
-      // (including tool calls from MESSAGES_SNAPSHOT) with stripped text-only versions,
-      // causing the backend to lose conversation context.
+      // Re-add all previous messages so the backend has full conversation context.
+      // getAgent() creates a fresh HttpAgent each time (for token refresh),
+      // so we must replay the history.
+      for (const msg of messages) {
+        if (msg.role === "user" || msg.role === "assistant") {
+          agent.addMessage({
+            id: msg.id,
+            role: msg.role,
+            content: msg.content,
+          } as AgentMessage);
+        }
+      }
+
       agent.addMessage({
         id: userMsg.id,
         role: "user",
@@ -218,7 +227,7 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
         focusInput();
       }
     },
-    [scrollToBottom, focusInput, getAgent, drainBuffer, flushBuffer],
+    [scrollToBottom, focusInput, getAgent, drainBuffer, flushBuffer, messages],
   );
 
   const answerQuestion = useCallback(

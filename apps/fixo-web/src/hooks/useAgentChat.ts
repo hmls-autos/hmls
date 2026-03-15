@@ -97,6 +97,15 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
 
       const agent = getAgent();
 
+      // Re-add all previous messages so the backend has full conversation context
+      for (const msg of messages) {
+        agent.addMessage({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+        } as AgentMessage);
+      }
+
       agent.addMessage({
         id: userMsg.id,
         role: "user",
@@ -156,7 +165,7 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
         focusInput();
       }
     },
-    [scrollToBottom, focusInput, getAgent, drainBuffer, flushBuffer],
+    [scrollToBottom, focusInput, getAgent, drainBuffer, flushBuffer, messages],
   );
 
   const clearMessages = useCallback(() => {

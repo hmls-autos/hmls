@@ -206,7 +206,10 @@ admin.patch("/estimates/:id", async (c) => {
     .limit(1);
 
   if (!order) {
-    return c.json({ error: { code: "NOT_FOUND", message: "No order found for this estimate" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "No order found for this estimate" } },
+      404,
+    );
   }
 
   const body = await c.req.json<{
