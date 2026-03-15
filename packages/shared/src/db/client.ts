@@ -18,7 +18,8 @@ export function createDbClient<T extends Record<string, unknown>>(
         throw new Error("DATABASE_URL environment variable is required");
       }
       _client = postgres(connectionString);
-      _db = drizzle(_client, { schema });
+      // deno-lint-ignore no-explicit-any
+      _db = drizzle(_client as any, { schema });
     }
     return _db;
   }

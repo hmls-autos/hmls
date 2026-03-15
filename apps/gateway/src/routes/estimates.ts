@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { renderToStream } from "@react-pdf/renderer";
 import { db, schema } from "@hmls/agent/db";
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { EstimatePdf, notifyOrderStatusChange } from "@hmls/agent";
 import { Errors } from "@hmls/shared/errors";
 import { type AuthEnv, requireAuth } from "../middleware/auth.ts";
