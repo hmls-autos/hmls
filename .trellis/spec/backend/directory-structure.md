@@ -99,13 +99,13 @@ A skill is a directory under `skills/` with these files: `index.ts`, `tools.ts`,
 
 ## Naming Conventions
 
-| Item             | Convention                                 | Example                        |
-| ---------------- | ------------------------------------------ | ------------------------------ |
-| Files            | `camelCase.ts`                             | `askUserQuestion.ts`           |
-| Route files      | Domain noun, lowercase                     | `estimates.ts`, `customers.ts` |
-| Tool files       | Domain noun, lowercase                     | `stripe.ts`, `scheduling.ts`   |
-| Entrypoint       | `index.ts` (API) or `main.ts` (fixo)       | —                              |
-| Middleware files | Feature name, lowercase                    | `auth.ts`, `credits.ts`        |
+| Item             | Convention                           | Example                        |
+| ---------------- | ------------------------------------ | ------------------------------ |
+| Files            | `camelCase.ts`                       | `askUserQuestion.ts`           |
+| Route files      | Domain noun, lowercase               | `estimates.ts`, `customers.ts` |
+| Tool files       | Domain noun, lowercase               | `stripe.ts`, `scheduling.ts`   |
+| Entrypoint       | `index.ts` (API) or `main.ts` (fixo) | —                              |
+| Middleware files | Feature name, lowercase              | `auth.ts`, `credits.ts`        |
 
 ---
 

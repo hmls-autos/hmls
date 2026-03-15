@@ -60,8 +60,7 @@ packages/
 The API server uses hostname-based dispatch to route requests:
 
 - **`localhost:8080`** / default → Main HMLS API (estimates, portal, admin, chat)
-- **`fixo.localhost:8080`** / `api.fixo.hmls.autos` → Fixo API (sessions, billing, vehicles,
-  chat)
+- **`fixo.localhost:8080`** / `api.fixo.hmls.autos` → Fixo API (sessions, billing, vehicles, chat)
 
 Each sub-app has its own CORS, auth middleware, and error handler. No middleware leaks between
 domains.
@@ -182,11 +181,11 @@ deno deploy env delete <KEY> --app hmls-api --org spinsirr
 
 ### Production URLs
 
-| App                     | Domain                                     | Hosting                                                                  |
-| ----------------------- | ------------------------------------------ | ------------------------------------------------------------------------ |
-| Web (HMLS)              | `https://hmls.autos`                       | Deno Deploy                                                              |
-| API (main + fixo)       | `https://api.fixo.hmls.autos` (fixo)       | Deno Deploy (`hmls-api`)                                                 |
-| Fixo Web                | `https://fixo.hmls.autos`                  | Vercel (`prj_EzagTZlxfjG6U6h3Cbdt8uWjPwdO`, scope: `spinsirrs-projects`) |
+| App               | Domain                               | Hosting                                                                  |
+| ----------------- | ------------------------------------ | ------------------------------------------------------------------------ |
+| Web (HMLS)        | `https://hmls.autos`                 | Deno Deploy                                                              |
+| API (main + fixo) | `https://api.fixo.hmls.autos` (fixo) | Deno Deploy (`hmls-api`)                                                 |
+| Fixo Web          | `https://fixo.hmls.autos`            | Vercel (`prj_EzagTZlxfjG6U6h3Cbdt8uWjPwdO`, scope: `spinsirrs-projects`) |
 
 Both main API and Fixo API run in the same Deno Deploy app (`hmls-api`), routed by hostname.
 

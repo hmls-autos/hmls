@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { and, gte, ilike, inArray, lte, sql } from "drizzle-orm";
-import { db, schema } from "../../db/client.ts";
 import { toolResult } from "@hmls/shared/tool-result";
+import { findVehicles, getCategoryBreakdown, getOlpDb, searchLaborTimes } from "./olp-sqlite.ts";
 
 /**
  * Lookup labor times from OLP (Open Labor Project) reference data.
  * 2.4M+ entries across 4,400+ vehicles — real industry labor guides.
+ * Data served from SQLite (downloaded from R2 on first access).
  */
 export const lookupLaborTimeTool = {
   name: "lookup_labor_time",
@@ -40,48 +40,16 @@ export const lookupLaborTimeTool = {
     },
     _ctx: unknown,
   ) => {
+    const db = await getOlpDb();
+
     // 1. Find matching vehicles (make + model + year in range)
-    const vehicles = await db
-      .select({
-        id: schema.olpVehicles.id,
-        make: schema.olpVehicles.make,
-        model: schema.olpVehicles.model,
-        yearRange: schema.olpVehicles.yearRange,
-        engine: schema.olpVehicles.engine,
-        fuelType: schema.olpVehicles.fuelType,
-      })
-      .from(schema.olpVehicles)
-      .where(
-        and(
-          ilike(schema.olpVehicles.make, params.make),
-          ilike(schema.olpVehicles.model, params.model),
-          lte(schema.olpVehicles.yearStart, params.year),
-          gte(schema.olpVehicles.yearEnd, params.year),
-        ),
-      );
+    let vehicles = findVehicles(db, params.make, params.model, params.year);
 
     if (vehicles.length === 0) {
       // Try fuzzy make + model match
-      const fuzzyVehicles = await db
-        .select({
-          id: schema.olpVehicles.id,
-          make: schema.olpVehicles.make,
-          model: schema.olpVehicles.model,
-          yearRange: schema.olpVehicles.yearRange,
-          engine: schema.olpVehicles.engine,
-          fuelType: schema.olpVehicles.fuelType,
-        })
-        .from(schema.olpVehicles)
-        .where(
-          and(
-            ilike(schema.olpVehicles.make, `%${params.make}%`),
-            ilike(schema.olpVehicles.model, `%${params.model}%`),
-            lte(schema.olpVehicles.yearStart, params.year),
-            gte(schema.olpVehicles.yearEnd, params.year),
-          ),
-        );
+      vehicles = findVehicles(db, params.make, params.model, params.year, true);
 
-      if (fuzzyVehicles.length === 0) {
+      if (vehicles.length === 0) {
         return toolResult({
           found: false,
           vehicle: `${params.year} ${params.make} ${params.model}`,
@@ -90,68 +58,31 @@ export const lookupLaborTimeTool = {
             "Vehicle not found in OLP database. Estimate labor hours based on industry knowledge.",
         });
       }
-
-      vehicles.push(...fuzzyVehicles);
     }
 
     const vehicleIds = vehicles.map((v) => v.id);
 
-    // 2. Search labor times for matching service (fuzzy: match each word independently)
+    // 2. Search labor times for matching service
     const serviceWords = params.service
       .split(/\s+/)
       .filter((w) => w.length > 1);
-    const conditions = [
-      inArray(schema.olpLaborTimes.vehicleId, vehicleIds),
-      ...serviceWords.map((word) => ilike(schema.olpLaborTimes.name, `%${word}%`)),
-    ];
 
-    if (params.category) {
-      conditions.push(
-        ilike(schema.olpLaborTimes.category, params.category),
-      );
-    }
-
-    const laborTimes = await db
-      .select({
-        name: schema.olpLaborTimes.name,
-        category: schema.olpLaborTimes.category,
-        laborHours: schema.olpLaborTimes.laborHours,
-        vehicleId: schema.olpLaborTimes.vehicleId,
-      })
-      .from(schema.olpLaborTimes)
-      .where(and(...conditions))
-      .limit(30);
+    let laborTimes = searchLaborTimes(
+      db,
+      vehicleIds,
+      serviceWords,
+      params.category,
+    );
 
     if (laborTimes.length === 0 && serviceWords.length > 1) {
-      // Fallback 1: try matching ANY word (OR instead of AND) to surface partial matches
-      const orConditions = [
-        inArray(schema.olpLaborTimes.vehicleId, vehicleIds),
-        sql`(${
-          sql.join(
-            serviceWords.map(
-              (word) => sql`${schema.olpLaborTimes.name} ilike ${"%" + word + "%"}`,
-            ),
-            sql` OR `,
-          )
-        })`,
-      ];
-      if (params.category) {
-        orConditions.push(
-          ilike(schema.olpLaborTimes.category, params.category),
-        );
-      }
-      const fallbackTimes = await db
-        .select({
-          name: schema.olpLaborTimes.name,
-          category: schema.olpLaborTimes.category,
-          laborHours: schema.olpLaborTimes.laborHours,
-          vehicleId: schema.olpLaborTimes.vehicleId,
-        })
-        .from(schema.olpLaborTimes)
-        .where(and(...orConditions))
-        .limit(30);
-
-      laborTimes.push(...fallbackTimes);
+      // Fallback: try matching ANY word (OR instead of AND)
+      laborTimes = searchLaborTimes(
+        db,
+        vehicleIds,
+        serviceWords,
+        params.category,
+        true,
+      );
     }
 
     if (laborTimes.length === 0) {
@@ -169,13 +100,13 @@ export const lookupLaborTimeTool = {
     const vehicleMap = new Map(vehicles.map((v) => [v.id, v]));
 
     const results = laborTimes.map((lt) => {
-      const vehicle = vehicleMap.get(lt.vehicleId);
+      const vehicle = vehicleMap.get(lt.vehicle_id);
       return {
         service: lt.name,
         category: lt.category,
-        laborHours: Number(lt.laborHours),
+        laborHours: Number(lt.labor_hours),
         engine: vehicle?.engine ?? "unknown",
-        fuelType: vehicle?.fuelType ?? null,
+        fuelType: vehicle?.fuel_type ?? null,
       };
     });
 
@@ -221,56 +152,27 @@ export const listOlpCategoriesTool = {
     params: { year: number; make: string; model: string },
     _ctx: unknown,
   ) => {
+    const db = await getOlpDb();
+
     // Find matching vehicles
-    const vehicles = await db
-      .select({ id: schema.olpVehicles.id, engine: schema.olpVehicles.engine })
-      .from(schema.olpVehicles)
-      .where(
-        and(
-          ilike(schema.olpVehicles.make, params.make),
-          ilike(schema.olpVehicles.model, params.model),
-          lte(schema.olpVehicles.yearStart, params.year),
-          gte(schema.olpVehicles.yearEnd, params.year),
-        ),
-      );
+    let vehicles = findVehicles(db, params.make, params.model, params.year);
 
     if (vehicles.length === 0) {
-      // Try fuzzy model match
-      const fuzzyVehicles = await db
-        .select({ id: schema.olpVehicles.id, engine: schema.olpVehicles.engine })
-        .from(schema.olpVehicles)
-        .where(
-          and(
-            ilike(schema.olpVehicles.make, `%${params.make}%`),
-            ilike(schema.olpVehicles.model, `%${params.model}%`),
-            lte(schema.olpVehicles.yearStart, params.year),
-            gte(schema.olpVehicles.yearEnd, params.year),
-          ),
-        );
+      vehicles = findVehicles(db, params.make, params.model, params.year, true);
 
-      if (fuzzyVehicles.length === 0) {
+      if (vehicles.length === 0) {
         return toolResult({
           found: false,
           vehicle: `${params.year} ${params.make} ${params.model}`,
           message: "Vehicle not found in OLP database.",
         });
       }
-
-      vehicles.push(...fuzzyVehicles);
     }
 
     const vehicleIds = vehicles.map((v) => v.id);
 
     // Get category breakdown
-    const categories = await db
-      .select({
-        category: schema.olpLaborTimes.category,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(schema.olpLaborTimes)
-      .where(inArray(schema.olpLaborTimes.vehicleId, vehicleIds))
-      .groupBy(schema.olpLaborTimes.category)
-      .orderBy(schema.olpLaborTimes.category);
+    const categories = getCategoryBreakdown(db, vehicleIds);
 
     return toolResult({
       found: true,

@@ -108,8 +108,7 @@ Applied to: DB client, Supabase client, Stripe client, R2 S3Client.
 
 Minimal test infrastructure currently exists:
 
-- **Fixo agent**: Integration tests in `apps/agent/src/test/integration.test.ts`
-  using `@std/assert`
+- **Fixo agent**: Integration tests in `apps/agent/src/test/integration.test.ts` using `@std/assert`
 - Run with: `deno task --cwd apps/agent test`
 - **API app**: No test files
 
