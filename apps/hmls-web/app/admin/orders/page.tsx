@@ -8,7 +8,7 @@ import {
   Plus,
   Save,
   Trash2,
-  X,
+  User,
 } from "lucide-react";
 import { useState } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -24,46 +24,119 @@ import {
 } from "@/lib/status";
 import type { OrderItem } from "@/lib/types";
 
-const FILTER_OPTIONS = [
+/* ── Grouped filters ────────────────────────────────────────────────── */
+
+const FILTER_GROUPS = [
   { value: "", label: "All" },
-  { value: "draft", label: "Draft" },
-  { value: "estimated", label: "Estimated" },
   { value: "sent", label: "Sent" },
   { value: "approved", label: "Approved" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
+const MORE_FILTERS = [
+  { value: "draft", label: "Draft" },
+  { value: "estimated", label: "Estimated" },
   { value: "declined", label: "Declined" },
   { value: "revised", label: "Revised" },
   { value: "invoiced", label: "Invoiced" },
   { value: "paid", label: "Paid" },
   { value: "scheduled", label: "Scheduled" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "completed", label: "Completed" },
   { value: "void", label: "Void" },
-  { value: "cancelled", label: "Cancelled" },
   { value: "archived", label: "Archived" },
 ];
 
-/** Human-readable labels for transition actions. */
 const TRANSITION_LABELS: Record<string, string> = {
-  estimated: "Finalize Estimate",
-  sent: "Send to Customer",
+  estimated: "Finalize",
+  sent: "Send",
   approved: "Approve",
   declined: "Decline",
   revised: "Revise",
-  invoiced: "Create Invoice",
+  invoiced: "Invoice",
   paid: "Mark Paid",
-  void: "Void Invoice",
+  void: "Void",
   scheduled: "Schedule",
-  in_progress: "Start Work",
+  in_progress: "Start",
   completed: "Complete",
   archived: "Archive",
   cancelled: "Cancel",
 };
 
+const DANGER_ACTIONS = new Set(["cancelled", "void", "declined"]);
+
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-// ─── Inline Item Editor ───────────────────────────────────────────────
+/* ── Customer Editor ────────────────────────────────────────────────── */
+
+function CustomerEditor({
+  customer,
+  onSave,
+  onCancel,
+  saving,
+}: {
+  customer: AdminOrder["customer"] & { id?: number };
+  onSave: (data: { name: string; email: string; phone: string }) => void;
+  onCancel: () => void;
+  saving: boolean;
+}) {
+  const [name, setName] = useState(customer.name ?? "");
+  const [email, setEmail] = useState(customer.email ?? "");
+  const [phone, setPhone] = useState(customer.phone ?? "");
+
+  return (
+    <div className="mt-3 border border-border rounded-lg p-4 bg-surface-alt space-y-3">
+      <h4 className="text-xs font-semibold text-text uppercase tracking-wide">
+        Edit Customer
+      </h4>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <input
+          type="text"
+          placeholder="Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="text-xs bg-surface border border-border rounded px-2 py-1.5 text-text"
+        />
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="text-xs bg-surface border border-border rounded px-2 py-1.5 text-text"
+        />
+        <input
+          type="tel"
+          placeholder="Phone"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          className="text-xs bg-surface border border-border rounded px-2 py-1.5 text-text"
+        />
+      </div>
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="text-xs font-medium px-3 py-1.5 rounded-lg text-text-secondary hover:text-text hover:bg-surface transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => onSave({ name, email, phone })}
+          disabled={saving}
+          className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-red-primary text-white hover:bg-red-primary/90 transition-colors disabled:opacity-50"
+        >
+          <Save className="w-3.5 h-3.5" /> {saving ? "Saving..." : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Item Editor ────────────────────────────────────────────────────── */
 
 function ItemEditor({
   items,
@@ -88,33 +161,12 @@ function ItemEditor({
       prev.map((item, i) => {
         if (i !== index) return item;
         const updated = { ...item, ...patch };
-        // Recompute totalCents when quantity or unitPriceCents changes
         if ("quantity" in patch || "unitPriceCents" in patch) {
           updated.totalCents = updated.quantity * updated.unitPriceCents;
         }
         return updated;
       }),
     );
-  }
-
-  function removeItem(index: number) {
-    setEditItems((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function addItem() {
-    setEditItems((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        category: "labor",
-        name: "",
-        description: "",
-        quantity: 1,
-        unitPriceCents: 0,
-        totalCents: 0,
-        taxable: true,
-      },
-    ]);
   }
 
   return (
@@ -126,7 +178,7 @@ function ItemEditor({
       {editItems.map((item, idx) => (
         <div
           key={item.id}
-          className="flex flex-wrap items-start gap-2 border-b border-border pb-3 last:border-0"
+          className="flex flex-wrap items-center gap-2 border-b border-border pb-2 last:border-0"
         >
           <select
             value={item.category}
@@ -147,44 +199,38 @@ function ItemEditor({
             placeholder="Name"
             value={item.name}
             onChange={(e) => updateItem(idx, { name: e.target.value })}
-            className="flex-1 min-w-[140px] text-xs bg-surface border border-border rounded px-2 py-1.5 text-text"
-          />
-          <input
-            type="text"
-            placeholder="Description"
-            value={item.description ?? ""}
-            onChange={(e) => updateItem(idx, { description: e.target.value })}
-            className="flex-1 min-w-[140px] text-xs bg-surface border border-border rounded px-2 py-1.5 text-text"
+            className="flex-1 min-w-[120px] text-xs bg-surface border border-border rounded px-2 py-1.5 text-text"
           />
           <input
             type="number"
             min={1}
-            placeholder="Qty"
             value={item.quantity}
             onChange={(e) =>
               updateItem(idx, { quantity: Number(e.target.value) || 1 })
             }
-            className="w-16 text-xs bg-surface border border-border rounded px-2 py-1.5 text-text text-right"
+            className="w-14 text-xs bg-surface border border-border rounded px-2 py-1.5 text-text text-right"
           />
           <input
             type="number"
             min={0}
             step={1}
-            placeholder="Unit price (cents)"
+            placeholder="¢"
             value={item.unitPriceCents}
             onChange={(e) =>
               updateItem(idx, {
                 unitPriceCents: Number(e.target.value) || 0,
               })
             }
-            className="w-28 text-xs bg-surface border border-border rounded px-2 py-1.5 text-text text-right"
+            className="w-24 text-xs bg-surface border border-border rounded px-2 py-1.5 text-text text-right"
           />
-          <span className="text-xs text-text-secondary py-1.5 w-20 text-right">
+          <span className="text-xs text-text-secondary w-16 text-right">
             {formatCents(item.quantity * item.unitPriceCents)}
           </span>
           <button
             type="button"
-            onClick={() => removeItem(idx)}
+            onClick={() =>
+              setEditItems((prev) => prev.filter((_, i) => i !== idx))
+            }
             className="text-red-500 hover:text-red-700 p-1"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -194,7 +240,21 @@ function ItemEditor({
 
       <button
         type="button"
-        onClick={addItem}
+        onClick={() =>
+          setEditItems((prev) => [
+            ...prev,
+            {
+              id: crypto.randomUUID(),
+              category: "labor",
+              name: "",
+              description: "",
+              quantity: 1,
+              unitPriceCents: 0,
+              totalCents: 0,
+              taxable: true,
+            },
+          ])
+        }
         className="flex items-center gap-1 text-xs text-text-secondary hover:text-text"
       >
         <Plus className="w-3.5 h-3.5" /> Add item
@@ -212,14 +272,14 @@ function ItemEditor({
         </label>
       </div>
 
-      <div className="flex justify-end gap-2 pt-1">
+      <div className="flex justify-end gap-2">
         <button
           type="button"
           onClick={onCancel}
           disabled={saving}
-          className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg text-text-secondary hover:text-text hover:bg-surface transition-colors"
+          className="text-xs font-medium px-3 py-1.5 rounded-lg text-text-secondary hover:text-text hover:bg-surface transition-colors"
         >
-          <X className="w-3.5 h-3.5" /> Cancel
+          Cancel
         </button>
         <button
           type="button"
@@ -234,259 +294,250 @@ function ItemEditor({
   );
 }
 
-// ─── Order Card ───────────────────────────────────────────────────────
+/* ── Order Card ─────────────────────────────────────────────────────── */
 
 function OrderCard({
   order,
   onTransition,
   onSaveItems,
+  onSaveCustomer,
   transitioning,
   savingItems,
+  savingCustomer,
 }: {
   order: AdminOrder;
   onTransition: (orderId: number, newStatus: string) => void;
   onSaveItems: (orderId: number, items: OrderItem[], notes: string) => void;
+  onSaveCustomer: (
+    orderId: number,
+    customerId: number,
+    data: { name: string; email: string; phone: string },
+  ) => void;
   transitioning: number | null;
   savingItems: number | null;
+  savingCustomer: number | null;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [editing, setEditing] = useState(false);
+  const [editMode, setEditMode] = useState<null | "items" | "customer">(null);
   const allowed = ORDER_TRANSITIONS[order.status] ?? [];
   const isEditable = EDITABLE_STATUSES.includes(order.status);
   const items: OrderItem[] = order.items ?? [];
+  const vehicle = order.vehicleInfo;
+  const vehicleStr = vehicle
+    ? [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ")
+    : null;
 
   return (
-    <div className="bg-surface border border-border rounded-xl p-5 hover:border-border-hover transition-colors">
-      {/* Header row */}
-      <div className="flex items-start justify-between gap-4 mb-3">
-        <div>
+    <div className="bg-surface border border-border rounded-xl p-4 hover:border-border-hover transition-colors">
+      {/* Header */}
+      <button
+        type="button"
+        onClick={() => {
+          setExpanded((v) => !v);
+          if (expanded) setEditMode(null);
+        }}
+        className="w-full flex items-center justify-between gap-3 text-left"
+      >
+        <div className="flex items-center gap-3 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-text">
-              Order #{order.id}
-            </h3>
+            <span className="text-sm font-semibold text-text">#{order.id}</span>
             <StatusBadge status={order.status} config={ORDER_STATUS} />
             {order.revisionNumber > 1 && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400">
-                Rev {order.revisionNumber}
+                v{order.revisionNumber}
               </span>
             )}
           </div>
-          <p className="text-xs text-text-secondary mt-0.5">
-            {order.customer.name ?? "Unknown"}{" "}
-            {order.customer.email && (
-              <span>&middot; {order.customer.email}</span>
-            )}
-            {order.customer.phone && (
-              <span>&middot; {order.customer.phone}</span>
-            )}
-          </p>
+          <span className="text-xs text-text-secondary truncate">
+            {order.customer.name ?? "Unknown"}
+            {vehicleStr && ` · ${vehicleStr}`}
+          </span>
         </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {items.length > 0 && (
+            <span className="text-xs font-medium text-text">
+              {formatCents(order.subtotalCents ?? 0)}
+            </span>
+          )}
+          {expanded ? (
+            <ChevronDown className="w-4 h-4 text-text-secondary" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-text-secondary" />
+          )}
+        </div>
+      </button>
 
-        {/* Expand / Edit toggles */}
-        <div className="flex items-center gap-1">
-          {isEditable && !editing && (
+      {/* Expanded details */}
+      {expanded && (
+        <div className="mt-3 space-y-3">
+          {/* Customer info row */}
+          <div className="flex items-center justify-between text-xs text-text-secondary">
+            <div className="flex items-center gap-3">
+              <span>{order.customer.name ?? "—"}</span>
+              {order.customer.email && <span>{order.customer.email}</span>}
+              {order.customer.phone && <span>{order.customer.phone}</span>}
+            </div>
             <button
               type="button"
-              onClick={() => {
-                setExpanded(true);
-                setEditing(true);
-              }}
-              className="text-xs text-text-secondary hover:text-text p-1"
-              title="Edit items & notes"
+              onClick={() =>
+                setEditMode(editMode === "customer" ? null : "customer")
+              }
+              className="flex items-center gap-1 text-text-secondary hover:text-text"
+              title="Edit customer"
             >
-              <Pencil className="w-3.5 h-3.5" />
+              <User className="w-3.5 h-3.5" />
             </button>
+          </div>
+
+          {/* Customer editor */}
+          {editMode === "customer" && (
+            <CustomerEditor
+              customer={order.customer}
+              saving={savingCustomer === order.id}
+              onCancel={() => setEditMode(null)}
+              onSave={(data) => {
+                onSaveCustomer(order.id, order.customerId, data);
+                setEditMode(null);
+              }}
+            />
           )}
-          <button
-            type="button"
-            onClick={() => {
-              setExpanded((v) => !v);
-              if (expanded) setEditing(false);
-            }}
-            className="text-xs text-text-secondary hover:text-text p-1"
-          >
-            {expanded ? (
-              <ChevronDown className="w-4 h-4" />
-            ) : (
-              <ChevronRight className="w-4 h-4" />
-            )}
-          </button>
-        </div>
-      </div>
 
-      {/* Linked entities */}
-      <div className="flex flex-wrap gap-2 mb-3">
-        {order.estimateId && (
-          <a
-            href="/admin/estimates"
-            className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 hover:underline"
-          >
-            Estimate #{order.estimateId}
-          </a>
-        )}
-        {order.quoteId && (
-          <a
-            href="/admin/quotes"
-            className="text-xs px-2 py-0.5 rounded bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400 hover:underline"
-          >
-            Quote #{order.quoteId}
-          </a>
-        )}
-        {order.bookingId && (
-          <a
-            href="/admin/bookings"
-            className="text-xs px-2 py-0.5 rounded bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400 hover:underline"
-          >
-            Booking #{order.bookingId}
-          </a>
-        )}
-        {order.vehicleInfo && (
-          <span className="text-xs px-2 py-0.5 rounded bg-neutral-50 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
-            {[
-              order.vehicleInfo.year,
-              order.vehicleInfo.make,
-              order.vehicleInfo.model,
-            ]
-              .filter(Boolean)
-              .join(" ")}
-          </span>
-        )}
-      </div>
-
-      {order.adminNotes && (
-        <p className="text-xs text-text-secondary mb-3 italic">
-          {order.adminNotes}
-        </p>
-      )}
-
-      {order.cancellationReason && (
-        <p className="text-xs text-red-500 mb-3">
-          Reason: {order.cancellationReason}
-        </p>
-      )}
-
-      {/* Expanded: items list or editor */}
-      {expanded && !editing && items.length > 0 && (
-        <div className="mb-3 border border-border rounded-lg overflow-hidden">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-surface-alt text-text-secondary">
-                <th className="text-left px-3 py-1.5 font-medium">Item</th>
-                <th className="text-left px-3 py-1.5 font-medium">Category</th>
-                <th className="text-right px-3 py-1.5 font-medium">Qty</th>
-                <th className="text-right px-3 py-1.5 font-medium">Unit</th>
-                <th className="text-right px-3 py-1.5 font-medium">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id} className="border-t border-border">
-                  <td className="px-3 py-1.5 text-text">
-                    {item.name}
-                    {item.description && (
-                      <span className="block text-text-secondary">
-                        {item.description}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-1.5 text-text-secondary capitalize">
-                    {item.category}
-                  </td>
-                  <td className="px-3 py-1.5 text-right text-text">
-                    {item.quantity}
-                  </td>
-                  <td className="px-3 py-1.5 text-right text-text">
-                    {formatCents(item.unitPriceCents)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right text-text font-medium">
-                    {formatCents(item.totalCents)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-border bg-surface-alt">
-                <td
-                  colSpan={4}
-                  className="px-3 py-1.5 text-right font-medium text-text"
-                >
-                  Subtotal
-                </td>
-                <td className="px-3 py-1.5 text-right font-semibold text-text">
-                  {formatCents(order.subtotalCents ?? 0)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-          {order.notes && (
-            <div className="px-3 py-2 border-t border-border text-xs text-text-secondary italic">
-              {order.notes}
+          {/* Items list */}
+          {editMode !== "items" && items.length > 0 && (
+            <div className="border border-border rounded-lg overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-surface-alt text-text-secondary">
+                    <th className="text-left px-3 py-1.5 font-medium">Item</th>
+                    <th className="text-right px-3 py-1.5 font-medium">Qty</th>
+                    <th className="text-right px-3 py-1.5 font-medium">
+                      Price
+                    </th>
+                    <th className="text-right px-3 py-1.5 font-medium">
+                      Total
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={item.id} className="border-t border-border">
+                      <td className="px-3 py-1.5 text-text">
+                        <span className="text-[10px] uppercase text-text-secondary mr-1.5">
+                          {item.category}
+                        </span>
+                        {item.name}
+                      </td>
+                      <td className="px-3 py-1.5 text-right text-text">
+                        {item.quantity}
+                      </td>
+                      <td className="px-3 py-1.5 text-right text-text">
+                        {formatCents(item.unitPriceCents)}
+                      </td>
+                      <td className="px-3 py-1.5 text-right text-text font-medium">
+                        {formatCents(item.totalCents)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-border bg-surface-alt">
+                    <td
+                      colSpan={3}
+                      className="px-3 py-1.5 text-right font-medium text-text"
+                    >
+                      Subtotal
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-semibold text-text">
+                      {formatCents(order.subtotalCents ?? 0)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           )}
+
+          {order.notes && editMode !== "items" && (
+            <p className="text-xs text-text-secondary italic">{order.notes}</p>
+          )}
+
+          {order.cancellationReason && (
+            <p className="text-xs text-red-500">
+              Reason: {order.cancellationReason}
+            </p>
+          )}
+
+          {/* Item editor */}
+          {editMode === "items" && isEditable && (
+            <ItemEditor
+              items={items}
+              notes={order.notes}
+              saving={savingItems === order.id}
+              onCancel={() => setEditMode(null)}
+              onSave={(newItems, newNotes) => {
+                onSaveItems(order.id, newItems, newNotes);
+                setEditMode(null);
+              }}
+            />
+          )}
+
+          {/* Footer: date + actions */}
+          <div className="flex items-center justify-between pt-1 border-t border-border">
+            <span className="text-xs text-text-secondary">
+              {formatDateTime(order.createdAt)}
+            </span>
+
+            <div className="flex items-center gap-1">
+              {isEditable && editMode !== "items" && (
+                <button
+                  type="button"
+                  onClick={() => setEditMode("items")}
+                  className="flex items-center gap-1 text-xs text-text-secondary hover:text-text px-2 py-1 rounded hover:bg-surface-alt transition-colors"
+                >
+                  <Pencil className="w-3 h-3" /> Edit
+                </button>
+              )}
+              {allowed.map((next) => {
+                const isDanger = DANGER_ACTIONS.has(next);
+                return (
+                  <button
+                    key={next}
+                    type="button"
+                    onClick={() => onTransition(order.id, next)}
+                    disabled={transitioning === order.id}
+                    className={`text-xs font-medium px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50 ${
+                      isDanger
+                        ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        : "text-text hover:bg-surface-alt"
+                    }`}
+                  >
+                    {TRANSITION_LABELS[next] ?? next}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
-
-      {expanded && editing && isEditable && (
-        <ItemEditor
-          items={items}
-          notes={order.notes}
-          saving={savingItems === order.id}
-          onCancel={() => setEditing(false)}
-          onSave={(newItems, newNotes) => {
-            onSaveItems(order.id, newItems, newNotes);
-            setEditing(false);
-          }}
-        />
-      )}
-
-      {/* Footer: date + transition buttons */}
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-text-secondary">
-          {formatDateTime(order.createdAt)}
-        </span>
-
-        {allowed.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {allowed.map((next) => {
-              const isCancelling = next === "cancelled";
-              const isVoid = next === "void";
-              const label = TRANSITION_LABELS[next] ?? next;
-              return (
-                <button
-                  key={next}
-                  type="button"
-                  onClick={() => onTransition(order.id, next)}
-                  disabled={transitioning === order.id}
-                  className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50 ${
-                    isCancelling || isVoid
-                      ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                      : "text-text hover:bg-surface-alt"
-                  }`}
-                >
-                  {label}
-                  <ChevronRight className="w-3 h-3" />
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────
+/* ── Page ────────────────────────────────────────────────────────────── */
 
 export default function OrdersPage() {
   const [filter, setFilter] = useState("");
+  const [showMore, setShowMore] = useState(false);
   const { orders, isLoading, mutate } = useAdminOrders(filter || undefined);
   const [transitioning, setTransitioning] = useState<number | null>(null);
   const [savingItems, setSavingItems] = useState<number | null>(null);
+  const [savingCustomer, setSavingCustomer] = useState<number | null>(null);
+
+  const isMoreActive = MORE_FILTERS.some((f) => f.value === filter);
 
   async function handleTransition(orderId: number, newStatus: string) {
     if (newStatus === "cancelled") {
       const reason = prompt("Cancellation reason (optional):");
-      if (reason === null) return; // user hit cancel on prompt
+      if (reason === null) return;
       await doTransition(orderId, newStatus, reason || undefined);
     } else {
       await doTransition(orderId, newStatus);
@@ -506,7 +557,7 @@ export default function OrdersPage() {
       });
       mutate();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Failed to update order status");
+      alert(e instanceof Error ? e.message : "Failed to update status");
     } finally {
       setTransitioning(null);
     }
@@ -525,9 +576,28 @@ export default function OrdersPage() {
       });
       mutate();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Failed to save order items");
+      alert(e instanceof Error ? e.message : "Failed to save items");
     } finally {
       setSavingItems(null);
+    }
+  }
+
+  async function handleSaveCustomer(
+    orderId: number,
+    customerId: number,
+    data: { name: string; email: string; phone: string },
+  ) {
+    setSavingCustomer(orderId);
+    try {
+      await authFetch(`/api/admin/customers/${customerId}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+      mutate();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to save customer");
+    } finally {
+      setSavingCustomer(null);
     }
   }
 
@@ -541,16 +611,11 @@ export default function OrdersPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-1">
-        <h1 className="text-2xl font-display font-bold text-text">Orders</h1>
-      </div>
-      <p className="text-sm text-text-secondary mb-6">
-        Track and manage the full order lifecycle.
-      </p>
+      <h1 className="text-2xl font-display font-bold text-text mb-6">Orders</h1>
 
-      {/* Status filter */}
-      <div className="flex flex-wrap gap-2 mb-6">
-        {FILTER_OPTIONS.map((opt) => (
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2 mb-6">
+        {FILTER_GROUPS.map((opt) => (
           <button
             key={opt.value}
             type="button"
@@ -564,25 +629,59 @@ export default function OrdersPage() {
             {opt.label}
           </button>
         ))}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowMore((v) => !v)}
+            className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+              isMoreActive
+                ? "bg-red-primary text-white"
+                : "bg-surface border border-border text-text-secondary hover:text-text hover:border-border-hover"
+            }`}
+          >
+            More {showMore ? "▲" : "▼"}
+          </button>
+          {showMore && (
+            <div className="absolute top-full left-0 mt-1 bg-surface border border-border rounded-lg shadow-lg z-10 py-1 min-w-[140px]">
+              {MORE_FILTERS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    setFilter(opt.value);
+                    setShowMore(false);
+                  }}
+                  className={`w-full text-left text-xs px-3 py-1.5 hover:bg-surface-alt transition-colors ${
+                    filter === opt.value
+                      ? "text-red-primary font-medium"
+                      : "text-text-secondary"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {orders.length === 0 ? (
         <EmptyState
           icon={ClipboardList}
-          message={
-            filter ? `No orders with status '${filter}'.` : "No orders yet."
-          }
+          message={filter ? `No ${filter} orders.` : "No orders yet."}
         />
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {orders.map((order) => (
             <OrderCard
               key={order.id}
               order={order}
               onTransition={handleTransition}
               onSaveItems={handleSaveItems}
+              onSaveCustomer={handleSaveCustomer}
               transitioning={transitioning}
               savingItems={savingItems}
+              savingCustomer={savingCustomer}
             />
           ))}
         </div>
