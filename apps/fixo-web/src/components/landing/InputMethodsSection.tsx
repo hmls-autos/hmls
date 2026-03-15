@@ -1,7 +1,5 @@
-"use client";
-
-import { motion } from "framer-motion";
 import { Camera, Mic, Plug, MessageSquare } from "lucide-react";
+import { AnimateInView } from "@/components/ui/animate-in-view";
 
 const inputMethods = [
   {
@@ -38,27 +36,19 @@ export function InputMethodsSection() {
   return (
     <section id="how" className="py-20 border-t border-border/40">
       <div className="max-w-5xl mx-auto px-6">
-        <motion.div
-          className="mb-12"
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px" }}
-        >
+        <AnimateInView className="mb-12" margin="-80px">
           <p className="text-sm font-mono text-primary mb-2 tracking-wide">INPUT</p>
           <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
             Four ways to describe the problem.
           </h2>
-        </motion.div>
+        </AnimateInView>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {inputMethods.map((method, i) => (
-            <motion.div
+            <AnimateInView
               key={method.label}
               className={`group relative rounded-xl border border-border/60 bg-card p-5 hover:border-border transition-all cursor-default`}
-              initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ delay: i * 0.08 }}
+              delay={i * 80}
             >
               <div className="flex items-start gap-4">
                 <div className={`size-10 rounded-lg bg-muted flex items-center justify-center transition-colors ${method.bg}`}>
@@ -71,7 +61,7 @@ export function InputMethodsSection() {
                   </p>
                 </div>
               </div>
-            </motion.div>
+            </AnimateInView>
           ))}
         </div>
       </div>

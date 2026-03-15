@@ -1,7 +1,5 @@
-"use client";
-
-import { motion } from "framer-motion";
 import { AlertTriangle, Wrench, Car } from "lucide-react";
+import { AnimateInView } from "@/components/ui/animate-in-view";
 
 /* ── Animated severity gauge ── */
 function SeverityGauge({ level }: { level: number }) {
@@ -9,13 +7,13 @@ function SeverityGauge({ level }: { level: number }) {
   return (
     <div className="flex gap-1 items-end h-5">
       {[0, 1, 2, 3, 4].map((i) => (
-        <motion.div
+        <div
           key={i}
-          className={`w-1.5 rounded-full ${i <= level ? colors[i] : "bg-foreground/10"}`}
-          style={{ height: `${40 + i * 15}%` }}
-          initial={{ scaleY: 0 }}
-          animate={{ scaleY: 1 }}
-          transition={{ delay: 0.8 + i * 0.1, duration: 0.3 }}
+          className={`w-1.5 rounded-full origin-bottom ${i <= level ? colors[i] : "bg-foreground/10"}`}
+          style={{
+            height: `${40 + i * 15}%`,
+            animation: `gauge-grow 0.3s ease-out ${0.8 + i * 0.1}s both`,
+          }}
         />
       ))}
     </div>
@@ -53,12 +51,7 @@ export function DiagnosisSection() {
   return (
     <section className="py-20 bg-muted/30 border-y border-border/40">
       <div className="max-w-5xl mx-auto px-6">
-        <motion.div
-          className="mb-12"
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px" }}
-        >
+        <AnimateInView className="mb-12" margin="-80px">
           <p className="text-sm font-mono text-primary mb-2 tracking-wide">OUTPUT</p>
           <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-2">
             Not a guess. A diagnosis.
@@ -66,17 +59,14 @@ export function DiagnosisSection() {
           <p className="text-muted-foreground max-w-lg">
             Severity rating, cost estimate, and what to tell your mechanic — in seconds.
           </p>
-        </motion.div>
+        </AnimateInView>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {diagnosisExamples.map((ex, i) => (
-            <motion.div
+            <AnimateInView
               key={ex.diagnosis}
               className="rounded-xl border border-border/60 bg-card p-5"
-              initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ delay: i * 0.1 }}
+              delay={i * 100}
             >
               <div className="flex items-center justify-between mb-3">
                 <ex.icon className="size-5 text-muted-foreground" />
@@ -96,7 +86,7 @@ export function DiagnosisSection() {
                   {ex.cost}
                 </span>
               </div>
-            </motion.div>
+            </AnimateInView>
           ))}
         </div>
       </div>

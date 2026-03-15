@@ -1,7 +1,5 @@
-"use client";
-
-import { motion } from "framer-motion";
 import { Car, Wrench, Check } from "lucide-react";
+import { AnimateInView } from "@/components/ui/animate-in-view";
 
 export function AudienceSection() {
   return (
@@ -9,11 +7,9 @@ export function AudienceSection() {
       <div className="max-w-5xl mx-auto px-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Car owners */}
-          <motion.div
+          <AnimateInView
             className="rounded-xl border border-border/60 bg-card p-8"
-            initial={{ opacity: 0, x: -16 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
+            animation="animate-in fade-in slide-in-from-left-4 duration-400 fill-mode-both"
           >
             <div className="flex items-center gap-3 mb-5">
               <div className="size-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -37,14 +33,12 @@ export function AudienceSection() {
                 </li>
               ))}
             </ul>
-          </motion.div>
+          </AnimateInView>
 
           {/* Mechanics */}
-          <motion.div
+          <AnimateInView
             className="rounded-xl border border-border/60 bg-card p-8"
-            initial={{ opacity: 0, x: 16 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
+            animation="animate-in fade-in slide-in-from-right-4 duration-400 fill-mode-both"
           >
             <div className="flex items-center gap-3 mb-5">
               <div className="size-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -68,7 +62,7 @@ export function AudienceSection() {
                 </li>
               ))}
             </ul>
-          </motion.div>
+          </AnimateInView>
         </div>
       </div>
     </section>

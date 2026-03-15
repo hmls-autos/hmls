@@ -108,39 +108,45 @@ export default function PricingPage() {
   return (
     <div className="min-h-dvh bg-background p-6">
       <div className="max-w-2xl mx-auto pt-12">
-        <h1 className="text-3xl font-bold text-center mb-2">Simple Pricing</h1>
-        <p className="text-text-secondary text-center mb-8">
-          Try free, upgrade when you need more
-        </p>
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-400 fill-mode-both">
+          <h1 className="text-3xl font-bold text-center mb-2">Simple Pricing</h1>
+          <p className="text-text-secondary text-center mb-8">
+            Try free, upgrade when you need more
+          </p>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <PricingCard
-            name="Free"
-            price="$0"
-            features={[
-              "3 text diagnoses/month",
-              "1 vehicle",
-              "Basic AI analysis",
-            ]}
-            cta="Get Started"
-            href="/login"
-          />
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-400 delay-100 fill-mode-both">
+            <PricingCard
+              name="Free"
+              price="$0"
+              features={[
+                "3 text diagnoses/month",
+                "1 vehicle",
+                "Basic AI analysis",
+              ]}
+              cta="Get Started"
+              href="/login"
+            />
+          </div>
 
-          <PricingCard
-            name="Plus"
-            price="$19.99"
-            period="/month"
-            features={[
-              "Unlimited diagnoses",
-              "Photo, audio, video, OBD",
-              "Diagnostic reports (PDF)",
-              "Unlimited vehicles",
-              "Full diagnosis history",
-            ]}
-            cta="Start Plus"
-            onClick={handleUpgrade}
-            highlighted
-          />
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-400 delay-200 fill-mode-both">
+            <PricingCard
+              name="Plus"
+              price="$19.99"
+              period="/month"
+              features={[
+                "Unlimited diagnoses",
+                "Photo, audio, video, OBD",
+                "Diagnostic reports (PDF)",
+                "Unlimited vehicles",
+                "Full diagnosis history",
+              ]}
+              cta="Start Plus"
+              onClick={handleUpgrade}
+              highlighted
+            />
+          </div>
         </div>
       </div>
     </div>
