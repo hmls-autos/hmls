@@ -234,55 +234,44 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
 
           if (
             toolName === "create_estimate" &&
-            (part.output as Record<string, unknown>)?.found &&
-            (part.output as Record<string, unknown>)?.order
+            (part.output as Record<string, unknown>)?.success === true
           ) {
             const raw = part.output as {
-              found: boolean;
-              order: {
-                id: number;
-                items: {
-                  name: string;
-                  description?: string;
-                  totalCents: number;
-                }[];
-                subtotal: number;
-                priceRange: string | null;
-                vehicleInfo: {
-                  year?: string;
-                  make?: string;
-                  model?: string;
-                } | null;
-                expiresAt: string | null;
-                shareToken?: string | null;
-                downloadUrl?: string;
-                shareUrl?: string | null;
-              };
+              success: boolean;
+              orderId?: number;
+              vehicle?: string;
+              items: {
+                name: string;
+                description?: string;
+                totalCents: number;
+              }[];
+              subtotal: number;
+              priceRange: string | null;
+              expiresAt?: string | null;
+              downloadUrl?: string;
+              shareUrl?: string | null;
+              note?: string;
             };
-            const o = raw.order;
-            const vehicle = o.vehicleInfo
-              ? [o.vehicleInfo.year, o.vehicleInfo.make, o.vehicleInfo.model]
-                  .filter(Boolean)
-                  .join(" ")
-              : "Unknown vehicle";
             result.push({
               id: `${msg.id}-estimate-${part.toolCallId}`,
               role: "estimate-card",
               content: "",
               estimateData: {
                 success: true,
-                estimateId: o.id,
-                vehicle,
-                items: o.items.map((i) => ({
+                estimateId: raw.orderId,
+                vehicle: raw.vehicle ?? "Unknown vehicle",
+                items: (raw.items ?? []).map((i) => ({
                   name: i.name,
                   description: i.description,
-                  price: (i.totalCents ?? 0) / 100,
+                  price:
+                    typeof i.totalCents === "number" ? i.totalCents / 100 : 0,
                 })),
-                subtotal: o.subtotal,
-                priceRange: o.priceRange ?? "",
-                expiresAt: o.expiresAt ?? undefined,
-                shareUrl: o.shareUrl ?? undefined,
-                downloadUrl: o.downloadUrl,
+                subtotal: typeof raw.subtotal === "number" ? raw.subtotal : 0,
+                priceRange: raw.priceRange ?? "",
+                expiresAt: raw.expiresAt ?? undefined,
+                shareUrl: raw.shareUrl ?? undefined,
+                downloadUrl: raw.downloadUrl,
+                note: raw.note,
               },
             });
           }
