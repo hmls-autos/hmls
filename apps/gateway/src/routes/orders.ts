@@ -388,6 +388,64 @@ orders.post("/:id/revise", async (c) => {
   return c.json(updated);
 });
 
+// GET /orders/:id/events — audit log for an order
+orders.get("/:id/events", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id <= 0) {
+    return c.json({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
+  }
+
+  const events = await db
+    .select()
+    .from(schema.orderEvents)
+    .where(eq(schema.orderEvents.orderId, id))
+    .orderBy(desc(schema.orderEvents.createdAt));
+
+  return c.json(events);
+});
+
+// POST /orders/:id/events — add a manual event (e.g. note_added)
+orders.post("/:id/events", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id <= 0) {
+    return c.json({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
+  }
+
+  const [order] = await db
+    .select({ id: schema.orders.id })
+    .from(schema.orders)
+    .where(eq(schema.orders.id, id))
+    .limit(1);
+
+  if (!order) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
+  }
+
+  const body = await c.req.json<{
+    eventType: string;
+    metadata?: Record<string, unknown>;
+  }>();
+
+  if (!body.eventType) {
+    return c.json({ error: { code: "BAD_REQUEST", message: "eventType is required" } }, 400);
+  }
+
+  const authUser = c.get("authUser");
+  const actor = authUser.email ?? "admin";
+
+  const [event] = await db
+    .insert(schema.orderEvents)
+    .values({
+      orderId: id,
+      eventType: body.eventType,
+      actor,
+      metadata: body.metadata ?? {},
+    })
+    .returning();
+
+  return c.json(event, 201);
+});
+
 // PATCH /orders/:id/notes — update admin notes
 orders.patch("/:id/notes", async (c) => {
   const id = Number(c.req.param("id"));
