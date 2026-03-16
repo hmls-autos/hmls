@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import Stripe from "stripe";
+import { renderToStream } from "@react-pdf/renderer";
 import { db, schema } from "@hmls/agent/db";
 import { and, desc, eq } from "drizzle-orm";
 import { type AdminEnv, requireAdmin } from "../middleware/admin.ts";
-import { notifyOrderStatusChange } from "@hmls/agent";
+import { EstimatePdf, notifyOrderStatusChange } from "@hmls/agent";
 import type { OrderItem } from "@hmls/agent/db";
 
 // New status machine
@@ -592,3 +593,71 @@ orders.patch("/:id/notes", async (c) => {
 });
 
 export { orders };
+
+// Public order PDF route (token-based, no admin auth required)
+const ordersPdf = new Hono();
+
+ordersPdf.get("/:id/pdf", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id <= 0) {
+    return c.json({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
+  }
+
+  const token = c.req.query("token");
+
+  const [order] = await db
+    .select()
+    .from(schema.orders)
+    .where(
+      token
+        ? and(eq(schema.orders.id, id), eq(schema.orders.shareToken, token))
+        : eq(schema.orders.id, id),
+    )
+    .limit(1);
+
+  if (!order) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
+  }
+
+  const customer = {
+    name: order.contactName,
+    phone: order.contactPhone,
+    email: order.contactEmail,
+    address: order.contactAddress,
+    vehicleInfo: order.vehicleInfo as { make?: string; model?: string; year?: string } | null,
+  };
+
+  const items =
+    ((order.items ?? []) as { name: string; description?: string; totalCents: number }[]).map(
+      (i) => ({
+        name: i.name,
+        description: i.description ?? "",
+        price: i.totalCents ?? 0,
+      }),
+    );
+
+  const pdfStream = await renderToStream(
+    EstimatePdf({
+      estimate: {
+        id,
+        items,
+        subtotal: order.subtotalCents ?? 0,
+        priceRangeLow: order.priceRangeLowCents ?? 0,
+        priceRangeHigh: order.priceRangeHighCents ?? 0,
+        notes: order.notes,
+        expiresAt: order.expiresAt ?? new Date(),
+        createdAt: order.createdAt,
+      },
+      customer,
+    }),
+  );
+
+  return new Response(pdfStream as unknown as ReadableStream, {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="HMLS-Estimate-${id}.pdf"`,
+    },
+  });
+});
+
+export { ordersPdf };

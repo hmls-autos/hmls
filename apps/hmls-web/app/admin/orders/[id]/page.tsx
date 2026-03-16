@@ -21,6 +21,7 @@ import { useState } from "react";
 import { Spinner } from "@/components/ui/Spinner";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useAdminOrder } from "@/hooks/useAdmin";
+import { AGENT_URL } from "@/lib/config";
 import { authFetch } from "@/lib/fetcher";
 import { formatCents, formatDate, formatDateTime } from "@/lib/format";
 import {
@@ -479,7 +480,7 @@ function EstimatePanel({
         </span>
         {order.shareToken && (
           <a
-            href={`/api/orders/${order.id}/pdf?token=${order.shareToken}`}
+            href={`${AGENT_URL}/api/orders/${order.id}/pdf?token=${order.shareToken}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1 text-xs text-text-secondary hover:text-text"
