@@ -19,6 +19,19 @@ import { authFetch } from "@/lib/fetcher";
 import { formatCents, formatDate } from "@/lib/format";
 import type { LineItem } from "@/lib/types";
 
+interface CustomerEditData {
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  vehicleYear: string;
+  vehicleMake: string;
+  vehicleModel: string;
+}
+
+const inputClass =
+  "w-full text-xs px-2.5 py-1.5 bg-background border border-border rounded-md text-text placeholder:text-text-secondary focus:outline-none focus:ring-1 focus:ring-red-primary";
+
 function EditForm({
   estimate,
   onSave,
@@ -32,7 +45,20 @@ function EditForm({
     estimate.items.map((i) => ({ ...i })),
   );
   const [notes, setNotes] = useState(estimate.notes ?? "");
+  const [customer, setCustomer] = useState<CustomerEditData>({
+    name: estimate.customer.name ?? "",
+    phone: estimate.customer.phone ?? "",
+    email: estimate.customer.email ?? "",
+    address: estimate.customer.address ?? "",
+    vehicleYear: estimate.customer.vehicleInfo?.year ?? "",
+    vehicleMake: estimate.customer.vehicleInfo?.make ?? "",
+    vehicleModel: estimate.customer.vehicleInfo?.model ?? "",
+  });
   const [saving, setSaving] = useState(false);
+
+  function setCustomerField(field: keyof CustomerEditData, value: string) {
+    setCustomer((prev) => ({ ...prev, [field]: value }));
+  }
 
   function updateItem(
     index: number,
@@ -55,6 +81,7 @@ function EditForm({
   async function handleSave() {
     setSaving(true);
     try {
+      // Update estimate items/notes
       await authFetch(`/api/admin/estimates/${estimate.id}`, {
         method: "PATCH",
         body: JSON.stringify({
@@ -68,6 +95,28 @@ function EditForm({
           notes: notes || null,
         }),
       });
+
+      // Update customer info
+      const vehicleInfo =
+        customer.vehicleYear || customer.vehicleMake || customer.vehicleModel
+          ? {
+              year: customer.vehicleYear || undefined,
+              make: customer.vehicleMake || undefined,
+              model: customer.vehicleModel || undefined,
+            }
+          : null;
+      const customerPayload: Record<string, unknown> = {
+        name: customer.name || null,
+        phone: customer.phone || null,
+        email: customer.email || null,
+        address: customer.address || null,
+        vehicleInfo,
+      };
+      await authFetch(`/api/admin/customers/${estimate.customerId}`, {
+        method: "PATCH",
+        body: JSON.stringify(customerPayload),
+      });
+
       onSave();
     } catch {
       alert("Failed to save estimate.");
@@ -77,7 +126,68 @@ function EditForm({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* Customer info */}
+      <div className="space-y-2">
+        <span className="text-xs font-medium text-text-secondary uppercase tracking-wide">
+          Customer Info
+        </span>
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="text"
+            value={customer.name}
+            onChange={(e) => setCustomerField("name", e.target.value)}
+            placeholder="Name"
+            className={inputClass}
+          />
+          <input
+            type="tel"
+            value={customer.phone}
+            onChange={(e) => setCustomerField("phone", e.target.value)}
+            placeholder="Phone"
+            className={inputClass}
+          />
+        </div>
+        <input
+          type="email"
+          value={customer.email}
+          onChange={(e) => setCustomerField("email", e.target.value)}
+          placeholder="Email"
+          className={inputClass}
+        />
+        <input
+          type="text"
+          value={customer.address}
+          onChange={(e) => setCustomerField("address", e.target.value)}
+          placeholder="Address"
+          className={inputClass}
+        />
+        <div className="grid grid-cols-3 gap-2">
+          <input
+            type="text"
+            value={customer.vehicleYear}
+            onChange={(e) => setCustomerField("vehicleYear", e.target.value)}
+            placeholder="Year"
+            className={inputClass}
+          />
+          <input
+            type="text"
+            value={customer.vehicleMake}
+            onChange={(e) => setCustomerField("vehicleMake", e.target.value)}
+            placeholder="Make"
+            className={inputClass}
+          />
+          <input
+            type="text"
+            value={customer.vehicleModel}
+            onChange={(e) => setCustomerField("vehicleModel", e.target.value)}
+            placeholder="Model"
+            className={inputClass}
+          />
+        </div>
+      </div>
+
+      {/* Line items */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-xs font-medium text-text-secondary uppercase tracking-wide">
@@ -363,6 +473,9 @@ export default function EstimatesPage() {
                           {e.customer.name ?? "Unknown"}{" "}
                           {e.customer.email && (
                             <span>&middot; {e.customer.email}</span>
+                          )}
+                          {e.customer.phone && (
+                            <span>&middot; {e.customer.phone}</span>
                           )}
                         </p>
                       </div>

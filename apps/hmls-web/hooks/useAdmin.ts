@@ -26,7 +26,13 @@ export type AdminBooking = Booking & {
 };
 
 export type AdminEstimate = Estimate & {
-  customer: { name: string | null; email: string | null };
+  customer: {
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    address: string | null;
+    vehicleInfo: { make?: string; model?: string; year?: string } | null;
+  };
   orderId: number | null;
   orderStatus: string | null;
 };

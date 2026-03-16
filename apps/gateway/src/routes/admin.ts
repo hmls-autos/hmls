@@ -172,6 +172,9 @@ admin.get("/estimates", async (c) => {
       estimate: schema.estimates,
       customerName: schema.customers.name,
       customerEmail: schema.customers.email,
+      customerPhone: schema.customers.phone,
+      customerAddress: schema.customers.address,
+      customerVehicleInfo: schema.customers.vehicleInfo,
       orderId: schema.orders.id,
       orderStatus: schema.orders.status,
     })
@@ -184,32 +187,34 @@ admin.get("/estimates", async (c) => {
   return c.json(
     rows.map((r) => ({
       ...r.estimate,
-      customer: { name: r.customerName, email: r.customerEmail },
+      customer: {
+        name: r.customerName,
+        email: r.customerEmail,
+        phone: r.customerPhone,
+        address: r.customerAddress,
+        vehicleInfo: r.customerVehicleInfo,
+      },
       orderId: r.orderId,
       orderStatus: r.orderStatus,
     })),
   );
 });
 
-// PATCH /estimates/:id — redirects to orders table (estimates are now managed via orders)
+// PATCH /estimates/:id — update estimate (items, notes, vehicleInfo) directly on the estimates table
 admin.patch("/estimates/:id", async (c) => {
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id) || id <= 0) {
     return c.json({ error: { code: "BAD_REQUEST", message: "Invalid estimate ID" } }, 400);
   }
 
-  // Find the order linked to this estimate
-  const [order] = await db
+  const [existing] = await db
     .select()
-    .from(schema.orders)
-    .where(eq(schema.orders.estimateId, id))
+    .from(schema.estimates)
+    .where(eq(schema.estimates.id, id))
     .limit(1);
 
-  if (!order) {
-    return c.json(
-      { error: { code: "NOT_FOUND", message: "No order found for this estimate" } },
-      404,
-    );
+  if (!existing) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Estimate not found" } }, 404);
   }
 
   const body = await c.req.json<{
@@ -222,21 +227,11 @@ admin.patch("/estimates/:id", async (c) => {
 
   const updates: Record<string, unknown> = {};
   if (body.items !== undefined) {
-    // Convert legacy format to OrderItem format
-    updates.items = body.items.map((item, i) => ({
-      id: `item-${i}`,
-      category: "labor" as const,
-      name: item.name,
-      description: item.description,
-      quantity: 1,
-      unitPriceCents: item.price,
-      totalCents: item.price,
-      taxable: true,
-    }));
+    updates.items = body.items;
     const subtotal = body.items.reduce((sum, item) => sum + item.price, 0);
-    updates.subtotalCents = subtotal;
-    updates.priceRangeLowCents = Math.round(subtotal * 0.9);
-    updates.priceRangeHighCents = Math.round(subtotal * 1.1);
+    updates.subtotal = subtotal;
+    updates.priceRangeLow = Math.round(subtotal * 0.9);
+    updates.priceRangeHigh = Math.round(subtotal * 1.1);
   }
   if (body.notes !== undefined) updates.notes = body.notes;
   if (body.vehicleInfo !== undefined) updates.vehicleInfo = body.vehicleInfo;
@@ -244,16 +239,15 @@ admin.patch("/estimates/:id", async (c) => {
   if (body.expiresAt !== undefined) {
     updates.expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
   }
-  updates.updatedAt = new Date();
 
-  if (Object.keys(updates).length <= 1) {
+  if (Object.keys(updates).length === 0) {
     return c.json({ error: { code: "BAD_REQUEST", message: "No fields to update" } }, 400);
   }
 
   const [updated] = await db
-    .update(schema.orders)
+    .update(schema.estimates)
     .set(updates)
-    .where(eq(schema.orders.id, order.id))
+    .where(eq(schema.estimates.id, id))
     .returning();
 
   return c.json(updated);
