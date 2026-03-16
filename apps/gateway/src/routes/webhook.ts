@@ -6,7 +6,7 @@ import { notifyOrderStatusChange } from "@hmls/agent";
 
 export function createWebhookRoute(stripeSecretKey: string) {
   const stripe = new Stripe(stripeSecretKey, {
-    apiVersion: "2026-01-28.clover",
+    apiVersion: "2026-02-25.clover",
   });
 
   const webhook = new Hono();

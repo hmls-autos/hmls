@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { convertToCoreMessages } from "ai";
+import { convertToModelMessages } from "ai";
 import { eq } from "drizzle-orm";
 import { type AgentConfig, runHmlsAgent, type UserContext } from "@hmls/agent";
 import { db, schema } from "@hmls/agent/db";
@@ -83,15 +83,15 @@ chat.post("/", optionalAuth, async (c) => {
   );
 
   try {
-    const coreMessages = convertToCoreMessages(messages);
+    const modelMessages = await convertToModelMessages(messages);
 
     const result = runHmlsAgent({
-      messages: coreMessages,
+      messages: modelMessages,
       config: _config,
       userContext,
     });
 
-    return result.toDataStreamResponse();
+    return result.toUIMessageStreamResponse();
   } catch (error) {
     console.error(`[agent] Agent error:`, error);
     return c.json(

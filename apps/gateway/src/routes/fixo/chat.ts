@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { convertToCoreMessages } from "ai";
+import { convertToModelMessages } from "ai";
 import { runFixoAgent } from "@hmls/agent";
 
 const chat = new Hono();
@@ -27,11 +27,11 @@ chat.post("/", async (c) => {
   console.log(`[fixo-agent] messages=${messages.length}`);
 
   try {
-    const coreMessages = convertToCoreMessages(messages);
+    const modelMessages = await convertToModelMessages(messages);
 
-    const result = runFixoAgent({ messages: coreMessages });
+    const result = runFixoAgent({ messages: modelMessages });
 
-    return result.toDataStreamResponse();
+    return result.toUIMessageStreamResponse();
   } catch (error) {
     console.error(`[fixo-agent] Agent error:`, error);
     return c.json(

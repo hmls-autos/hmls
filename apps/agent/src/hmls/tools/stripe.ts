@@ -16,7 +16,7 @@ function centsToDollars(cents: number): number {
 
 export function createStripeTools(secretKey: string) {
   const stripe = new Stripe(secretKey, {
-    apiVersion: "2026-01-28.clover",
+    apiVersion: "2026-02-25.clover",
   });
 
   async function getOrCreateStripeCustomer(customerId: number): Promise<string> {

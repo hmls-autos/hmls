@@ -1,4 +1,4 @@
-import { type CoreMessage, streamText, tool as aiTool } from "ai";
+import { hasToolCall, type ModelMessage, stepCountIs, streamText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { SYSTEM_PROMPT } from "./system-prompt.ts";
 import { schedulingTools } from "./tools/scheduling.ts";
@@ -18,7 +18,7 @@ export interface AgentConfig {
 }
 
 export interface RunAgentOptions {
-  messages: CoreMessage[];
+  messages: ModelMessage[];
   config: AgentConfig;
   userContext?: UserContext;
 }
@@ -33,15 +33,16 @@ interface LegacyTool<P = any> {
 }
 
 /** Convert existing tool arrays (name/schema/execute) to AI SDK tool records. */
-function convertTools(existingTools: LegacyTool[]): Record<string, ReturnType<typeof aiTool>> {
+// deno-lint-ignore no-explicit-any
+function convertTools(existingTools: LegacyTool[]): Record<string, any> {
   // deno-lint-ignore no-explicit-any
   const result: Record<string, any> = {};
   for (const t of existingTools) {
-    result[t.name] = aiTool({
+    result[t.name] = {
       description: t.description,
-      parameters: t.schema,
-      execute: (input) => t.execute(input, undefined),
-    });
+      inputSchema: t.schema,
+      execute: (input: unknown) => t.execute(input, undefined),
+    };
   }
   return result;
 }
@@ -68,19 +69,11 @@ export function runHmlsAgent(options: RunAgentOptions) {
 
   const tools = convertTools(allTools);
 
-  const abortController = new AbortController();
-
   return streamText({
     model: google(modelId),
     system: systemPrompt,
     messages,
     tools,
-    maxSteps: 10,
-    abortSignal: abortController.signal,
-    onStepFinish({ toolCalls }) {
-      if (toolCalls.some((tc) => tc.toolName === "ask_user_question")) {
-        abortController.abort();
-      }
-    },
+    stopWhen: [stepCountIs(10), hasToolCall("ask_user_question")],
   });
 }

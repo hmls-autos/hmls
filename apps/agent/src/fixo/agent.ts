@@ -1,4 +1,4 @@
-import { type CoreMessage, streamText, tool as aiTool } from "ai";
+import { type ModelMessage, stepCountIs, streamText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { SYSTEM_PROMPT } from "./system-prompt.ts";
 import { analyzeImageTool } from "./tools/analyzeImage.ts";
@@ -19,21 +19,22 @@ interface LegacyTool<P = any> {
 }
 
 /** Convert existing tool arrays (name/schema/execute) to AI SDK tool records. */
-function convertTools(existingTools: LegacyTool[]): Record<string, ReturnType<typeof aiTool>> {
+// deno-lint-ignore no-explicit-any
+function convertTools(existingTools: LegacyTool[]): Record<string, any> {
   // deno-lint-ignore no-explicit-any
   const result: Record<string, any> = {};
   for (const t of existingTools) {
-    result[t.name] = aiTool({
+    result[t.name] = {
       description: t.description,
-      parameters: t.schema,
-      execute: (input) => t.execute(input, undefined),
-    });
+      inputSchema: t.schema,
+      execute: (input: unknown) => t.execute(input, undefined),
+    };
   }
   return result;
 }
 
 export interface RunFixoAgentOptions {
-  messages: CoreMessage[];
+  messages: ModelMessage[];
 }
 
 export function runFixoAgent(options: RunFixoAgentOptions) {
@@ -63,6 +64,6 @@ export function runFixoAgent(options: RunFixoAgentOptions) {
     system: SYSTEM_PROMPT,
     messages: options.messages,
     tools,
-    maxSteps: 10,
+    stopWhen: stepCountIs(10),
   });
 }

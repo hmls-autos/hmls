@@ -1,16 +1,16 @@
 {
   "workspace": ["./apps/gateway", "./apps/agent", "./packages/shared"],
   "imports": {
-    "ai": "npm:ai@^4",
-    "@ai-sdk/google": "npm:@ai-sdk/google@^1",
-    "hono": "npm:hono@^4.11.9",
-    "zod": "npm:zod@^3.24.0",
-    "stripe": "npm:stripe@^20.3.0",
+    "ai": "npm:ai@^6.0.116",
+    "@ai-sdk/google": "npm:@ai-sdk/google@^3.0.43",
+    "hono": "npm:hono@^4.12.8",
+    "zod": "npm:zod@^4.3.6",
+    "stripe": "npm:stripe@^20.4.1",
     "drizzle-orm": "npm:drizzle-orm@^0.45.1",
     "drizzle-orm/postgres-js": "npm:drizzle-orm@^0.45.1/postgres-js",
     "drizzle-orm/pg-core": "npm:drizzle-orm@^0.45.1/pg-core",
     "postgres": "npm:postgres@^3.4.8",
-    "@db/sqlite": "jsr:@db/sqlite@0.12"
+    "@db/sqlite": "jsr:@db/sqlite@^0.13.0"
   },
   "fmt": {
     "indentWidth": 2,
