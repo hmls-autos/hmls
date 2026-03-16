@@ -45,15 +45,8 @@ estimates.get("/:id/pdf", async (c) => {
 
   // Try to read from orders first (new flow), fall back to estimates
   const [orderRow] = await db
-    .select({
-      order: schema.orders,
-      customerName: schema.customers.name,
-      customerPhone: schema.customers.phone,
-      customerEmail: schema.customers.email,
-      customerAddress: schema.customers.address,
-    })
+    .select()
     .from(schema.orders)
-    .leftJoin(schema.customers, eq(schema.orders.customerId, schema.customers.id))
     .where(
       token
         ? and(eq(schema.orders.estimateId, id), eq(schema.orders.shareToken, token))
@@ -61,14 +54,14 @@ estimates.get("/:id/pdf", async (c) => {
     )
     .limit(1);
 
-  if (orderRow && orderRow.order.items && (orderRow.order.items as unknown[]).length > 0) {
-    // Use order items (new format)
-    const order = orderRow.order;
+  if (orderRow && orderRow.items && (orderRow.items as unknown[]).length > 0) {
+    // Use order items + contact snapshot fields (new format)
+    const order = orderRow;
     const customer = {
-      name: orderRow.customerName,
-      phone: orderRow.customerPhone,
-      email: orderRow.customerEmail,
-      address: orderRow.customerAddress,
+      name: order.contactName,
+      phone: order.contactPhone,
+      email: order.contactEmail,
+      address: order.contactAddress,
       vehicleInfo: order.vehicleInfo as { make?: string; model?: string; year?: string } | null,
     };
 
@@ -165,19 +158,13 @@ estimates.get("/:id/review", async (c) => {
   }
 
   // Try orders table first (new flow)
-  const [orderRow] = await db
-    .select({
-      order: schema.orders,
-      customerName: schema.customers.name,
-      customerEmail: schema.customers.email,
-    })
+  const [order] = await db
+    .select()
     .from(schema.orders)
-    .leftJoin(schema.customers, eq(schema.orders.customerId, schema.customers.id))
     .where(and(eq(schema.orders.estimateId, id), eq(schema.orders.shareToken, token)))
     .limit(1);
 
-  if (orderRow) {
-    const order = orderRow.order;
+  if (order) {
     return c.json({
       estimate: {
         id,
@@ -190,7 +177,7 @@ estimates.get("/:id/review", async (c) => {
         expiresAt: order.expiresAt,
         createdAt: order.createdAt,
       },
-      customerName: orderRow.customerName,
+      customerName: order.contactName,
       orderId: order.id,
       orderStatus: order.status,
     });

@@ -96,18 +96,10 @@ function CustomerEditor({
   onCancel: () => void;
   saving: boolean;
 }) {
-  const [name, setName] = useState(
-    order.contactName ?? order.customer.name ?? "",
-  );
-  const [email, setEmail] = useState(
-    order.contactEmail ?? order.customer.email ?? "",
-  );
-  const [phone, setPhone] = useState(
-    order.contactPhone ?? order.customer.phone ?? "",
-  );
-  const [address, setAddress] = useState(
-    order.contactAddress ?? order.customer.address ?? "",
-  );
+  const [name, setName] = useState(order.contactName ?? "");
+  const [email, setEmail] = useState(order.contactEmail ?? "");
+  const [phone, setPhone] = useState(order.contactPhone ?? "");
+  const [address, setAddress] = useState(order.contactAddress ?? "");
 
   return (
     <div className="mt-3 border border-border rounded-lg p-4 bg-surface-alt space-y-3">
@@ -513,7 +505,7 @@ function OrderCard({
             )}
           </div>
           <span className="text-xs text-text-secondary truncate">
-            {order.contactName ?? order.customer.name ?? "Unknown"}
+            {order.contactName ?? "Unknown"}
             {vehicleStr && ` · ${vehicleStr}`}
           </span>
         </div>
@@ -534,16 +526,12 @@ function OrderCard({
       {/* Expanded details */}
       {expanded && (
         <div className="mt-3 space-y-3">
-          {/* Customer info row — prefer per-order snapshot, fall back to customer record */}
+          {/* Customer info row — contact snapshot fields */}
           <div className="flex items-center justify-between text-xs text-text-secondary">
             <div className="flex items-center gap-3">
-              <span>{order.contactName ?? order.customer.name ?? "—"}</span>
-              {(order.contactEmail ?? order.customer.email) && (
-                <span>{order.contactEmail ?? order.customer.email}</span>
-              )}
-              {(order.contactPhone ?? order.customer.phone) && (
-                <span>{order.contactPhone ?? order.customer.phone}</span>
-              )}
+              <span>{order.contactName ?? "—"}</span>
+              {order.contactEmail && <span>{order.contactEmail}</span>}
+              {order.contactPhone && <span>{order.contactPhone}</span>}
             </div>
             <button
               type="button"

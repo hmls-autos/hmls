@@ -47,19 +47,12 @@ const orders = new Hono<AdminEnv>();
 
 orders.use("*", requireAdmin);
 
-// GET /orders — list all orders with customer info
+// GET /orders — list all orders
 orders.get("/", async (c) => {
   const status = c.req.query("status");
   let query = db
-    .select({
-      order: schema.orders,
-      customerName: schema.customers.name,
-      customerEmail: schema.customers.email,
-      customerPhone: schema.customers.phone,
-      customerAddress: schema.customers.address,
-    })
+    .select()
     .from(schema.orders)
-    .leftJoin(schema.customers, eq(schema.orders.customerId, schema.customers.id))
     .orderBy(desc(schema.orders.createdAt))
     .$dynamic();
 
@@ -68,17 +61,7 @@ orders.get("/", async (c) => {
   }
 
   const rows = await query.limit(200);
-  return c.json(
-    rows.map((r) => ({
-      ...r.order,
-      customer: {
-        name: r.customerName,
-        email: r.customerEmail,
-        phone: r.customerPhone,
-        address: r.customerAddress,
-      },
-    })),
-  );
+  return c.json(rows);
 });
 
 // GET /orders/:id — single order with related entities + events

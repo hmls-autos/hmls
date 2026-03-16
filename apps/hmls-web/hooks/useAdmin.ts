@@ -41,14 +41,7 @@ export type AdminQuote = Quote & {
   customer: { name: string | null; email: string | null };
 };
 
-export type AdminOrder = Order & {
-  customer: {
-    name: string | null;
-    email: string | null;
-    phone: string | null;
-    address: string | null;
-  };
-};
+export type AdminOrder = Order;
 
 interface CustomerDetail {
   customer: Customer;
