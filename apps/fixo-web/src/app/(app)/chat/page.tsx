@@ -2,7 +2,7 @@
 
 import { Car, FileDown } from "lucide-react";
 import { redirect } from "next/navigation";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { MessageBubble } from "@/components/chat/MessageBubble";
@@ -86,10 +86,13 @@ export default function ChatPage() {
     error &&
     (error.includes("upgrade_required") || error.includes("limit_reached"));
 
-  if (isUpgradeError && !upgradeMessage) {
-    setUpgradeMessage(error);
-    clearError();
-  }
+  // Move state update out of render to avoid React anti-pattern
+  useEffect(() => {
+    if (isUpgradeError && !upgradeMessage) {
+      setUpgradeMessage(error);
+      clearError();
+    }
+  }, [isUpgradeError, error, upgradeMessage, clearError]);
 
   if (authLoading) {
     return (

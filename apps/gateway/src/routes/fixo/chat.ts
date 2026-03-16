@@ -1,11 +1,21 @@
 import { Hono } from "hono";
 import { convertToModelMessages } from "ai";
 import { runFixoAgent } from "@hmls/agent";
+import { checkFreeTierLimit } from "../../middleware/fixo/tier.ts";
+import type { AuthContext } from "../../middleware/fixo/auth.ts";
 
-const chat = new Hono();
+type Variables = { auth: AuthContext };
+
+const chat = new Hono<{ Variables: Variables }>();
 
 // AI SDK data stream endpoint for fixo chat
 chat.post("/", async (c) => {
+  const auth = c.get("auth");
+
+  // Validate that the user has an active subscription/tier before running the agent
+  const tierBlock = await checkFreeTierLimit(auth, "text");
+  if (tierBlock) return tierBlock;
+
   let body;
   try {
     body = await c.req.json();
