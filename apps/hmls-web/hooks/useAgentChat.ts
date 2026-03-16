@@ -64,14 +64,16 @@ function sendAutomaticallyWhenNotAskUser({
   if (!lastAssistantMessageIsCompleteWithToolCalls({ messages })) return false;
   const last = messages[messages.length - 1];
   if (!last || last.role !== "assistant") return false;
-  const toolParts = last.parts
+  // ask_user_question has an execute() on the backend so providerExecuted=true.
+  // Check ALL output-available tool parts, not just client-side ones.
+  const hasAskUserQuestion = last.parts
     .filter(isToolOrDynamicToolUIPart)
-    .filter((p) => !p.providerExecuted && p.state === "output-available");
-  // If any output-available tool is ask_user_question, don't auto-send
-  if (
-    toolParts.some((p) => getToolOrDynamicToolName(p) === "ask_user_question")
-  )
-    return false;
+    .some(
+      (p) =>
+        p.state === "output-available" &&
+        getToolOrDynamicToolName(p) === "ask_user_question",
+    );
+  if (hasAskUserQuestion) return false;
   return true;
 }
 
