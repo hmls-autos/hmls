@@ -300,6 +300,10 @@ export const createEstimateTool = {
           shareToken,
           validDays,
           expiresAt,
+          contactName: customer.name ?? null,
+          contactEmail: customer.email ?? null,
+          contactPhone: customer.phone ?? null,
+          contactAddress: customer.address ?? null,
         })
         .returning();
 
