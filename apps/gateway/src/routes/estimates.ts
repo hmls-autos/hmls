@@ -76,7 +76,7 @@ estimates.get("/:id/pdf", async (c) => {
       .map((i) => ({
         name: i.name,
         description: i.description ?? "",
-        price: (i.totalCents ?? 0) / 100,
+        price: i.totalCents ?? 0,
       }));
 
     const pdfStream = await renderToStream(
