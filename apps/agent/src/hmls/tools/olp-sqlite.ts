@@ -24,6 +24,9 @@ export async function getOlpDb(): Promise<Database> {
   }
 }
 
+const DOWNLOAD_TIMEOUT_MS = 300_000; // 5 minutes — allows for slow cold-start downloads of large DB files
+const MAX_RETRIES = 3;
+
 async function _initDb(): Promise<Database> {
   // Check if already downloaded
   try {
@@ -42,16 +45,45 @@ async function _initDb(): Promise<Database> {
     );
   }
 
-  console.log(`Downloading OLP SQLite database from R2...`);
-  const res = await fetch(R2_URL);
-  if (!res.ok) throw new Error(`Failed to download OLP DB: ${res.status}`);
+  let lastError: Error | undefined;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      console.log(`Downloading OLP SQLite database from R2 (attempt ${attempt}/${MAX_RETRIES})...`);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
 
-  const data = new Uint8Array(await res.arrayBuffer());
-  await Deno.writeFile(OLP_DB_PATH, data);
-  console.log(`OLP database downloaded (${(data.length / 1024 / 1024).toFixed(1)} MB)`);
+      let res: Response;
+      try {
+        res = await fetch(R2_URL, { signal: controller.signal });
+      } finally {
+        clearTimeout(timer);
+      }
 
-  _db = new Database(OLP_DB_PATH, { readonly: true });
-  return _db;
+      if (!res.ok) throw new Error(`Failed to download OLP DB: ${res.status}`);
+
+      const data = new Uint8Array(await res.arrayBuffer());
+      await Deno.writeFile(OLP_DB_PATH, data);
+      console.log(`OLP database downloaded (${(data.length / 1024 / 1024).toFixed(1)} MB)`);
+
+      _db = new Database(OLP_DB_PATH, { readonly: true });
+      return _db;
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+      const isTimeout = lastError.name === "AbortError";
+      console.error(
+        `OLP download attempt ${attempt} failed${isTimeout ? " (timeout)" : ""}: ${lastError.message}`,
+      );
+      if (attempt < MAX_RETRIES) {
+        const delay = 1000 * attempt;
+        console.log(`Retrying in ${delay}ms...`);
+        await new Promise((r) => setTimeout(r, delay));
+        // Remove partial file before retry
+        try { await Deno.remove(OLP_DB_PATH); } catch { /* ignore */ }
+      }
+    }
+  }
+
+  throw new Error(`Failed to download OLP DB after ${MAX_RETRIES} attempts: ${lastError?.message}`);
 }
 
 // --- Query helpers ---
