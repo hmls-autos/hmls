@@ -520,7 +520,7 @@ const createBookingTool = {
         `[scheduling] Booking created: #${booking.id} for provider ${params.providerId}`,
       );
 
-      // Link booking to existing order (find the most recent accepted order for this customer)
+      // Link booking to existing order (paid or draft) for this customer
       if (resolvedCustomerId) {
         const [existingOrder] = await db
           .select()
@@ -528,7 +528,7 @@ const createBookingTool = {
           .where(
             and(
               eq(schema.orders.customerId, resolvedCustomerId),
-              eq(schema.orders.status, "paid"),
+              sql`${schema.orders.status} IN ('paid', 'draft')`,
               isNull(schema.orders.bookingId),
             ),
           )

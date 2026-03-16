@@ -65,8 +65,8 @@ The API server uses hostname-based dispatch to route requests:
 Each sub-app has its own CORS, auth middleware, and error handler. No middleware leaks between
 domains.
 
-- **Web → Agent**: Direct AG-UI protocol connection via `@ag-ui/client` (port 8080)
-- **Fixo Web → Agent**: AG-UI via `http://fixo.localhost:8080` / `https://api.fixo.hmls.autos`
+- **Web → Agent**: AI SDK v6 `useChat` with `DefaultChatTransport` (port 8080)
+- **Fixo Web → Agent**: AI SDK v6 via `http://fixo.localhost:8080` / `https://api.fixo.hmls.autos`
 - **Agent → DB**: Direct Supabase PostgreSQL connection via Drizzle ORM
 
 ### Key Patterns

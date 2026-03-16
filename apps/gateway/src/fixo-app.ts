@@ -79,6 +79,13 @@ export function createFixoApp() {
   app.use("/task", async (c, next) => {
     if (DEV_MODE) {
       console.log("[fixo] DEV_MODE: skipping auth");
+      c.set("auth", {
+        userId: "dev-user",
+        email: "dev@localhost",
+        tier: "plus" as const,
+        stripeCustomerId: null,
+        stripeSubscriptionId: null,
+      });
       return next();
     }
     return requireAuth(c, next);

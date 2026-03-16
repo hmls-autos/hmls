@@ -95,6 +95,7 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
     error: chatError,
     sendMessage: chatSendMessage,
     setMessages: setChatMessages,
+    clearError: chatClearError,
   } = useChat({
     transport: transportRef.current,
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
@@ -148,9 +149,9 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
         // Detect tool results
         if (
           part.state === "output-available" &&
-          !processed.has(part.toolCallId)
+          !processed.has(`result-${part.toolCallId}`)
         ) {
-          processed.add(part.toolCallId);
+          processed.add(`result-${part.toolCallId}`);
           setCurrentTool(null);
 
           if (part.toolName === "get_availability" && part.output) {
@@ -270,9 +271,8 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
   }, [setChatMessages]);
 
   const clearError = useCallback(() => {
-    // useChat manages error state internally; clearing is a no-op
-    // but we keep the function for API compatibility
-  }, []);
+    chatClearError();
+  }, [chatClearError]);
 
   return {
     messages,

@@ -19,6 +19,9 @@ const USER_AGENTS = [
 let lastRequestAt = 0;
 const MIN_REQUEST_GAP_MS = 1500;
 
+// Serialize outgoing requests so concurrent callers don't bypass the rate limit
+let requestChain: Promise<void> = Promise.resolve();
+
 // ── Session management (_nck token) ──
 
 let sessionToken: string | null = null;
@@ -27,11 +30,24 @@ const SESSION_TTL = 30 * 60 * 1000; // 30 minutes
 let sessionCookies: string[] = [];
 let sessionUserAgent = USER_AGENTS[0];
 
+// Lock to prevent concurrent session initialization races in Deno Deploy
+let sessionInitLock: Promise<string> | null = null;
+
 async function ensureSession(): Promise<string> {
   if (sessionToken && Date.now() - sessionTokenAt < SESSION_TTL) {
     return sessionToken;
   }
 
+  // Coalesce concurrent callers onto a single refresh
+  if (sessionInitLock) return sessionInitLock;
+
+  sessionInitLock = refreshSession().finally(() => {
+    sessionInitLock = null;
+  });
+  return sessionInitLock;
+}
+
+async function refreshSession(): Promise<string> {
   sessionUserAgent = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 
   const res = await fetch(HOMEPAGE, {
@@ -77,11 +93,16 @@ async function navnodeFetch(
   jsn: Record<string, unknown>,
   _maxGroupIndex = 500,
 ): Promise<NavnodeFetchResponse> {
-  // Rate limit
-  const now = Date.now();
-  const wait = MIN_REQUEST_GAP_MS - (now - lastRequestAt);
-  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-  lastRequestAt = Date.now();
+  // Serialize through request chain to enforce rate limit across concurrent callers
+  await new Promise<void>((resolve) => {
+    requestChain = requestChain.then(async () => {
+      const now = Date.now();
+      const wait = MIN_REQUEST_GAP_MS - (now - lastRequestAt);
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      lastRequestAt = Date.now();
+      resolve();
+    });
+  });
 
   const token = await ensureSession();
   const jnck = encodeURIComponent(token);
@@ -137,10 +158,16 @@ async function navnodeFetch(
 // ── Simple HTML page fetch (for engine resolution) ──
 
 async function fetchPage(path: string): Promise<string> {
-  const now = Date.now();
-  const wait = MIN_REQUEST_GAP_MS - (now - lastRequestAt);
-  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-  lastRequestAt = Date.now();
+  // Serialize through request chain to enforce rate limit across concurrent callers
+  await new Promise<void>((resolve) => {
+    requestChain = requestChain.then(async () => {
+      const now = Date.now();
+      const wait = MIN_REQUEST_GAP_MS - (now - lastRequestAt);
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      lastRequestAt = Date.now();
+      resolve();
+    });
+  });
 
   await ensureSession();
 

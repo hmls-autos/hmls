@@ -115,15 +115,14 @@ input.post("/:id/input", async (c) => {
       metadata: { filename, contentType, durationSeconds },
     });
 
-    if (type === "audio" && spectrogramBase64) {
-      // For audio: trigger spectrogram-based noise analysis
+    if (type === "audio" && spectrogramUrl) {
+      // For audio: trigger spectrogram-based noise analysis using uploaded URL (not raw base64)
       agentInput = `[AUDIO uploaded: ${filename}, duration: ${
         durationSeconds ?? "unknown"
-      }s] A spectrogram has been generated from this vehicle sound recording. Use the analyzeAudioNoise tool with the following spectrogram data to diagnose the sound. Spectrogram base64: ${spectrogramBase64}`;
+      }s] A spectrogram has been generated from this vehicle sound recording. Use the analyzeAudioNoise tool with the following spectrogram URL to diagnose the sound. Spectrogram URL: ${spectrogramUrl}`;
     } else {
       agentInput = `[${type.toUpperCase()} uploaded: ${filename}] URL: ${uploadResult.url}`;
     }
-    void spectrogramUrl;
   } else {
     agentInput = content;
   }
