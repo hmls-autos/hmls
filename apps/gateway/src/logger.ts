@@ -1,9 +1,17 @@
-import { configure, getConsoleSink, getLogger } from "@logtape/logtape";
+import {
+  configure,
+  getConsoleSink,
+  getLogger,
+  getTextFormatter,
+} from "@logtape/logtape";
 
 export async function setupLogging() {
   await configure({
     sinks: {
-      console: getConsoleSink(),
+      console: getConsoleSink({
+        // deno-lint-ignore no-explicit-any
+        formatter: getTextFormatter({ category: "." } as any),
+      }),
     },
     filters: {},
     loggers: [
