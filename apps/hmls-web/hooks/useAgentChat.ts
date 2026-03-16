@@ -4,6 +4,8 @@ import { useChat } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
   type DynamicToolUIPart,
+  getToolOrDynamicToolName,
+  isToolOrDynamicToolUIPart,
   lastAssistantMessageIsCompleteWithToolCalls,
   type UIMessage,
 } from "ai";
@@ -48,6 +50,29 @@ function getToolParts(msg: UIMessage): DynamicToolUIPart[] {
   return msg.parts.filter(
     (p): p is DynamicToolUIPart => p.type === "dynamic-tool",
   );
+}
+
+/**
+ * Like lastAssistantMessageIsCompleteWithToolCalls, but skips auto-send when
+ * ask_user_question is the pending tool — the user must pick an option first.
+ */
+function sendAutomaticallyWhenNotAskUser({
+  messages,
+}: {
+  messages: UIMessage[];
+}): boolean {
+  if (!lastAssistantMessageIsCompleteWithToolCalls({ messages })) return false;
+  const last = messages[messages.length - 1];
+  if (!last || last.role !== "assistant") return false;
+  const toolParts = last.parts
+    .filter(isToolOrDynamicToolUIPart)
+    .filter((p) => !p.providerExecuted && p.state === "output-available");
+  // If any output-available tool is ask_user_question, don't auto-send
+  if (
+    toolParts.some((p) => getToolOrDynamicToolName(p) === "ask_user_question")
+  )
+    return false;
+  return true;
 }
 
 export function useAgentChat(options: UseAgentChatOptions = {}) {
@@ -98,7 +123,7 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
     clearError: chatClearError,
   } = useChat({
     transport: transportRef.current,
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    sendAutomaticallyWhen: sendAutomaticallyWhenNotAskUser,
     onFinish: () => {
       setCurrentTool(null);
       focusInput();
