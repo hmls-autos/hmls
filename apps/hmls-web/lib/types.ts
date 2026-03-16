@@ -110,6 +110,24 @@ export interface Order {
   updatedAt: string;
 }
 
+export interface OrderEvent {
+  id: number;
+  orderId: number;
+  eventType: string;
+  fromStatus: string | null;
+  toStatus: string | null;
+  actor: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface OrderDetail {
+  order: Order;
+  customer: Customer | null;
+  booking: Booking | null;
+  events: OrderEvent[];
+}
+
 export interface Customer {
   id: number;
   name: string | null;

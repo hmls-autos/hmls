@@ -1,6 +1,13 @@
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
-import type { Booking, Customer, Estimate, Order, Quote } from "@/lib/types";
+import type {
+  Booking,
+  Customer,
+  Estimate,
+  Order,
+  OrderDetail,
+  Quote,
+} from "@/lib/types";
 
 export type { Customer };
 
@@ -90,6 +97,14 @@ export function useAdminEstimates() {
     fetcher,
   );
   return { estimates: data ?? [], isLoading, isError: !!error, mutate };
+}
+
+export function useAdminOrder(id: number | string | null) {
+  const { data, error, isLoading, mutate } = useSWR<OrderDetail>(
+    id ? `/api/admin/orders/${id}` : null,
+    fetcher,
+  );
+  return { data, isLoading, isError: !!error, mutate };
 }
 
 export function useAdminOrders(status?: string) {
