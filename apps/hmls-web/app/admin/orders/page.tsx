@@ -207,7 +207,7 @@ function ItemEditor({
       {editItems.map((item, idx) => (
         <div
           key={item.id}
-          className="flex flex-wrap items-center gap-2 border-b border-border pb-2 last:border-0"
+          className="grid grid-cols-1 sm:grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-2 border-b border-border pb-2 last:border-0"
         >
           <select
             value={item.category}
@@ -228,7 +228,7 @@ function ItemEditor({
             placeholder="Name"
             value={item.name}
             onChange={(e) => updateItem(idx, { name: e.target.value })}
-            className="flex-1 min-w-[120px] text-xs bg-surface border border-border rounded px-2 py-1.5 text-text"
+            className="min-w-0 text-xs bg-surface border border-border rounded px-2 py-1.5 text-text"
           />
           <input
             type="number"
@@ -237,7 +237,7 @@ function ItemEditor({
             onChange={(e) =>
               updateItem(idx, { quantity: Number(e.target.value) || 1 })
             }
-            className="w-14 text-xs bg-surface border border-border rounded px-2 py-1.5 text-text text-right"
+            className="w-full sm:w-14 text-xs bg-surface border border-border rounded px-2 py-1.5 text-text text-right"
           />
           <input
             type="number"
@@ -250,7 +250,7 @@ function ItemEditor({
                 unitPriceCents: Number(e.target.value) || 0,
               })
             }
-            className="w-24 text-xs bg-surface border border-border rounded px-2 py-1.5 text-text text-right"
+            className="w-full sm:w-24 text-xs bg-surface border border-border rounded px-2 py-1.5 text-text text-right"
           />
           <span className="text-xs text-text-secondary w-16 text-right">
             {formatCents(item.quantity * item.unitPriceCents)}
@@ -527,8 +527,8 @@ function OrderCard({
       {expanded && (
         <div className="mt-3 space-y-3">
           {/* Customer info row — contact snapshot fields */}
-          <div className="flex items-center justify-between text-xs text-text-secondary">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs text-text-secondary">
+            <div className="flex flex-wrap items-center gap-3">
               <span>{order.contactName ?? "—"}</span>
               {order.contactEmail && <span>{order.contactEmail}</span>}
               {order.contactPhone && <span>{order.contactPhone}</span>}
@@ -567,7 +567,7 @@ function OrderCard({
 
           {/* Items list */}
           {editMode !== "items" && items.length > 0 && (
-            <div className="border border-border rounded-lg overflow-hidden">
+            <div className="border border-border rounded-lg overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-surface-alt text-text-secondary">

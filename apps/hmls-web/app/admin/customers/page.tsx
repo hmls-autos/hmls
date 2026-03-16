@@ -107,7 +107,7 @@ function CustomerFormFields({
           className={inputClass}
         />
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label
             htmlFor="customer-phone"
@@ -164,7 +164,7 @@ function CustomerFormFields({
         >
           Vehicle
         </label>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <input
             id="customer-vehicle-year"
             type="text"
@@ -399,7 +399,7 @@ function CustomerDetail({
         <p className="text-sm text-text-secondary mt-1">{customer.address}</p>
       )}
 
-      <div className="grid grid-cols-3 gap-4 text-center border-t border-border pt-4 mt-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center border-t border-border pt-4 mt-4">
         <div>
           <p className="text-xl font-display font-bold text-text">
             {bookings.length}
