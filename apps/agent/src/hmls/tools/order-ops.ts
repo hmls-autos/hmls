@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { desc, eq, or, sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { db, schema } from "../../db/client.ts";
 import { toolResult } from "@hmls/shared/tool-result";
 
