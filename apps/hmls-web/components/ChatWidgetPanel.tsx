@@ -141,45 +141,42 @@ export default function ChatWidgetPanel({
           )
         )}
 
-        {isAuthenticated &&
-          messages.map((msg) => {
-            if (msg.role === "estimate-card" && msg.estimateData) {
-              return (
-                <div key={msg.id} className="flex justify-start">
-                  <div className="max-w-[80%]">
-                    <EstimateCard data={msg.estimateData} />
-                  </div>
-                </div>
-              );
-            }
-            if (msg.role === "booking-confirmation" && msg.bookingData) {
-              return (
-                <BookingConfirmation key={msg.id} data={msg.bookingData} />
-              );
-            }
+        {messages.map((msg) => {
+          if (msg.role === "estimate-card" && msg.estimateData) {
             return (
-              <div
-                key={msg.id}
-                className={`flex ${
-                  msg.role === "user" ? "justify-end" : "justify-start"
-                }`}
-              >
-                <div
-                  className={`max-w-[80%] px-4 py-2 rounded-2xl ${
-                    msg.role === "user"
-                      ? "bg-red-primary text-white rounded-br-md"
-                      : "bg-surface border border-border text-text rounded-bl-md"
-                  }`}
-                >
-                  {msg.role === "user" ? (
-                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                  ) : (
-                    <Markdown content={msg.content} className="text-sm" />
-                  )}
+              <div key={msg.id} className="flex justify-start">
+                <div className="max-w-[80%]">
+                  <EstimateCard data={msg.estimateData} />
                 </div>
               </div>
             );
-          })}
+          }
+          if (msg.role === "booking-confirmation" && msg.bookingData) {
+            return <BookingConfirmation key={msg.id} data={msg.bookingData} />;
+          }
+          return (
+            <div
+              key={msg.id}
+              className={`flex ${
+                msg.role === "user" ? "justify-end" : "justify-start"
+              }`}
+            >
+              <div
+                className={`max-w-[80%] px-4 py-2 rounded-2xl ${
+                  msg.role === "user"
+                    ? "bg-red-primary text-white rounded-br-md"
+                    : "bg-surface border border-border text-text rounded-bl-md"
+                }`}
+              >
+                {msg.role === "user" ? (
+                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                ) : (
+                  <Markdown content={msg.content} className="text-sm" />
+                )}
+              </div>
+            </div>
+          );
+        })}
 
         {/* Question card */}
         {pendingQuestion && (

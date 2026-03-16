@@ -234,14 +234,56 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
 
           if (
             toolName === "create_estimate" &&
-            (part.output as Record<string, unknown>)?.success &&
-            (part.output as Record<string, unknown>)?.items
+            (part.output as Record<string, unknown>)?.found &&
+            (part.output as Record<string, unknown>)?.order
           ) {
+            const raw = part.output as {
+              found: boolean;
+              order: {
+                id: number;
+                items: {
+                  name: string;
+                  description?: string;
+                  totalCents: number;
+                }[];
+                subtotal: number;
+                priceRange: string | null;
+                vehicleInfo: {
+                  year?: string;
+                  make?: string;
+                  model?: string;
+                } | null;
+                expiresAt: string | null;
+                shareToken?: string | null;
+                downloadUrl?: string;
+                shareUrl?: string | null;
+              };
+            };
+            const o = raw.order;
+            const vehicle = o.vehicleInfo
+              ? [o.vehicleInfo.year, o.vehicleInfo.make, o.vehicleInfo.model]
+                  .filter(Boolean)
+                  .join(" ")
+              : "Unknown vehicle";
             result.push({
               id: `${msg.id}-estimate-${part.toolCallId}`,
               role: "estimate-card",
               content: "",
-              estimateData: part.output as EstimateCardData,
+              estimateData: {
+                success: true,
+                estimateId: o.id,
+                vehicle,
+                items: o.items.map((i) => ({
+                  name: i.name,
+                  description: i.description,
+                  price: (i.totalCents ?? 0) / 100,
+                })),
+                subtotal: o.subtotal,
+                priceRange: o.priceRange ?? "",
+                expiresAt: o.expiresAt ?? undefined,
+                shareUrl: o.shareUrl ?? undefined,
+                downloadUrl: o.downloadUrl,
+              },
             });
           }
         }
