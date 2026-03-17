@@ -378,12 +378,12 @@ function ItemEditor({
           <input
             type="number"
             min={0}
-            step={1}
-            placeholder="¢"
-            value={item.unitPriceCents}
+            step={0.01}
+            placeholder="$"
+            value={(item.unitPriceCents / 100).toFixed(2)}
             onChange={(e) =>
               updateItem(idx, {
-                unitPriceCents: Number(e.target.value) || 0,
+                unitPriceCents: Math.round((Number(e.target.value) || 0) * 100),
               })
             }
             className="w-full sm:w-24 text-xs bg-surface border border-border rounded px-2 py-1.5 text-text text-right"
