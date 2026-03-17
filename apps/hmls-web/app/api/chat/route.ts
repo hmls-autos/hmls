@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
 
-const GATEWAY_URL = process.env.GATEWAY_URL ?? "https://api.hmls.autos";
+export const runtime = "edge";
 
-export const maxDuration = 120;
+const GATEWAY_URL = process.env.GATEWAY_URL ?? "https://api.hmls.autos";
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
