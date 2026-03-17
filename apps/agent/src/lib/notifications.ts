@@ -198,6 +198,24 @@ const STATUS_EMAILS: Record<string, EmailTemplate> = {
       </div>`),
   },
 
+  preauth: {
+    subject: "Card Authorized — Your Service Will Be Scheduled",
+    text: (ctx) =>
+      `Hi ${ctx.customerName},\n\nYour card has been authorized. We'll schedule your service appointment and notify you with the details.\n\nView your order:\n${ctx.portalUrl}/orders\n\nThanks,\nHMLS Team`,
+    html: (ctx) =>
+      htmlWrapper(`
+      <div style="padding:32px 24px;text-align:center;">
+        <div style="width:56px;height:56px;background:#f3e8ff;border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;">
+          <span style="font-size:24px;">&#128179;</span>
+        </div>
+        <h1 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#18181b;">Card Authorized</h1>
+        <p style="margin:0 0 20px;color:#71717a;font-size:14px;line-height:1.6;">
+          Hi ${ctx.customerName}, your card has been authorized. We&apos;ll schedule your service appointment and email you with the details.
+        </p>
+        <a href="${ctx.portalUrl}/orders" style="display:inline-block;background:#7c3aed;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 36px;border-radius:8px;">View Order</a>
+      </div>`),
+  },
+
   approved: {
     subject: "Estimate Approved — We'll Prepare Your Invoice",
     text: (ctx) =>
