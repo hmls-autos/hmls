@@ -5,6 +5,7 @@ import { SYSTEM_PROMPT } from "./system-prompt.ts";
 import { schedulingTools } from "./tools/scheduling.ts";
 import { createStripeTools } from "./tools/stripe.ts";
 import { orderOpsTools } from "./tools/order-ops.ts";
+import { customerOrderActionTools } from "./tools/customer-order-actions.ts";
 import { formatUserContext, type UserContext } from "../types/user-context.ts";
 import { convertTools, type LegacyTool } from "../common/convert-tools.ts";
 import { askUserQuestionTools } from "../common/tools/ask-user-question.ts";
@@ -38,6 +39,14 @@ export function runHmlsAgent(options: RunAgentOptions) {
     ? `${SYSTEM_PROMPT}\n\n${formatUserContext(userContext)}`
     : SYSTEM_PROMPT;
 
+  // Customer agent uses restricted order tools — no direct status transitions,
+  // only approve/decline/cancel/request_reschedule + read-only get_order_status
+  const customerOrderTools = [
+    orderOpsTools.find((t) => t.name === "get_order_status")!,
+    orderOpsTools.find((t) => t.name === "add_order_note")!,
+    ...customerOrderActionTools,
+  ];
+
   const allTools: LegacyTool[] = [
     ...askUserQuestionTools,
     ...estimateTools,
@@ -45,7 +54,7 @@ export function runHmlsAgent(options: RunAgentOptions) {
     ...schedulingTools,
     ...laborLookupTools,
     ...partsLookupTools,
-    ...orderOpsTools,
+    ...customerOrderTools,
   ];
 
   const tools = convertTools(allTools);
