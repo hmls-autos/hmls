@@ -183,7 +183,7 @@ const STATUS_EMAILS: Record<string, EmailTemplate> = {
       <div style="padding:20px 24px 24px;background:#f9f9fb;border-top:1px solid #e4e4e7;text-align:center;">
         <a href="${
         ctx.reviewUrl ?? ctx.portalUrl
-      }" style="display:inline-block;background:#16a34a;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 36px;border-radius:8px;letter-spacing:-0.2px;">Approve Estimate</a>
+      }" style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 36px;border-radius:8px;letter-spacing:-0.2px;">Approve Estimate</a>
         <br>
         <a href="${
         ctx.reviewUrl ?? ctx.portalUrl
