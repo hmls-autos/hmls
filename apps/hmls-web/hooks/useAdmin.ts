@@ -1,5 +1,5 @@
 import useSWR from "swr";
-import { fetcher } from "@/lib/fetcher";
+import { authFetch, fetcher } from "@/lib/fetcher";
 import type {
   Booking,
   Customer,
@@ -30,6 +30,7 @@ interface DashboardData {
 
 export type AdminBooking = Booking & {
   customer: { name: string | null; email: string | null; phone: string | null };
+  staffNotes?: string | null;
 };
 
 export type AdminEstimate = Estimate & {
@@ -82,13 +83,42 @@ export function useAdminCustomer(id: number | null) {
   return { data, isLoading, isError: !!error, mutate };
 }
 
-export function useAdminBookings(status?: string) {
-  const params = status ? `?status=${encodeURIComponent(status)}` : "";
+export function useAdminBookings(
+  status?: string,
+  dateFrom?: string,
+  dateTo?: string,
+) {
+  const p = new URLSearchParams();
+  if (status) p.set("status", status);
+  if (dateFrom) p.set("dateFrom", dateFrom);
+  if (dateTo) p.set("dateTo", dateTo);
+  const qs = p.toString() ? `?${p.toString()}` : "";
   const { data, error, isLoading, mutate } = useSWR<AdminBooking[]>(
-    `/api/admin/bookings${params}`,
+    `/api/admin/bookings${qs}`,
     fetcher,
   );
-  return { bookings: data ?? [], isLoading, isError: !!error, mutate };
+
+  async function confirmBooking(id: number) {
+    await authFetch(`/api/admin/bookings/${id}/confirm`, { method: "POST" });
+    await mutate();
+  }
+
+  async function rejectBooking(id: number, staffNotes?: string) {
+    await authFetch(`/api/admin/bookings/${id}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ staffNotes }),
+    });
+    await mutate();
+  }
+
+  return {
+    bookings: data ?? [],
+    isLoading,
+    isError: !!error,
+    mutate,
+    confirmBooking,
+    rejectBooking,
+  };
 }
 
 export function useAdminEstimates() {

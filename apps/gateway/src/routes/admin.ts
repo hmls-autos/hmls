@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { db, schema } from "@hmls/agent/db";
-import { count, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, between, count, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { type AdminEnv, requireAdmin } from "../middleware/admin.ts";
 
 const admin = new Hono<AdminEnv>();
@@ -133,10 +133,23 @@ admin.get("/customers/:id", async (c) => {
   return c.json({ customer, bookings, estimates, quotes });
 });
 
-// GET /bookings — all bookings
+// GET /bookings — all bookings with optional status/dateFrom/dateTo filters
 admin.get("/bookings", async (c) => {
   const status = c.req.query("status");
-  let query = db
+  const dateFrom = c.req.query("dateFrom");
+  const dateTo = c.req.query("dateTo");
+
+  const conditions = [];
+  if (status) conditions.push(eq(schema.bookings.status, status));
+  if (dateFrom && dateTo) {
+    conditions.push(
+      between(schema.bookings.scheduledAt, new Date(dateFrom), new Date(dateTo)),
+    );
+  } else if (dateFrom) {
+    conditions.push(gte(schema.bookings.scheduledAt, new Date(dateFrom)));
+  }
+
+  const rows = await db
     .select({
       booking: schema.bookings,
       customerName: schema.customers.name,
@@ -145,14 +158,10 @@ admin.get("/bookings", async (c) => {
     })
     .from(schema.bookings)
     .leftJoin(schema.customers, eq(schema.bookings.customerId, schema.customers.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(schema.bookings.scheduledAt))
-    .$dynamic();
+    .limit(200);
 
-  if (status) {
-    query = query.where(eq(schema.bookings.status, status));
-  }
-
-  const rows = await query.limit(200);
   return c.json(
     rows.map((r) => ({
       ...r.booking,
@@ -579,6 +588,66 @@ admin.patch("/bookings/:id", async (c) => {
   if (!updated) {
     return c.json({ error: { code: "NOT_FOUND", message: "Booking not found" } }, 404);
   }
+
+  return c.json(updated);
+});
+
+// POST /bookings/:id/confirm — set status to confirmed
+admin.post("/bookings/:id/confirm", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id <= 0) {
+    return c.json({ error: { code: "BAD_REQUEST", message: "Invalid booking ID" } }, 400);
+  }
+
+  const [existing] = await db
+    .select({ id: schema.bookings.id, status: schema.bookings.status })
+    .from(schema.bookings)
+    .where(eq(schema.bookings.id, id))
+    .limit(1);
+
+  if (!existing) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Booking not found" } }, 404);
+  }
+
+  const [updated] = await db
+    .update(schema.bookings)
+    .set({ status: "confirmed", updatedAt: new Date() })
+    .where(eq(schema.bookings.id, id))
+    .returning();
+
+  return c.json(updated);
+});
+
+// POST /bookings/:id/reject — set status to rejected, save staff_notes
+admin.post("/bookings/:id/reject", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id <= 0) {
+    return c.json({ error: { code: "BAD_REQUEST", message: "Invalid booking ID" } }, 400);
+  }
+
+  const body: { staffNotes?: string } = await c.req.json<{ staffNotes?: string }>().catch(
+    () => ({}),
+  );
+
+  const [existing] = await db
+    .select({ id: schema.bookings.id })
+    .from(schema.bookings)
+    .where(eq(schema.bookings.id, id))
+    .limit(1);
+
+  if (!existing) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Booking not found" } }, 404);
+  }
+
+  const [updated] = await db
+    .update(schema.bookings)
+    .set({
+      status: "rejected",
+      staffNotes: body.staffNotes ?? null,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.bookings.id, id))
+    .returning();
 
   return c.json(updated);
 });

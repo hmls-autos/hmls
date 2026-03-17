@@ -23,6 +23,7 @@ export interface Booking {
   customerName?: string | null;
   customerNotes?: string | null;
   internalNotes?: string | null;
+  staffNotes?: string | null;
   status: string;
   createdAt: string;
   updatedAt?: string;

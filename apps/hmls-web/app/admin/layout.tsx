@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CalendarDays,
   ClipboardList,
   LayoutDashboard,
   MessageSquare,
@@ -12,6 +13,7 @@ import { DashboardLayout, type NavItem } from "@/components/DashboardLayout";
 const navItems: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/orders", label: "Orders", icon: ClipboardList },
+  { href: "/admin/schedule", label: "Schedule", icon: CalendarDays },
   { href: "/admin/customers", label: "Customers", icon: Users },
   { href: "/admin/chat", label: "Chat", icon: MessageSquare },
 ];

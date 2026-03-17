@@ -148,6 +148,7 @@ export const bookings = pgTable("bookings", {
   photoUrls: jsonb("photo_urls"),
   customerNotes: text("customer_notes"),
   internalNotes: text("internal_notes"),
+  staffNotes: text("staff_notes"),
   preferredMechanicId: integer("preferred_mechanic_id").references(() => providers.id),
   status: varchar("status", { length: 50 }).notNull().default("requested"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
