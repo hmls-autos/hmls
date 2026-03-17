@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 const CUSTOMER_CANCELLABLE_STATUSES = ["draft", "estimated", "sent"];
 
 // Statuses where a customer can still modify requested items (before shop prices them)
-const CUSTOMER_EDITABLE_STATUSES = ["draft", "revised"];
+const CUSTOMER_EDITABLE_STATUSES = ["draft", "revised", "estimated"];
 
 // ---------------------------------------------------------------------------
 // Tool 1: approve_order
@@ -276,9 +276,10 @@ const requestRescheduleTool = {
 
 const modifyOrderItemsTool = {
   name: "modify_order_items",
-  description: "Customer adds or removes service request items on a draft or revised order. " +
+  description:
+    "Customer adds or removes service request items on a draft, revised, or estimated order. " +
     "Customers CANNOT set prices — all pricing is determined by the shop. " +
-    "Only works when the order is in 'draft' or 'revised' status. " +
+    "Only works when the order is in 'draft', 'revised', or 'estimated' status. " +
     "Use this when a customer wants to add a service request (e.g. 'also do an oil change') " +
     "or remove an item they no longer want.",
   schema: z.object({

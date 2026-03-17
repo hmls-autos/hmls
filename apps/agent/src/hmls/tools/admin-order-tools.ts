@@ -265,13 +265,14 @@ const createOrderTool = {
 // Tool 4: update_order_items
 // ---------------------------------------------------------------------------
 
-const EDITABLE_STATUSES = new Set(["draft", "revised"]);
+const EDITABLE_STATUSES = new Set(["draft", "revised", "estimated"]);
 
 const updateOrderItemsTool = {
   name: "update_order_items",
-  description: "Update line items and/or notes on a draft or revised order. " +
-    "Only works on orders in 'draft' or 'revised' status. " +
-    "Replaces the existing items array — include all items you want on the order.",
+  description: "Update line items and/or notes on a draft, revised, or estimated order. " +
+    "Only works on orders in 'draft', 'revised', or 'estimated' status. " +
+    "Replaces the existing items array — include all items you want on the order. " +
+    "Automatically recalculates total_amount (subtotal) from item unit_price * quantity.",
   schema: z.object({
     order_id: z
       .string()
@@ -318,7 +319,7 @@ const updateOrderItemsTool = {
       return toolResult({
         success: false,
         error:
-          `Cannot edit order #${id} in '${order.status}' status. Editable statuses: draft, revised`,
+          `Cannot edit order #${id} in '${order.status}' status. Editable statuses: draft, revised, estimated`,
       });
     }
 
