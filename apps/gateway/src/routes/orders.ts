@@ -590,7 +590,7 @@ orders.post("/:id/capture", async (c) => {
   const authUser = c.get("authUser");
   const actor = authUser.email ?? "admin";
 
-  let capturedAmount = body.finalAmountCents;
+  const capturedAmount = body.finalAmountCents;
 
   try {
     if (body.finalAmountCents <= (order.preauthAmountCents ?? 0)) {
@@ -603,27 +603,21 @@ orders.post("/:id/capture", async (c) => {
       const originalPi = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId);
       await stripe.paymentIntents.cancel(order.stripePaymentIntentId);
 
-      try {
-        await stripe.paymentIntents.create({
-          amount: body.finalAmountCents,
-          currency: "usd",
-          confirm: true,
-          customer: originalPi.customer as string,
-          payment_method: originalPi.payment_method as string,
-          metadata: { orderId: String(order.id) },
-          off_session: true,
-        });
-      } catch {
-        // If the new charge fails, capture original amount as fallback
-        // Note: original PI was cancelled, so we can't capture it. Record the difference.
-        capturedAmount = order.preauthAmountCents ?? 0;
-      }
+      await stripe.paymentIntents.create({
+        amount: body.finalAmountCents,
+        currency: "usd",
+        confirm: true,
+        customer: originalPi.customer as string,
+        payment_method: originalPi.payment_method as string,
+        metadata: { orderId: String(order.id) },
+        off_session: true,
+      });
     }
   } catch (err) {
     console.error(`[capture] Error capturing payment for order ${id}:`, err);
     return c.json(
-      { error: { code: "INTERNAL_ERROR", message: "Failed to capture payment" } },
-      500,
+      { error: { code: "PAYMENT_FAILED", message: "Failed to capture payment" } },
+      402,
     );
   }
 
