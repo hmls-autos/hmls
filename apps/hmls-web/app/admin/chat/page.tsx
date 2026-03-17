@@ -13,10 +13,10 @@ import { toolDisplayNames } from "@/lib/agent-tools";
 import { AGENT_URL } from "@/lib/config";
 
 const STAFF_SUGGESTIONS = [
-  "Create an order for John Smith, 2019 F-150, brake job",
-  "What's open on Thursday afternoon?",
-  "How long does a front brake job take on a 2020 Camry?",
-  "Show me all in-progress orders",
+  "Create a new order",
+  "What's open Thursday?",
+  "Front brake job labor time on 2020 Camry?",
+  "Show in-progress orders",
 ];
 
 export default function AdminChatPage() {
@@ -43,13 +43,10 @@ export default function AdminChatPage() {
     inputRef,
   });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, []);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  }, [messages]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -59,7 +56,10 @@ export default function AdminChatPage() {
   };
 
   return (
-    <div className="flex flex-col h-full max-w-4xl mx-auto w-full pt-4 pb-4 px-4">
+    <div
+      className="flex flex-col flex-1 min-h-0 max-w-4xl mx-auto w-full px-4 pt-4 pb-4"
+      style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
+    >
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
@@ -112,13 +112,13 @@ export default function AdminChatPage() {
                 Create orders, check labor times, look up customers, manage work
                 orders.
               </p>
-              <div className="flex flex-wrap gap-2 justify-center">
+              <div className="flex gap-2 overflow-x-auto pb-1 w-full max-w-sm px-1 -mx-1 snap-x">
                 {STAFF_SUGGESTIONS.map((suggestion) => (
                   <button
                     key={suggestion}
                     type="button"
                     onClick={() => sendMessage(suggestion)}
-                    className="px-3 py-1.5 rounded-full bg-surface-alt border border-border text-xs text-text-secondary hover:border-red-primary/50 hover:text-red-primary transition-colors"
+                    className="flex-none snap-start px-3 py-1.5 rounded-full bg-surface-alt border border-border text-xs text-text-secondary hover:border-red-primary/50 hover:text-red-primary transition-colors whitespace-nowrap"
                   >
                     {suggestion}
                   </button>
@@ -271,9 +271,10 @@ export default function AdminChatPage() {
             type="text"
             name="message"
             autoComplete="off"
+            enterKeyHint="send"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Create an order, check labor times, update status..."
+            placeholder="Create an order, check labor times..."
             disabled={isLoading || !!pendingQuestion}
             className="flex-1 bg-surface border border-border rounded-xl px-4 py-3 text-sm text-text placeholder-text-secondary/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-primary focus-visible:border-red-primary disabled:opacity-50 transition-colors"
           />

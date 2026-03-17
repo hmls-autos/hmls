@@ -22,6 +22,7 @@ export function DashboardLayout({
   maxWidth = "max-w-5xl",
   adminCheck,
   adminPanelLabel,
+  fullHeight,
   children,
 }: {
   navItems: NavItem[];
@@ -29,23 +30,26 @@ export function DashboardLayout({
   maxWidth?: string;
   adminCheck?: boolean;
   adminPanelLabel?: string;
+  /** When true, children fill the remaining height with no padding wrapper */
+  fullHeight?: boolean;
   children: React.ReactNode;
 }) {
+  const skipAuth = process.env.NEXT_PUBLIC_SKIP_AUTH === "true";
   const { session, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const { error: adminError, isLoading: adminLoading } = useSWR(
-    adminCheck && session ? "/api/admin/dashboard" : null,
+    adminCheck && (session || skipAuth) ? "/api/admin/dashboard" : null,
     fetcher,
   );
 
   useEffect(() => {
-    if (!authLoading && !session) {
+    if (!skipAuth && !authLoading && !session) {
       router.push("/login");
     }
-  }, [authLoading, session, router]);
+  }, [skipAuth, authLoading, session, router]);
 
   // Close sidebar on route change (mobile)
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally close sidebar when pathname changes
@@ -53,7 +57,7 @@ export function DashboardLayout({
     setSidebarOpen(false);
   }, [pathname]);
 
-  const isLoading = authLoading || (adminCheck && adminLoading);
+  const isLoading = !skipAuth && (authLoading || (adminCheck && adminLoading));
 
   if (isLoading) {
     return (
@@ -63,9 +67,9 @@ export function DashboardLayout({
     );
   }
 
-  if (!session) return null;
+  if (!skipAuth && !session) return null;
 
-  if (adminCheck && adminError) {
+  if (!skipAuth && adminCheck && adminError) {
     return (
       <main className="flex flex-1 items-center justify-center">
         <div className="text-center">
@@ -146,9 +150,41 @@ export function DashboardLayout({
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 min-w-0">
-        <div className={`p-4 md:p-8 ${maxWidth} mx-auto`}>{children}</div>
+      <main
+        className={`flex-1 min-w-0 ${fullHeight ? "flex flex-col min-h-0" : ""}`}
+      >
+        {fullHeight ? (
+          <div className="flex flex-col flex-1 min-h-0 pb-16 md:pb-0">
+            {children}
+          </div>
+        ) : (
+          <div className={`p-4 pb-20 md:pb-8 md:p-8 ${maxWidth} mx-auto`}>
+            {children}
+          </div>
+        )}
       </main>
+
+      {/* Mobile bottom tab bar */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 flex md:hidden bg-surface border-t border-border safe-area-inset-bottom">
+        {navItems.map(({ href, label, icon: Icon }) => {
+          const isActive =
+            href === basePath
+              ? pathname === basePath
+              : pathname.startsWith(href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={`flex flex-col items-center gap-0.5 flex-1 py-2.5 text-xs font-medium transition-colors ${
+                isActive ? "text-red-primary" : "text-text-secondary"
+              }`}
+            >
+              <Icon className="w-5 h-5 shrink-0" />
+              {label}
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
 }
