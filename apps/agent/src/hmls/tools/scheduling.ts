@@ -528,7 +528,7 @@ const createBookingTool = {
           .where(
             and(
               eq(schema.orders.customerId, resolvedCustomerId),
-              sql`${schema.orders.status} IN ('paid', 'draft')`,
+              sql`${schema.orders.status} IN ('preauth', 'approved')`,
               isNull(schema.orders.bookingId),
             ),
           )
