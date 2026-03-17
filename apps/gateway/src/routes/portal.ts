@@ -151,7 +151,7 @@ portal.get("/me/quotes", async (c) => {
   return c.json(rows);
 });
 
-// POST /me/orders/:id/approve — customer approves estimate (status: sent → approved)
+// POST /me/orders/:id/approve — customer approves estimate (status: estimated → approved)
 portal.post("/me/orders/:id/approve", async (c) => {
   const customerId = c.get("customerId");
   const id = Number(c.req.param("id"));
@@ -169,9 +169,9 @@ portal.post("/me/orders/:id/approve", async (c) => {
     return c.json({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
   }
 
-  if (order.status !== "sent") {
+  if (order.status !== "estimated") {
     return c.json(
-      { error: { code: "BAD_REQUEST", message: `Order is '${order.status}', not 'sent'` } },
+      { error: { code: "BAD_REQUEST", message: `Order is '${order.status}', not 'estimated'` } },
       400,
     );
   }
@@ -187,7 +187,7 @@ portal.post("/me/orders/:id/approve", async (c) => {
       ],
       updatedAt: new Date(),
     })
-    .where(and(eq(schema.orders.id, id), eq(schema.orders.status, "sent")))
+    .where(and(eq(schema.orders.id, id), eq(schema.orders.status, "estimated")))
     .returning();
 
   if (!updated) {
@@ -200,7 +200,7 @@ portal.post("/me/orders/:id/approve", async (c) => {
   await db.insert(schema.orderEvents).values({
     orderId: id,
     eventType: "status_change",
-    fromStatus: "sent",
+    fromStatus: "estimated",
     toStatus: "approved",
     actor: "customer",
     metadata: {},
@@ -210,7 +210,7 @@ portal.post("/me/orders/:id/approve", async (c) => {
   return c.json(updated);
 });
 
-// POST /me/orders/:id/decline — customer declines estimate (status: sent → declined)
+// POST /me/orders/:id/decline — customer declines estimate (status: estimated → declined)
 portal.post("/me/orders/:id/decline", async (c) => {
   const customerId = c.get("customerId");
   const id = Number(c.req.param("id"));
@@ -228,9 +228,9 @@ portal.post("/me/orders/:id/decline", async (c) => {
     return c.json({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
   }
 
-  if (order.status !== "sent") {
+  if (order.status !== "estimated") {
     return c.json(
-      { error: { code: "BAD_REQUEST", message: `Order is '${order.status}', not 'sent'` } },
+      { error: { code: "BAD_REQUEST", message: `Order is '${order.status}', not 'estimated'` } },
       400,
     );
   }
@@ -248,7 +248,7 @@ portal.post("/me/orders/:id/decline", async (c) => {
       cancellationReason: (body as { reason?: string }).reason ?? null,
       updatedAt: new Date(),
     })
-    .where(and(eq(schema.orders.id, id), eq(schema.orders.status, "sent")))
+    .where(and(eq(schema.orders.id, id), eq(schema.orders.status, "estimated")))
     .returning();
 
   if (!updated) {
@@ -261,7 +261,7 @@ portal.post("/me/orders/:id/decline", async (c) => {
   await db.insert(schema.orderEvents).values({
     orderId: id,
     eventType: "status_change",
-    fromStatus: "sent",
+    fromStatus: "estimated",
     toStatus: "declined",
     actor: "customer",
     metadata: {},

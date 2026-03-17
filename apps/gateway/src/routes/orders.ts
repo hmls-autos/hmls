@@ -9,10 +9,10 @@ import type { OrderItem } from "@hmls/agent/db";
 
 // New status machine
 const TRANSITIONS: Record<string, string[]> = {
-  draft: ["sent", "cancelled"],
-  sent: ["approved", "declined", "cancelled"],
+  draft: ["estimated", "cancelled"],
+  estimated: ["approved", "declined", "cancelled"],
   declined: ["revised"],
-  revised: ["sent", "cancelled"],
+  revised: ["estimated", "cancelled"],
   approved: ["preauth", "cancelled"],
   preauth: ["scheduled", "cancelled"],
   scheduled: ["in_progress", "cancelled"],
@@ -367,7 +367,7 @@ orders.patch("/:id/status", async (c) => {
   return c.json(updated);
 });
 
-// POST /orders/:id/send — transition to 'sent' + trigger notification
+// POST /orders/:id/send — transition to 'estimated' + trigger notification
 orders.post("/:id/send", async (c) => {
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id) || id <= 0) {
@@ -397,10 +397,10 @@ orders.post("/:id/send", async (c) => {
   const [updated] = await db
     .update(schema.orders)
     .set({
-      status: "sent",
+      status: "estimated",
       statusHistory: [
         ...(Array.isArray(order.statusHistory) ? order.statusHistory : []),
-        { status: "sent", timestamp: new Date().toISOString(), actor },
+        { status: "estimated", timestamp: new Date().toISOString(), actor },
       ],
       updatedAt: new Date(),
     })
@@ -414,8 +414,11 @@ orders.post("/:id/send", async (c) => {
     );
   }
 
-  await logOrderEvent(id, "status_change", actor, { fromStatus: order.status, toStatus: "sent" });
-  notifyOrderStatusChange(id, "sent");
+  await logOrderEvent(id, "status_change", actor, {
+    fromStatus: order.status,
+    toStatus: "estimated",
+  });
+  notifyOrderStatusChange(id, "estimated");
 
   return c.json(updated);
 });

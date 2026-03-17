@@ -268,7 +268,7 @@ async function doApprove(
   c: { json: (data: unknown, status?: number) => Response },
   order: typeof schema.orders.$inferSelect,
 ) {
-  if (order.status !== "sent") {
+  if (order.status !== "estimated") {
     return c.json(
       { error: { code: "BAD_REQUEST", message: `Order is already '${order.status}'` } },
       400,
@@ -287,7 +287,7 @@ async function doApprove(
       ],
       updatedAt: new Date(),
     })
-    .where(and(eq(schema.orders.id, order.id), eq(schema.orders.status, "sent")))
+    .where(and(eq(schema.orders.id, order.id), eq(schema.orders.status, "estimated")))
     .returning();
 
   if (!updated) {
@@ -300,7 +300,7 @@ async function doApprove(
   await db.insert(schema.orderEvents).values({
     orderId: order.id,
     eventType: "status_change",
-    fromStatus: "sent",
+    fromStatus: "estimated",
     toStatus: "approved",
     actor: "customer",
     metadata: {},
@@ -357,7 +357,7 @@ async function doDecline(
   c: { req: { json: <T>() => Promise<T> }; json: (data: unknown, status?: number) => Response },
   order: typeof schema.orders.$inferSelect,
 ) {
-  if (order.status !== "sent") {
+  if (order.status !== "estimated") {
     return c.json(
       { error: { code: "BAD_REQUEST", message: `Order is already '${order.status}'` } },
       400,
@@ -377,7 +377,7 @@ async function doDecline(
       cancellationReason: (body as { reason?: string }).reason ?? null,
       updatedAt: new Date(),
     })
-    .where(and(eq(schema.orders.id, order.id), eq(schema.orders.status, "sent")))
+    .where(and(eq(schema.orders.id, order.id), eq(schema.orders.status, "estimated")))
     .returning();
 
   if (!updated) {
@@ -390,7 +390,7 @@ async function doDecline(
   await db.insert(schema.orderEvents).values({
     orderId: order.id,
     eventType: "status_change",
-    fromStatus: "sent",
+    fromStatus: "estimated",
     toStatus: "declined",
     actor: "customer",
     metadata: {},

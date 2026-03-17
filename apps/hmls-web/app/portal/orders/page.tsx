@@ -23,7 +23,7 @@ function OrderCard({
   onPreauth: (orderId: number) => void;
   loading: number | null;
 }) {
-  const canApproveDecline = order.status === "sent";
+  const canApproveDecline = order.status === "estimated";
   const canPreauth = order.status === "approved";
 
   return (

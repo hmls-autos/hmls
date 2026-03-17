@@ -12,13 +12,13 @@ const listOrdersTool = {
   name: "list_orders",
   description: "List all orders with optional status filter. Returns id, status, customer name, " +
     "vehicle info, total, and created date. Use to browse the order queue or find orders " +
-    "by status (e.g. 'draft', 'sent', 'in_progress').",
+    "by status (e.g. 'draft', 'estimated', 'in_progress').",
   schema: z.object({
     status: z
       .string()
       .optional()
       .describe(
-        "Filter by order status (e.g. 'draft', 'sent', 'approved', 'in_progress'). Omit to list all.",
+        "Filter by order status (e.g. 'draft', 'estimated', 'approved', 'in_progress'). Omit to list all.",
       ),
     limit: z
       .number()

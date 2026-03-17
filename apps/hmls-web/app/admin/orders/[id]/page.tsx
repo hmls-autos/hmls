@@ -36,7 +36,7 @@ import type { OrderEvent, OrderItem } from "@/lib/types";
 /* ── Constants ────────────────────────────────────────────────────────── */
 
 const TRANSITION_LABELS: Record<string, string> = {
-  sent: "Send",
+  estimated: "Send",
   approved: "Approve",
   declined: "Decline",
   revised: "Revise",
@@ -54,7 +54,12 @@ const TRANSITION_LABELS: Record<string, string> = {
 const DANGER_ACTIONS = new Set(["cancelled", "void", "declined"]);
 
 const ESTIMATE_STATUSES = new Set(["draft", "revised"]);
-const QUOTE_STATUSES = new Set(["sent", "approved", "preauth", "invoiced"]);
+const QUOTE_STATUSES = new Set([
+  "estimated",
+  "approved",
+  "preauth",
+  "invoiced",
+]);
 const BOOKING_STATUSES = new Set([
   "paid",
   "scheduled",
@@ -66,7 +71,7 @@ const BOOKING_STATUSES = new Set([
 
 const MAIN_STEPS = [
   "draft",
-  "sent",
+  "estimated",
   "approved",
   "preauth",
   "scheduled",
@@ -77,7 +82,7 @@ const MAIN_STEPS = [
 
 const MAIN_STEP_LABELS: Record<string, string> = {
   draft: "Draft",
-  sent: "Sent",
+  estimated: "Estimated",
   approved: "Approved",
   preauth: "Card on File",
   scheduled: "Scheduled",
@@ -100,9 +105,9 @@ function getStepState(
 
   // If current status is a branch/terminal, figure out progress from statusHistory context
   if (currentIdx === -1) {
-    // declined/revised sit between sent and approved
+    // declined/revised sit between estimated and approved
     if (currentStatus === "declined" || currentStatus === "revised") {
-      const effectiveIdx = MAIN_STEPS.indexOf("sent");
+      const effectiveIdx = MAIN_STEPS.indexOf("estimated");
       if (stepIdx <= effectiveIdx) return "completed";
       return "pending";
     }

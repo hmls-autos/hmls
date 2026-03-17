@@ -22,7 +22,7 @@ import type { OrderEvent, OrderItem } from "@/lib/types";
 
 const PORTAL_STEPS = [
   "draft",
-  "sent",
+  "estimated",
   "approved",
   "preauth",
   "scheduled",
@@ -33,7 +33,7 @@ const PORTAL_STEPS = [
 
 const PORTAL_STEP_LABELS: Record<string, string> = {
   draft: "Preparing",
-  sent: "Estimate Ready",
+  estimated: "Estimate Ready",
   approved: "Approved",
   preauth: "Card Authorized",
   scheduled: "Scheduled",
@@ -55,7 +55,7 @@ function getStepState(
 
   if (currentIdx === -1) {
     if (currentStatus === "declined" || currentStatus === "revised") {
-      const effectiveIdx = PORTAL_STEPS.indexOf("sent");
+      const effectiveIdx = PORTAL_STEPS.indexOf("estimated");
       return stepIdx <= effectiveIdx ? "completed" : "pending";
     }
     if (currentStatus === "completed" || currentStatus === "archived") {
@@ -384,7 +384,7 @@ export default function PortalOrderDetailPage() {
   const vehicleStr = vehicle
     ? [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ")
     : null;
-  const canApproveDecline = order.status === "sent";
+  const canApproveDecline = order.status === "estimated";
   const canPreauth = order.status === "approved";
 
   async function handleAction(action: "approve" | "decline") {

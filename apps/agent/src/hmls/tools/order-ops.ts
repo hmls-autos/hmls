@@ -8,7 +8,6 @@ const ORDER_STATUSES = [
   "draft",
   "estimated",
   "revised",
-  "sent",
   "approved",
   "invoiced",
   "paid",
@@ -24,11 +23,10 @@ const ORDER_STATUSES = [
 // Mirrors the state machine in gateway/src/routes/orders.ts
 const TRANSITIONS: Record<string, string[]> = {
   draft: ["estimated", "cancelled"],
-  estimated: ["sent", "cancelled"],
-  sent: ["approved", "declined", "cancelled"],
+  estimated: ["approved", "declined", "cancelled"],
   approved: ["invoiced", "cancelled"],
   declined: ["revised"],
-  revised: ["sent", "cancelled"],
+  revised: ["estimated", "cancelled"],
   invoiced: ["paid", "void", "cancelled"],
   paid: ["scheduled", "cancelled"],
   scheduled: ["in_progress", "cancelled"],

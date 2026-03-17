@@ -14,7 +14,7 @@ import { ORDER_STATUS } from "@/lib/status";
 
 const FILTER_GROUPS = [
   { value: "", label: "All" },
-  { value: "sent", label: "Sent" },
+  { value: "estimated", label: "Estimated" },
   { value: "approved", label: "Approved" },
   { value: "in_progress", label: "In Progress" },
   { value: "completed", label: "Completed" },

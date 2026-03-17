@@ -36,8 +36,8 @@ export const ORDER_STATUS: Record<string, StatusConfig> = {
     color:
       "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400",
   },
-  sent: {
-    label: "Sent",
+  estimated: {
+    label: "Estimated",
     color:
       "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
   },
@@ -107,7 +107,7 @@ export const PORTAL_ORDER_STATUS: Record<string, StatusConfig> = {
     color:
       "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400",
   },
-  sent: {
+  estimated: {
     label: "Estimate Ready",
     color:
       "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
@@ -171,10 +171,10 @@ export const QUOTE_STATUS: Record<string, StatusConfig> = {
 };
 
 export const ORDER_TRANSITIONS: Record<string, string[]> = {
-  draft: ["sent", "cancelled"],
-  sent: ["approved", "declined", "cancelled"],
+  draft: ["estimated", "cancelled"],
+  estimated: ["approved", "declined", "cancelled"],
   declined: ["revised"],
-  revised: ["sent", "cancelled"],
+  revised: ["estimated", "cancelled"],
   approved: ["preauth", "cancelled"],
   preauth: ["scheduled", "cancelled"],
   scheduled: ["in_progress", "cancelled"],

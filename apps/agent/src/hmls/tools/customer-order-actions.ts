@@ -6,7 +6,7 @@ import { toolResult } from "@hmls/shared/tool-result";
 import { randomUUID } from "node:crypto";
 
 // Statuses a customer is allowed to cancel from (before any money changes hands)
-const CUSTOMER_CANCELLABLE_STATUSES = ["draft", "estimated", "sent"];
+const CUSTOMER_CANCELLABLE_STATUSES = ["draft", "estimated"];
 
 // Statuses where a customer can still modify requested items (before shop prices them)
 const CUSTOMER_EDITABLE_STATUSES = ["draft", "revised", "estimated"];
@@ -18,7 +18,7 @@ const CUSTOMER_EDITABLE_STATUSES = ["draft", "revised", "estimated"];
 const approveOrderTool = {
   name: "approve_order",
   description:
-    "Customer approves an estimate/quote. Only valid when the order is in 'sent' status. " +
+    "Customer approves an estimate/quote. Only valid when the order is in 'estimated' status. " +
     "This does not charge the customer — it signals acceptance so the shop can proceed to invoice.",
   schema: z.object({
     orderId: z.string().describe("The order ID to approve"),
@@ -39,11 +39,11 @@ const approveOrderTool = {
       return toolResult({ success: false, error: `Order #${id} not found` });
     }
 
-    if (order.status !== "sent") {
+    if (order.status !== "estimated") {
       return toolResult({
         success: false,
         error:
-          `Order #${id} cannot be approved — current status is '${order.status}'. Only 'sent' orders can be approved.`,
+          `Order #${id} cannot be approved — current status is '${order.status}'. Only 'estimated' orders can be approved.`,
       });
     }
 
@@ -62,7 +62,7 @@ const approveOrderTool = {
     await db.insert(schema.orderEvents).values({
       orderId: id,
       eventType: "status_change",
-      fromStatus: "sent",
+      fromStatus: "estimated",
       toStatus: "approved",
       actor: "customer",
       metadata: {},
@@ -84,7 +84,7 @@ const approveOrderTool = {
 const declineOrderTool = {
   name: "decline_order",
   description:
-    "Customer declines an estimate/quote. Only valid when the order is in 'sent' status. " +
+    "Customer declines an estimate/quote. Only valid when the order is in 'estimated' status. " +
     "The shop may revise and resend the estimate.",
   schema: z.object({
     orderId: z.string().describe("The order ID to decline"),
@@ -106,11 +106,11 @@ const declineOrderTool = {
       return toolResult({ success: false, error: `Order #${id} not found` });
     }
 
-    if (order.status !== "sent") {
+    if (order.status !== "estimated") {
       return toolResult({
         success: false,
         error:
-          `Order #${id} cannot be declined — current status is '${order.status}'. Only 'sent' orders can be declined.`,
+          `Order #${id} cannot be declined — current status is '${order.status}'. Only 'estimated' orders can be declined.`,
       });
     }
 
@@ -129,7 +129,7 @@ const declineOrderTool = {
     await db.insert(schema.orderEvents).values({
       orderId: id,
       eventType: "status_change",
-      fromStatus: "sent",
+      fromStatus: "estimated",
       toStatus: "declined",
       actor: "customer",
       metadata: params.reason ? { reason: params.reason } : {},

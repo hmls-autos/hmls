@@ -142,7 +142,7 @@ export default function EstimateReviewPage() {
   const expired = new Date(estimate.expiresAt) < new Date();
   const alreadyActed =
     orderStatus !== null &&
-    !["draft", "estimated", "sent", "revised"].includes(orderStatus);
+    !["draft", "estimated", "revised"].includes(orderStatus);
 
   if (result) {
     return (

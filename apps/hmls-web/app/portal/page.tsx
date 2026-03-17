@@ -51,7 +51,7 @@ export default function PortalDashboard() {
   }
 
   const pendingAction = orders.filter(
-    (o) => o.status === "sent" || o.status === "approved",
+    (o) => o.status === "estimated" || o.status === "approved",
   ).length;
 
   const activeOrders = orders.filter((o) =>
