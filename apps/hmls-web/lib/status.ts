@@ -108,7 +108,7 @@ export const PORTAL_ORDER_STATUS: Record<string, StatusConfig> = {
       "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400",
   },
   sent: {
-    label: "Review Required",
+    label: "Estimate Ready",
     color:
       "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
   },
