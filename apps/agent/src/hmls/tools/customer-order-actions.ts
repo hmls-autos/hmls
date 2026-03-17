@@ -1,10 +1,15 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../../db/client.ts";
+import type { OrderItem } from "../../db/schema.ts";
 import { toolResult } from "@hmls/shared/tool-result";
+import { randomUUID } from "node:crypto";
 
 // Statuses a customer is allowed to cancel from (before any money changes hands)
 const CUSTOMER_CANCELLABLE_STATUSES = ["draft", "estimated", "sent"];
+
+// Statuses where a customer can still modify requested items (before shop prices them)
+const CUSTOMER_EDITABLE_STATUSES = ["draft", "revised"];
 
 // ---------------------------------------------------------------------------
 // Tool 1: approve_order
@@ -266,6 +271,118 @@ const requestRescheduleTool = {
 };
 
 // ---------------------------------------------------------------------------
+// Tool 5: modify_order_items
+// ---------------------------------------------------------------------------
+
+const modifyOrderItemsTool = {
+  name: "modify_order_items",
+  description: "Customer adds or removes service request items on a draft or revised order. " +
+    "Customers CANNOT set prices — all pricing is determined by the shop. " +
+    "Only works when the order is in 'draft' or 'revised' status. " +
+    "Use this when a customer wants to add a service request (e.g. 'also do an oil change') " +
+    "or remove an item they no longer want.",
+  schema: z.object({
+    orderId: z.string().describe("The order ID to modify"),
+    addItems: z
+      .array(
+        z.object({
+          name: z.string().describe("Short service name (e.g. 'Oil Change', 'Tire Rotation')"),
+          description: z.string().optional().describe("Additional details or context"),
+        }),
+      )
+      .optional()
+      .describe("Service items to add (no pricing — shop will price these)"),
+    removeItemIds: z
+      .array(z.string())
+      .optional()
+      .describe("Item IDs to remove from the order"),
+  }),
+  execute: async (
+    params: {
+      orderId: string;
+      addItems?: Array<{ name: string; description?: string }>;
+      removeItemIds?: string[];
+    },
+    _ctx: unknown,
+  ) => {
+    const id = Number(params.orderId);
+    if (!Number.isInteger(id) || id <= 0) {
+      return toolResult({ success: false, error: "Invalid order ID" });
+    }
+
+    const [order] = await db
+      .select()
+      .from(schema.orders)
+      .where(eq(schema.orders.id, id))
+      .limit(1);
+
+    if (!order) {
+      return toolResult({ success: false, error: `Order #${id} not found` });
+    }
+
+    if (!CUSTOMER_EDITABLE_STATUSES.includes(order.status)) {
+      return toolResult({
+        success: false,
+        error: `Order #${id} cannot be modified — current status is '${order.status}'. ` +
+          `Customers can only modify items on orders in: ${CUSTOMER_EDITABLE_STATUSES.join(", ")}.`,
+      });
+    }
+
+    let items: OrderItem[] = Array.isArray(order.items) ? (order.items as OrderItem[]) : [];
+
+    // Remove items
+    if (params.removeItemIds && params.removeItemIds.length > 0) {
+      const removeSet = new Set(params.removeItemIds);
+      items = items.filter((item) => !removeSet.has(item.id));
+    }
+
+    // Add new service request items (price = 0, shop will fill in)
+    if (params.addItems && params.addItems.length > 0) {
+      for (const req of params.addItems) {
+        items.push({
+          id: randomUUID(),
+          category: "labor",
+          name: req.name,
+          description: req.description,
+          quantity: 1,
+          unitPriceCents: 0,
+          totalCents: 0,
+          taxable: true,
+        });
+      }
+    }
+
+    const subtotalCents = items.reduce((sum, item) => sum + item.totalCents, 0);
+
+    await db
+      .update(schema.orders)
+      .set({ items, subtotalCents, updatedAt: new Date() })
+      .where(eq(schema.orders.id, id));
+
+    await db.insert(schema.orderEvents).values({
+      orderId: id,
+      eventType: "items_modified",
+      actor: "customer",
+      metadata: {
+        added: params.addItems?.map((i) => i.name) ?? [],
+        removed: params.removeItemIds ?? [],
+      },
+    });
+
+    return toolResult({
+      success: true,
+      orderId: id,
+      itemCount: items.length,
+      message: `Order #${id} updated. ` +
+        (params.addItems?.length
+          ? `Added ${params.addItems.length} service request(s). The shop will price them. `
+          : "") +
+        (params.removeItemIds?.length ? `Removed ${params.removeItemIds.length} item(s).` : ""),
+    });
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Export
 // ---------------------------------------------------------------------------
 
@@ -274,4 +391,5 @@ export const customerOrderActionTools = [
   declineOrderTool,
   cancelOrderTool,
   requestRescheduleTool,
+  modifyOrderItemsTool,
 ];
