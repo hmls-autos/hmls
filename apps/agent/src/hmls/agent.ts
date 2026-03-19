@@ -16,7 +16,7 @@ import { estimateTools } from "../common/tools/estimate.ts";
 
 const logger = getLogger(["hmls", "agent", "hmls"]);
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
+const DEFAULT_MODEL = "gemini-3-flash";
 
 export interface AgentConfig {
   googleApiKey: string;

@@ -13,7 +13,7 @@ import { laborLookupTools } from "../common/tools/labor-lookup.ts";
 import { partsLookupTools } from "../common/tools/parts-lookup.ts";
 import { createFixoEstimateTool } from "./tools/fixo-estimate.ts";
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
+const DEFAULT_MODEL = "gemini-3-flash";
 
 const logger = getLogger(["hmls", "agent", "fixo"]);
 

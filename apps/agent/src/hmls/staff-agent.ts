@@ -14,7 +14,7 @@ import type { AgentConfig } from "./agent.ts";
 
 const logger = getLogger(["hmls", "agent", "staff"]);
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
+const DEFAULT_MODEL = "gemini-3-flash";
 
 export interface RunStaffAgentOptions {
   messages: ModelMessage[];

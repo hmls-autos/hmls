@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/";
-const VISION_MODEL = "gemini-2.5-flash";
+const VISION_MODEL = "gemini-3-flash";
 
 const analyzeImageSchema = z.object({
   imageUrl: z.string().describe("URL of the image to analyze"),
