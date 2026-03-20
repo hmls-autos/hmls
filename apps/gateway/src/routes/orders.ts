@@ -141,6 +141,7 @@ orders.post("/", async (c) => {
       priceRangeLowCents: Math.round(subtotalCents * 0.9),
       priceRangeHighCents: Math.round(subtotalCents * 1.1),
       vehicleInfo: vehicleInfo ?? undefined,
+      shareToken: crypto.randomUUID().replace(/-/g, ""),
       contactName: customer.name ?? null,
       contactEmail: customer.email ?? null,
       contactPhone: customer.phone ?? null,
@@ -171,6 +172,13 @@ orders.get("/:id", async (c) => {
 
   if (!order) {
     return c.json({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
+  }
+
+  // Backfill shareToken if missing (legacy orders)
+  if (!order.shareToken) {
+    const token = crypto.randomUUID().replace(/-/g, "");
+    await db.update(schema.orders).set({ shareToken: token }).where(eq(schema.orders.id, id));
+    order.shareToken = token;
   }
 
   const [customer, booking, events] = await Promise.all([
@@ -341,6 +349,11 @@ orders.patch("/:id/status", async (c) => {
     ],
     updatedAt: new Date(),
   };
+
+  // Backfill shareToken if missing (legacy orders created without one)
+  if (!order.shareToken) {
+    updateFields.shareToken = crypto.randomUUID().replace(/-/g, "");
+  }
 
   if (body.notes) updateFields.adminNotes = body.notes;
   if (newStatus === "cancelled" && body.cancellationReason) {
