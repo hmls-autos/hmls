@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/";
-const VISION_MODEL = "gemini-3-flash";
+const VISION_MODEL = "gemini-3-flash-preview";
 
 const analyzeAudioNoiseSchema = z.object({
   spectrogramBase64: z
