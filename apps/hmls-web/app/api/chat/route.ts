@@ -1,21 +1,12 @@
 import type { NextRequest } from "next/server";
 
-export const runtime = "edge";
-
 const GATEWAY_URL = process.env.GATEWAY_URL ?? "https://api.hmls.autos";
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.text();
+    // Parse then re-serialize to avoid edge runtime body-forwarding issues
+    const json = await req.json();
     const authorization = req.headers.get("Authorization");
-
-    console.log(
-      "[chat-proxy] body length:",
-      body.length,
-      "gateway:",
-      GATEWAY_URL,
-    );
-    console.log("[chat-proxy] body preview:", body.slice(0, 200));
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -27,19 +18,17 @@ export async function POST(req: NextRequest) {
     const upstream = await fetch(`${GATEWAY_URL}/task`, {
       method: "POST",
       headers,
-      body,
+      body: JSON.stringify(json),
     });
 
     if (!upstream.ok) {
       const errText = await upstream.text();
-      console.log("[chat-proxy] upstream error:", upstream.status, errText);
       return new Response(errText || `Upstream error: ${upstream.status}`, {
         status: upstream.status,
         headers: { "Content-Type": "text/plain" },
       });
     }
 
-    // Proxy the streaming response back to the client
     return new Response(upstream.body, {
       status: upstream.status,
       headers: {
