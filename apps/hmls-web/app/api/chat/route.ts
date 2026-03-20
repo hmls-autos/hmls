@@ -9,6 +9,14 @@ export async function POST(req: NextRequest) {
     const body = await req.text();
     const authorization = req.headers.get("Authorization");
 
+    console.log(
+      "[chat-proxy] body length:",
+      body.length,
+      "gateway:",
+      GATEWAY_URL,
+    );
+    console.log("[chat-proxy] body preview:", body.slice(0, 200));
+
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
@@ -24,6 +32,7 @@ export async function POST(req: NextRequest) {
 
     if (!upstream.ok) {
       const errText = await upstream.text();
+      console.log("[chat-proxy] upstream error:", upstream.status, errText);
       return new Response(errText || `Upstream error: ${upstream.status}`, {
         status: upstream.status,
         headers: { "Content-Type": "text/plain" },
