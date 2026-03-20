@@ -116,18 +116,6 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
     transportRef.current = new DefaultChatTransport<UIMessage>({
       api: endpoint,
       headers: () => headersRef.current,
-      prepareSendMessagesRequest: (opts) => {
-        console.log("[chat-debug] outgoing body:", {
-          hasMessages: "messages" in opts,
-          messagesLength: opts.messages?.length,
-          bodyKeys: Object.keys(opts.body ?? {}),
-          messagesPreview: JSON.stringify(opts.messages?.slice(0, 2)).slice(
-            0,
-            500,
-          ),
-        });
-        return opts;
-      },
     });
   }
 

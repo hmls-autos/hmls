@@ -73,19 +73,6 @@ chat.post("/", optionalAuth, async (c) => {
     );
   }
 
-  // Raw console.log to bypass logtape (debug)
-  console.log(
-    "[chat-debug] Body received:",
-    JSON.stringify({
-      keys: Object.keys(body),
-      hasMessages: "messages" in body,
-      messagesType: typeof body.messages,
-      messagesIsArray: Array.isArray(body.messages),
-      messagesLength: Array.isArray(body.messages) ? body.messages.length : "N/A",
-      bodyPreview: JSON.stringify(body).slice(0, 500),
-    }),
-  );
-
   const { messages } = body;
   if (!messages || !Array.isArray(messages)) {
     logger.error("Validation failed", {
