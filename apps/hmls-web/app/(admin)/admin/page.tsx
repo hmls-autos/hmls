@@ -2,7 +2,9 @@
 
 import { Calendar, DollarSign, FileText, Receipt, Users } from "lucide-react";
 import Link from "next/link";
-import { Spinner } from "@/components/ui/Spinner";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAdminDashboard } from "@/hooks/useAdmin";
 import { formatCents, formatDate } from "@/lib/format";
 
@@ -18,14 +20,68 @@ function StatCard({
   color: string;
 }) {
   return (
-    <div className="bg-surface border border-border rounded-xl p-5">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-sm text-text-secondary">{label}</span>
-        <div className={`p-2 rounded-lg ${color}`}>
-          <Icon className="w-4 h-4" />
+    <Card className="gap-0 p-5">
+      <CardContent className="p-0">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sm text-muted-foreground">{label}</span>
+          <div className={`p-2 rounded-lg ${color}`}>
+            <Icon className="w-4 h-4" />
+          </div>
         </div>
+        <p className="text-2xl font-display font-bold text-foreground">
+          {value}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function StatCardSkeleton() {
+  return (
+    <Card className="gap-0 p-5">
+      <CardContent className="p-0">
+        <div className="flex items-center justify-between mb-3">
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-8 w-8 rounded-lg" />
+        </div>
+        <Skeleton className="h-8 w-24" />
+      </CardContent>
+    </Card>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div>
+      <Skeleton className="h-8 w-40 mb-1" />
+      <Skeleton className="h-4 w-56 mb-8" />
+
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-10">
+        {["stat-1", "stat-2", "stat-3", "stat-4", "stat-5"].map((id) => (
+          <StatCardSkeleton key={id} />
+        ))}
       </div>
-      <p className="text-2xl font-display font-bold text-text">{value}</p>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {["col-1", "col-2", "col-3"].map((colId) => (
+          <div key={colId}>
+            <div className="flex items-center justify-between mb-3">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-3 w-14" />
+            </div>
+            <Card className="gap-0 p-0">
+              <CardContent className="p-0 divide-y divide-border">
+                {["row-1", "row-2", "row-3"].map((rowId) => (
+                  <div key={rowId} className="px-4 py-3">
+                    <Skeleton className="h-4 w-3/4 mb-1.5" />
+                    <Skeleton className="h-3 w-1/2" />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -34,21 +90,17 @@ export default function AdminDashboard() {
   const { data, isLoading } = useAdminDashboard();
 
   if (isLoading || !data) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Spinner />
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   const { stats, upcomingBookings, recentCustomers, pendingQuotes } = data;
 
   return (
     <div>
-      <h1 className="text-2xl font-display font-bold text-text mb-1">
+      <h1 className="text-2xl font-display font-bold text-foreground mb-1">
         Dashboard
       </h1>
-      <p className="text-sm text-text-secondary mb-8">
+      <p className="text-sm text-muted-foreground mb-8">
         Business overview at a glance.
       </p>
 
@@ -90,109 +142,130 @@ export default function AdminDashboard() {
         {/* Upcoming bookings */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-text">
+            <h2 className="text-sm font-semibold text-foreground">
               Upcoming Bookings
             </h2>
             <Link
               href="/admin/orders?status=scheduled"
-              className="text-xs text-red-primary hover:text-red-dark font-medium"
+              className="text-xs text-primary hover:text-primary/80 font-medium"
             >
               View all
             </Link>
           </div>
           {upcomingBookings.length === 0 ? (
-            <div className="bg-surface border border-border rounded-xl p-6 text-center">
-              <p className="text-xs text-text-secondary">
-                No upcoming bookings.
-              </p>
-            </div>
+            <Card className="gap-0 p-6 text-center">
+              <CardContent className="p-0">
+                <p className="text-xs text-muted-foreground">
+                  No upcoming bookings.
+                </p>
+              </CardContent>
+            </Card>
           ) : (
-            <div className="bg-surface border border-border rounded-xl divide-y divide-border">
-              {upcomingBookings.map((b) => (
-                <div key={b.id} className="px-4 py-3">
-                  <p className="text-sm text-text font-medium truncate">
-                    {b.serviceType}
-                  </p>
-                  <p className="text-xs text-text-secondary">
-                    {formatDate(b.scheduledAt)} &middot;{" "}
-                    {b.customerName ?? "Unknown"}
-                  </p>
-                </div>
-              ))}
-            </div>
+            <Card className="gap-0 p-0">
+              <CardContent className="p-0 divide-y divide-border">
+                {upcomingBookings.map((b) => (
+                  <div key={b.id} className="px-4 py-3">
+                    <p className="text-sm text-foreground font-medium truncate">
+                      {b.serviceType}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(b.scheduledAt)} &middot;{" "}
+                      {b.customerName ?? "Unknown"}
+                    </p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
           )}
         </div>
 
         {/* Recent customers */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-text">
+            <h2 className="text-sm font-semibold text-foreground">
               Recent Customers
             </h2>
             <Link
               href="/admin/customers"
-              className="text-xs text-red-primary hover:text-red-dark font-medium"
+              className="text-xs text-primary hover:text-primary/80 font-medium"
             >
               View all
             </Link>
           </div>
           {recentCustomers.length === 0 ? (
-            <div className="bg-surface border border-border rounded-xl p-6 text-center">
-              <p className="text-xs text-text-secondary">No customers yet.</p>
-            </div>
+            <Card className="gap-0 p-6 text-center">
+              <CardContent className="p-0">
+                <p className="text-xs text-muted-foreground">
+                  No customers yet.
+                </p>
+              </CardContent>
+            </Card>
           ) : (
-            <div className="bg-surface border border-border rounded-xl divide-y divide-border">
-              {recentCustomers.map((c) => (
-                <Link
-                  key={c.id}
-                  href={`/admin/customers?id=${c.id}`}
-                  className="block px-4 py-3 hover:bg-surface-alt transition-colors first:rounded-t-xl last:rounded-b-xl"
-                >
-                  <p className="text-sm text-text font-medium truncate">
-                    {c.name ?? "Unnamed"}
-                  </p>
-                  <p className="text-xs text-text-secondary truncate">
-                    {c.email ?? c.phone ?? "No contact info"}
-                  </p>
-                </Link>
-              ))}
-            </div>
+            <Card className="gap-0 p-0 overflow-hidden">
+              <CardContent className="p-0 divide-y divide-border">
+                {recentCustomers.map((c) => (
+                  <Link
+                    key={c.id}
+                    href={`/admin/customers?id=${c.id}`}
+                    className="block px-4 py-3 hover:bg-muted transition-colors"
+                  >
+                    <p className="text-sm text-foreground font-medium truncate">
+                      {c.name ?? "Unnamed"}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {c.email ?? c.phone ?? "No contact info"}
+                    </p>
+                  </Link>
+                ))}
+              </CardContent>
+            </Card>
           )}
         </div>
 
         {/* Pending quotes */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-text">Pending Quotes</h2>
+            <h2 className="text-sm font-semibold text-foreground">
+              Pending Quotes
+            </h2>
             <Link
               href="/admin/orders?status=sent"
-              className="text-xs text-red-primary hover:text-red-dark font-medium"
+              className="text-xs text-primary hover:text-primary/80 font-medium"
             >
               View all
             </Link>
           </div>
           {pendingQuotes.length === 0 ? (
-            <div className="bg-surface border border-border rounded-xl p-6 text-center">
-              <p className="text-xs text-text-secondary">No pending quotes.</p>
-            </div>
+            <Card className="gap-0 p-6 text-center">
+              <CardContent className="p-0">
+                <p className="text-xs text-muted-foreground">
+                  No pending quotes.
+                </p>
+              </CardContent>
+            </Card>
           ) : (
-            <div className="bg-surface border border-border rounded-xl divide-y divide-border">
-              {pendingQuotes.map((q) => (
-                <div key={q.id} className="px-4 py-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-text font-medium">
-                      {formatCents(q.totalAmount)}
+            <Card className="gap-0 p-0">
+              <CardContent className="p-0 divide-y divide-border">
+                {pendingQuotes.map((q) => (
+                  <div key={q.id} className="px-4 py-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-foreground font-medium">
+                        {formatCents(q.totalAmount)}
+                      </p>
+                      <Badge
+                        variant="outline"
+                        className="capitalize bg-amber-100 text-amber-700 border-transparent dark:bg-amber-900/30 dark:text-amber-400"
+                      >
+                        {q.status}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {formatDate(q.createdAt)}
                     </p>
-                    <span className="text-xs font-medium px-2 py-0.5 rounded-full capitalize bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                      {q.status}
-                    </span>
                   </div>
-                  <p className="text-xs text-text-secondary mt-0.5">
-                    {formatDate(q.createdAt)}
-                  </p>
-                </div>
-              ))}
-            </div>
+                ))}
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>

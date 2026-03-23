@@ -2,7 +2,8 @@
 
 import { CheckCircle, ClipboardList, Loader } from "lucide-react";
 import Link from "next/link";
-import { Spinner } from "@/components/ui/Spinner";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { usePortalCustomer, usePortalOrders } from "@/hooks/usePortal";
 import { formatCents, formatDateTime } from "@/lib/format";
 import { PORTAL_ORDER_STATUS } from "@/lib/status";
@@ -21,18 +22,35 @@ function SummaryCard({
   color: string;
 }) {
   return (
-    <Link
-      href={href}
-      className="bg-surface border border-border rounded-xl p-5 hover:border-border-hover transition-colors group"
-    >
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-sm text-text-secondary">{label}</span>
-        <div className={`p-2 rounded-lg ${color}`}>
-          <Icon className="w-4 h-4" />
-        </div>
-      </div>
-      <p className="text-2xl font-display font-bold text-text">{count}</p>
+    <Link href={href}>
+      <Card className="p-5 hover:border-primary transition-colors group">
+        <CardContent className="p-0">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm text-muted-foreground">{label}</span>
+            <div className={`p-2 rounded-lg ${color}`}>
+              <Icon className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="text-2xl font-display font-bold text-foreground">
+            {count}
+          </p>
+        </CardContent>
+      </Card>
     </Link>
+  );
+}
+
+function SummaryCardSkeleton() {
+  return (
+    <Card className="p-5">
+      <CardContent className="p-0">
+        <div className="flex items-center justify-between mb-3">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-8 w-8 rounded-lg" />
+        </div>
+        <Skeleton className="h-8 w-12" />
+      </CardContent>
+    </Card>
   );
 }
 
@@ -44,8 +62,33 @@ export default function PortalDashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Spinner />
+      <div>
+        <Skeleton className="h-8 w-64 mb-1" />
+        <Skeleton className="h-4 w-48 mb-8" />
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+          <SummaryCardSkeleton />
+          <SummaryCardSkeleton />
+          <SummaryCardSkeleton />
+        </div>
+
+        <Skeleton className="h-6 w-32 mb-4" />
+        <Card>
+          <CardContent className="divide-y divide-border">
+            {["skeleton-1", "skeleton-2", "skeleton-3", "skeleton-4"].map(
+              (id) => (
+                <div key={id} className="flex items-center gap-4 py-3">
+                  <Skeleton className="h-4 w-4 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <Skeleton className="h-4 w-32 mb-1" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                  <Skeleton className="h-3 w-20 shrink-0" />
+                </div>
+              ),
+            )}
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -71,10 +114,10 @@ export default function PortalDashboard() {
 
   return (
     <div>
-      <h1 className="text-2xl font-display font-bold text-text mb-1">
+      <h1 className="text-2xl font-display font-bold text-foreground mb-1">
         {customer?.name ? `Welcome back, ${customer.name}` : "Welcome back"}
       </h1>
-      <p className="text-sm text-text-secondary mb-8">
+      <p className="text-sm text-muted-foreground mb-8">
         Here&apos;s an overview of your account.
       </p>
 
@@ -104,48 +147,52 @@ export default function PortalDashboard() {
       </div>
 
       {/* Recent orders */}
-      <h2 className="text-lg font-display font-semibold text-text mb-4">
+      <h2 className="text-lg font-display font-semibold text-foreground mb-4">
         Recent Orders
       </h2>
       {recentOrders.length === 0 ? (
-        <div className="bg-surface border border-border rounded-xl p-8 text-center">
-          <p className="text-text-secondary text-sm">No orders yet.</p>
-          <Link
-            href="/chat"
-            className="inline-block mt-3 text-sm text-red-primary hover:text-red-dark font-medium"
-          >
-            Get your first estimate &rarr;
-          </Link>
-        </div>
+        <Card className="p-8 text-center">
+          <CardContent className="p-0">
+            <p className="text-muted-foreground text-sm">No orders yet.</p>
+            <Link
+              href="/chat"
+              className="inline-block mt-3 text-sm text-primary hover:text-primary/80 font-medium"
+            >
+              Get your first estimate &rarr;
+            </Link>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="bg-surface border border-border rounded-xl divide-y divide-border">
-          {recentOrders.map((order) => {
-            const statusConfig = PORTAL_ORDER_STATUS[order.status];
-            return (
-              <Link
-                key={order.id}
-                href={`/portal/orders/${order.id}`}
-                className="flex items-center gap-4 px-4 py-3 hover:bg-surface-alt transition-colors first:rounded-t-xl last:rounded-b-xl"
-              >
-                <ClipboardList className="w-4 h-4 text-text-secondary shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-text truncate">
-                    Order #{order.id}
-                  </p>
-                  <p className="text-xs text-text-secondary capitalize">
-                    {statusConfig?.label ?? order.status}
-                    {order.subtotalCents > 0
-                      ? ` · ${formatCents(order.subtotalCents)}`
-                      : ""}
-                  </p>
-                </div>
-                <span className="text-xs text-text-secondary shrink-0">
-                  {formatDateTime(order.updatedAt)}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
+        <Card className="p-0">
+          <CardContent className="p-0 divide-y divide-border">
+            {recentOrders.map((order) => {
+              const statusConfig = PORTAL_ORDER_STATUS[order.status];
+              return (
+                <Link
+                  key={order.id}
+                  href={`/portal/orders/${order.id}`}
+                  className="flex items-center gap-4 px-4 py-3 hover:bg-muted transition-colors first:rounded-t-xl last:rounded-b-xl"
+                >
+                  <ClipboardList className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-foreground truncate">
+                      Order #{order.id}
+                    </p>
+                    <p className="text-xs text-muted-foreground capitalize">
+                      {statusConfig?.label ?? order.status}
+                      {order.subtotalCents > 0
+                        ? ` · ${formatCents(order.subtotalCents)}`
+                        : ""}
+                    </p>
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {formatDateTime(order.updatedAt)}
+                  </span>
+                </Link>
+              );
+            })}
+          </CardContent>
+        </Card>
       )}
     </div>
   );

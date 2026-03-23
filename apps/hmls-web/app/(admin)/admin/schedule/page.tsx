@@ -9,12 +9,23 @@ import {
   XCircle,
 } from "lucide-react";
 import { useCallback, useState } from "react";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { Spinner } from "@/components/ui/Spinner";
-import { StatusBadge } from "@/components/ui/StatusBadge";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import { type AdminBooking, useAdminBookings } from "@/hooks/useAdmin";
 import { formatDate, formatTime } from "@/lib/format";
 import { BOOKING_STATUS } from "@/lib/status";
+import { cn } from "@/lib/utils";
 
 /* ── Helpers ─────────────────────────────────────────────────────────── */
 
@@ -57,68 +68,106 @@ function vehicleLabel(b: AdminBooking) {
     .join(" ");
 }
 
-/* ── Reject Modal ────────────────────────────────────────────────────── */
+/* ── Skeleton Loading ───────────────────────────────────────────────── */
 
-function RejectModal({
+function ScheduleSkeleton() {
+  return (
+    <div className="space-y-10">
+      <Skeleton className="h-8 w-40" />
+      <div className="space-y-4">
+        <Skeleton className="h-5 w-48" />
+        <div className="space-y-2">
+          {["skeleton-1", "skeleton-2", "skeleton-3"].map((id) => (
+            <Card key={id} className="py-0">
+              <CardContent className="p-4">
+                <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                  <Skeleton className="h-7 w-16 rounded-lg" />
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-4 w-12" />
+                      <Skeleton className="h-5 w-20 rounded-full" />
+                    </div>
+                    <Skeleton className="h-4 w-36" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                  <div className="flex gap-2 sm:flex-col">
+                    <Skeleton className="h-7 w-20 rounded-md" />
+                    <Skeleton className="h-7 w-20 rounded-md" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Reject Dialog ──────────────────────────────────────────────────── */
+
+function RejectDialog({
   booking,
+  open,
+  onOpenChange,
   onConfirm,
-  onCancel,
   isSubmitting,
 }: {
   booking: AdminBooking;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onConfirm: (notes: string) => void;
-  onCancel: () => void;
   isSubmitting: boolean;
 }) {
   const [notes, setNotes] = useState("");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-surface border border-border rounded-xl shadow-xl w-full max-w-md">
-        <div className="p-5 border-b border-border">
-          <h2 className="text-base font-semibold text-text">Reject Booking</h2>
-          <p className="text-sm text-text-secondary mt-0.5">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Reject Booking</DialogTitle>
+          <DialogDescription>
             Booking #{booking.id} &mdash;{" "}
             {booking.customer?.name ?? booking.customerName ?? "Unknown"}
-          </p>
-        </div>
-        <div className="p-5 space-y-3">
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
           <label
-            className="block text-sm font-medium text-text"
+            className="block text-sm font-medium text-foreground"
             htmlFor="reject-notes"
           >
             Reason / staff note{" "}
-            <span className="text-text-secondary font-normal">(optional)</span>
+            <span className="text-muted-foreground font-normal">
+              (optional)
+            </span>
           </label>
-          <textarea
+          <Textarea
             id="reject-notes"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
-            placeholder="e.g. Outside service area, no availability that week…"
-            className="w-full bg-surface-alt border border-border rounded-lg px-3 py-2 text-sm text-text placeholder:text-text-secondary focus:outline-none focus:border-border-hover resize-none"
+            placeholder="e.g. Outside service area, no availability that week..."
+            className="resize-none"
           />
         </div>
-        <div className="p-5 border-t border-border flex gap-2 justify-end">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="text-sm px-4 py-2 rounded-lg border border-border text-text-secondary hover:text-text hover:border-border-hover transition-colors"
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
             disabled={isSubmitting}
           >
             Cancel
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="destructive"
             onClick={() => onConfirm(notes)}
-            className="text-sm px-4 py-2 rounded-lg bg-red-primary text-white hover:bg-red-dark transition-colors disabled:opacity-50"
             disabled={isSubmitting}
           >
-            {isSubmitting ? "Rejecting…" : "Reject Booking"}
-          </button>
-        </div>
-      </div>
-    </div>
+            {isSubmitting ? "Rejecting..." : "Reject Booking"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -139,66 +188,79 @@ function BookingCard({
     booking.customer?.name ?? booking.customerName ?? "Unknown Customer";
   const vehicle = vehicleLabel(booking);
   const time = formatTime(booking.scheduledAt);
+  const statusConfig = BOOKING_STATUS[booking.status];
 
   return (
-    <div className="bg-surface border border-border rounded-xl p-4 flex flex-col sm:flex-row sm:items-start gap-3">
-      {/* Time pill */}
-      <div className="shrink-0 text-center sm:w-16">
-        <span className="text-xs font-semibold text-text-secondary bg-surface-alt border border-border rounded-lg px-2 py-1 inline-block">
-          {time}
-        </span>
-      </div>
-
-      {/* Details */}
-      <div className="flex-1 min-w-0">
-        <div className="flex flex-wrap items-center gap-2 mb-1">
-          <span className="text-sm font-semibold text-text">#{booking.id}</span>
-          <StatusBadge status={booking.status} config={BOOKING_STATUS} />
+    <Card className="py-0">
+      <CardContent className="p-4 flex flex-col sm:flex-row sm:items-start gap-3">
+        {/* Time pill */}
+        <div className="shrink-0 text-center sm:w-16">
+          <span className="text-xs font-semibold text-muted-foreground bg-muted border border-border rounded-lg px-2 py-1 inline-block">
+            {time}
+          </span>
         </div>
-        <p className="text-sm text-text truncate">{name}</p>
-        <p className="text-xs text-text-secondary mt-0.5">
-          {booking.serviceType}
-        </p>
-        {vehicle && <p className="text-xs text-text-secondary">{vehicle}</p>}
-        {booking.location && (
-          <p className="text-xs text-text-secondary truncate">
-            {booking.location}
-          </p>
-        )}
-        {booking.customerNotes && (
-          <p className="text-xs text-text-secondary mt-1 italic truncate">
-            &ldquo;{booking.customerNotes}&rdquo;
-          </p>
-        )}
-        {booking.staffNotes && (
-          <p className="text-xs text-red-primary mt-1 italic truncate">
-            Staff note: {booking.staffNotes}
-          </p>
-        )}
-      </div>
 
-      {/* Actions */}
-      {showActions && (
-        <div className="flex gap-2 shrink-0 sm:flex-col sm:items-end">
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40 transition-colors"
-          >
-            <CheckCircle className="w-3.5 h-3.5" />
-            Confirm
-          </button>
-          <button
-            type="button"
-            onClick={onReject}
-            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 transition-colors"
-          >
-            <XCircle className="w-3.5 h-3.5" />
-            Reject
-          </button>
+        {/* Details */}
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <span className="text-sm font-semibold text-foreground">
+              #{booking.id}
+            </span>
+            {statusConfig && (
+              <Badge className={cn("border-transparent", statusConfig.color)}>
+                {statusConfig.label}
+              </Badge>
+            )}
+          </div>
+          <p className="text-sm text-foreground truncate">{name}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {booking.serviceType}
+          </p>
+          {vehicle && (
+            <p className="text-xs text-muted-foreground">{vehicle}</p>
+          )}
+          {booking.location && (
+            <p className="text-xs text-muted-foreground truncate">
+              {booking.location}
+            </p>
+          )}
+          {booking.customerNotes && (
+            <p className="text-xs text-muted-foreground mt-1 italic truncate">
+              &ldquo;{booking.customerNotes}&rdquo;
+            </p>
+          )}
+          {booking.staffNotes && (
+            <p className="text-xs text-primary mt-1 italic truncate">
+              Staff note: {booking.staffNotes}
+            </p>
+          )}
         </div>
-      )}
-    </div>
+
+        {/* Actions */}
+        {showActions && (
+          <div className="flex gap-2 shrink-0 sm:flex-col sm:items-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onConfirm}
+              className="text-green-700 bg-green-100 hover:bg-green-200 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40"
+            >
+              <CheckCircle className="size-3.5" />
+              Confirm
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onReject}
+              className="text-red-700 bg-red-100 hover:bg-red-200 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+            >
+              <XCircle className="size-3.5" />
+              Reject
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -260,26 +322,27 @@ export default function SchedulePage() {
   }
 
   if (pendingLoading || weekLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Spinner />
-      </div>
-    );
+    return <ScheduleSkeleton />;
   }
 
   return (
     <>
       {rejectTarget && (
-        <RejectModal
+        <RejectDialog
           booking={rejectTarget}
+          open={!!rejectTarget}
+          onOpenChange={(open) => {
+            if (!open) setRejectTarget(null);
+          }}
           onConfirm={handleRejectConfirm}
-          onCancel={() => setRejectTarget(null)}
           isSubmitting={isSubmitting}
         />
       )}
 
       <div className="space-y-10">
-        <h1 className="text-2xl font-display font-bold text-text">Schedule</h1>
+        <h1 className="text-2xl font-display font-bold text-foreground">
+          Schedule
+        </h1>
 
         {actionError && (
           <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm rounded-xl px-4 py-3">
@@ -290,22 +353,26 @@ export default function SchedulePage() {
         {/* ── Pending Confirmation ── */}
         <section>
           <div className="flex items-center gap-2 mb-4">
-            <Clock className="w-4 h-4 text-amber-500" />
-            <h2 className="text-base font-semibold text-text">
+            <Clock className="size-4 text-amber-500" />
+            <h2 className="text-base font-semibold text-foreground">
               Pending Confirmation
             </h2>
             {pendingBookings.length > 0 && (
-              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+              <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-transparent">
                 {pendingBookings.length}
-              </span>
+              </Badge>
             )}
           </div>
 
           {pendingBookings.length === 0 ? (
-            <EmptyState
-              icon={CheckCircle}
-              message="No pending bookings. You're all caught up."
-            />
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+                <CheckCircle className="size-8 text-muted-foreground mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  No pending bookings. You're all caught up.
+                </p>
+              </CardContent>
+            </Card>
           ) : (
             <div className="space-y-2">
               {pendingBookings.map((b) => (
@@ -325,44 +392,41 @@ export default function SchedulePage() {
         <section>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <CalendarDays className="w-4 h-4 text-blue-500" />
-              <h2 className="text-base font-semibold text-text">
+              <CalendarDays className="size-4 text-blue-500" />
+              <h2 className="text-base font-semibold text-foreground">
                 {weekOffset === 0 ? "This Week" : "Schedule"}
               </h2>
-              <span className="text-xs text-text-secondary">{weekLabel}</span>
+              <span className="text-xs text-muted-foreground">{weekLabel}</span>
             </div>
             <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={goToPrevWeek}
-                className="p-1.5 rounded-lg text-text-secondary hover:text-text hover:bg-surface-alt transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
+              <Button variant="ghost" size="icon-sm" onClick={goToPrevWeek}>
+                <ChevronLeft className="size-4" />
+              </Button>
               {weekOffset !== 0 && (
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={goToCurrentWeek}
-                  className="text-xs font-medium px-2 py-1 rounded-lg text-red-primary hover:bg-surface-alt transition-colors"
+                  className="text-primary"
                 >
                   Today
-                </button>
+                </Button>
               )}
-              <button
-                type="button"
-                onClick={goToNextWeek}
-                className="p-1.5 rounded-lg text-text-secondary hover:text-text hover:bg-surface-alt transition-colors"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              <Button variant="ghost" size="icon-sm" onClick={goToNextWeek}>
+                <ChevronRight className="size-4" />
+              </Button>
             </div>
           </div>
 
           {weekBookings.length === 0 ? (
-            <EmptyState
-              icon={CalendarDays}
-              message="No confirmed bookings this week."
-            />
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+                <CalendarDays className="size-8 text-muted-foreground mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  No confirmed bookings this week.
+                </p>
+              </CardContent>
+            </Card>
           ) : (
             <div className="space-y-6">
               {sortedDays.map((dayKey) => {
@@ -370,7 +434,7 @@ export default function SchedulePage() {
                 const dayDate = new Date(dayKey);
                 return (
                   <div key={dayKey}>
-                    <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                       {dayDate.toLocaleDateString("en-US", {
                         weekday: "long",
                         month: "short",

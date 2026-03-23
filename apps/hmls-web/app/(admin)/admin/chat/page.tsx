@@ -57,7 +57,7 @@ export default function AdminChatPage() {
   };
 
   return (
-    <main className="flex flex-col flex-1 bg-background text-text">
+    <main className="flex flex-col flex-1 bg-background text-foreground">
       <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full pt-8 pb-4 px-4">
         {/* Header */}
         <motion.div
@@ -77,15 +77,15 @@ export default function AdminChatPage() {
                   ? { duration: 0 }
                   : { delay: 0.2, type: "spring", stiffness: 200 }
               }
-              className="w-12 h-12 rounded-full bg-red-light flex items-center justify-center"
+              className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center"
             >
-              <Wrench className="w-6 h-6 text-red-primary" />
+              <Wrench className="w-6 h-6 text-primary" />
             </motion.div>
             <div>
-              <h1 className="text-xl font-display font-bold text-text">
+              <h1 className="text-xl font-display font-bold text-foreground">
                 Shop Assistant
               </h1>
-              <p className="text-sm text-text-secondary">
+              <p className="text-sm text-muted-foreground">
                 Orders · Labor times · Customers
               </p>
             </div>
@@ -102,7 +102,7 @@ export default function AdminChatPage() {
             }}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="text-sm text-text-secondary hover:text-text transition-colors px-4 py-2 rounded-lg hover:bg-surface-alt"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors px-4 py-2 rounded-lg hover:bg-muted"
           >
             Clear
           </motion.button>
@@ -117,7 +117,7 @@ export default function AdminChatPage() {
               ? { duration: 0 }
               : { duration: 0.4, delay: 0.1 }
           }
-          className="flex-1 overflow-y-auto rounded-2xl border border-border bg-surface p-6 space-y-4 min-h-0"
+          className="flex-1 overflow-y-auto rounded-2xl border border-border bg-card p-6 space-y-4 min-h-0"
         >
           <AnimatePresence mode="wait">
             {messages.length === 0 && (
@@ -133,15 +133,15 @@ export default function AdminChatPage() {
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-                  className="w-16 h-16 rounded-full bg-red-light flex items-center justify-center mb-4"
+                  className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4"
                 >
-                  <Wrench className="w-8 h-8 text-red-primary" />
+                  <Wrench className="w-8 h-8 text-primary" />
                 </motion.div>
                 <motion.h2
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 }}
-                  className="text-xl font-display font-bold text-text mb-2"
+                  className="text-xl font-display font-bold text-foreground mb-2"
                 >
                   What do you need?
                 </motion.h2>
@@ -149,7 +149,7 @@ export default function AdminChatPage() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
-                  className="text-text-secondary max-w-sm"
+                  className="text-muted-foreground max-w-sm"
                 >
                   Create orders, check labor times, look up customers, manage
                   work orders.
@@ -173,7 +173,7 @@ export default function AdminChatPage() {
                       }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => sendMessage(suggestion)}
-                      className="px-4 py-2 rounded-full bg-surface-alt border border-border text-sm text-text-secondary hover:border-red-primary/50 hover:text-red-primary transition-colors"
+                      className="px-4 py-2 rounded-full bg-muted border border-border text-sm text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
                     >
                       {suggestion}
                     </motion.button>
@@ -213,8 +213,8 @@ export default function AdminChatPage() {
                   transition={{ duration: 0.2, delay: 0.05 }}
                   className={`max-w-[80%] px-5 py-3 rounded-2xl ${
                     msg.role === "user"
-                      ? "bg-red-primary text-white rounded-br-md"
-                      : "bg-surface-alt border border-border text-text rounded-bl-md"
+                      ? "bg-primary text-white rounded-br-md"
+                      : "bg-muted border border-border text-foreground rounded-bl-md"
                   }`}
                 >
                   {msg.role === "user" ? (
@@ -263,9 +263,9 @@ export default function AdminChatPage() {
                 exit={{ opacity: 0, y: -10 }}
                 className="flex justify-start"
               >
-                <div className="bg-surface-alt border border-border px-4 py-2 rounded-xl flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 text-red-primary animate-spin" />
-                  <span className="text-sm text-text-secondary">
+                <div className="bg-muted border border-border px-4 py-2 rounded-xl flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                  <span className="text-sm text-muted-foreground">
                     {toolDisplayNames[currentTool] || currentTool}...
                   </span>
                 </div>
@@ -308,11 +308,11 @@ export default function AdminChatPage() {
                   exit={{ opacity: 0 }}
                   className="flex justify-start"
                 >
-                  <div className="bg-surface-alt border border-border px-5 py-3 rounded-2xl rounded-bl-md">
+                  <div className="bg-muted border border-border px-5 py-3 rounded-2xl rounded-bl-md">
                     <div className="flex gap-1">
-                      <span className="w-2 h-2 bg-text-secondary/50 rounded-full animate-bounce" />
-                      <span className="w-2 h-2 bg-text-secondary/50 rounded-full animate-bounce [animation-delay:0.1s]" />
-                      <span className="w-2 h-2 bg-text-secondary/50 rounded-full animate-bounce [animation-delay:0.2s]" />
+                      <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" />
+                      <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:0.1s]" />
+                      <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:0.2s]" />
                     </div>
                   </div>
                 </motion.div>
@@ -349,7 +349,7 @@ export default function AdminChatPage() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="Create an order, check labor times..."
               disabled={isLoading || !!pendingQuestion}
-              className="flex-1 bg-surface border border-border rounded-xl px-5 py-4 text-text placeholder-text-secondary/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-primary focus-visible:border-red-primary disabled:opacity-50 transition-colors"
+              className="flex-1 bg-card border border-border rounded-xl px-5 py-4 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring disabled:opacity-50 transition-colors"
             />
             <motion.button
               type="submit"
@@ -357,7 +357,7 @@ export default function AdminChatPage() {
               disabled={isLoading || !input.trim() || !!pendingQuestion}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="w-14 h-14 rounded-xl bg-red-primary text-white flex items-center justify-center hover:bg-red-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-14 h-14 rounded-xl bg-primary text-white flex items-center justify-center hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Send size={20} />
             </motion.button>

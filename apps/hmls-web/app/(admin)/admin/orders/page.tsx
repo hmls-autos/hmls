@@ -3,12 +3,33 @@
 import { ChevronRight, ClipboardList } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { Spinner } from "@/components/ui/Spinner";
-import { StatusBadge } from "@/components/ui/StatusBadge";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAdminOrders } from "@/hooks/useAdmin";
 import { formatCents, formatDateTime } from "@/lib/format";
-import { ORDER_STATUS } from "@/lib/status";
+import { ORDER_STATUS, type StatusConfig } from "@/lib/status";
+import { cn } from "@/lib/utils";
+
+/* ── Helpers ──────────────────────────────────────────────────────────── */
+
+function OrderStatusBadge({
+  status,
+  config,
+}: {
+  status: string;
+  config: Record<string, StatusConfig>;
+}) {
+  const entry = config[status] ?? {
+    label: status,
+    color: "bg-neutral-100 text-neutral-500",
+  };
+  return (
+    <Badge variant="outline" className={cn(entry.color)}>
+      {entry.label}
+    </Badge>
+  );
+}
 
 /* ── Grouped filters ────────────────────────────────────────────────── */
 
@@ -33,6 +54,18 @@ const MORE_FILTERS = [
   { value: "archived", label: "Archived" },
 ];
 
+/* ── Skeleton loading state ───────────────────────────────────────────── */
+
+function OrdersSkeleton() {
+  return (
+    <div className="space-y-2">
+      {["sk-1", "sk-2", "sk-3", "sk-4", "sk-5"].map((id) => (
+        <Skeleton key={id} className="h-16 w-full rounded-xl" />
+      ))}
+    </div>
+  );
+}
+
 /* ── Page ────────────────────────────────────────────────────────────── */
 
 export default function OrdersPage() {
@@ -42,17 +75,11 @@ export default function OrdersPage() {
 
   const isMoreActive = MORE_FILTERS.some((f) => f.value === filter);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Spinner />
-      </div>
-    );
-  }
-
   return (
     <div>
-      <h1 className="text-2xl font-display font-bold text-text mb-6">Orders</h1>
+      <h1 className="text-2xl font-display font-bold text-foreground mb-6">
+        Orders
+      </h1>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
@@ -61,11 +88,12 @@ export default function OrdersPage() {
             key={opt.value}
             type="button"
             onClick={() => setFilter(opt.value)}
-            className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+            className={cn(
+              "text-xs font-medium px-3 py-1.5 rounded-full transition-colors",
               filter === opt.value
-                ? "bg-red-primary text-white"
-                : "bg-surface border border-border text-text-secondary hover:text-text hover:border-border-hover"
-            }`}
+                ? "bg-primary text-white"
+                : "bg-card border border-border text-muted-foreground hover:text-foreground hover:border-primary",
+            )}
           >
             {opt.label}
           </button>
@@ -74,16 +102,17 @@ export default function OrdersPage() {
           <button
             type="button"
             onClick={() => setShowMore((v) => !v)}
-            className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+            className={cn(
+              "text-xs font-medium px-3 py-1.5 rounded-full transition-colors",
               isMoreActive
-                ? "bg-red-primary text-white"
-                : "bg-surface border border-border text-text-secondary hover:text-text hover:border-border-hover"
-            }`}
+                ? "bg-primary text-white"
+                : "bg-card border border-border text-muted-foreground hover:text-foreground hover:border-primary",
+            )}
           >
-            More {showMore ? "▲" : "▼"}
+            More {showMore ? "\u25B2" : "\u25BC"}
           </button>
           {showMore && (
-            <div className="absolute top-full left-0 mt-1 bg-surface border border-border rounded-lg shadow-lg z-10 py-1 min-w-[140px]">
+            <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-10 py-1 min-w-[140px]">
               {MORE_FILTERS.map((opt) => (
                 <button
                   key={opt.value}
@@ -92,11 +121,12 @@ export default function OrdersPage() {
                     setFilter(opt.value);
                     setShowMore(false);
                   }}
-                  className={`w-full text-left text-xs px-3 py-1.5 hover:bg-surface-alt transition-colors ${
+                  className={cn(
+                    "w-full text-left text-xs px-3 py-1.5 hover:bg-muted transition-colors",
                     filter === opt.value
-                      ? "text-red-primary font-medium"
-                      : "text-text-secondary"
-                  }`}
+                      ? "text-primary font-medium"
+                      : "text-muted-foreground",
+                  )}
                 >
                   {opt.label}
                 </button>
@@ -106,11 +136,17 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {orders.length === 0 ? (
-        <EmptyState
-          icon={ClipboardList}
-          message={filter ? `No ${filter} orders.` : "No orders yet."}
-        />
+      {isLoading ? (
+        <OrdersSkeleton />
+      ) : orders.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <ClipboardList className="w-10 h-10 text-muted-foreground mb-3" />
+            <p className="text-sm text-muted-foreground">
+              {filter ? `No ${filter} orders.` : "No orders yet."}
+            </p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-2">
           {orders.map((order) => {
@@ -126,35 +162,38 @@ export default function OrdersPage() {
               <Link
                 key={order.id}
                 href={`/admin/orders/${order.id}`}
-                className="flex items-center justify-between gap-3 bg-surface border border-border rounded-xl p-4 hover:border-border-hover transition-colors group"
+                className="flex items-center justify-between gap-3 bg-card border border-border rounded-xl p-4 hover:border-primary transition-colors group"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-text">
+                    <span className="text-sm font-semibold text-foreground">
                       #{order.id}
                     </span>
-                    <StatusBadge status={order.status} config={ORDER_STATUS} />
+                    <OrderStatusBadge
+                      status={order.status}
+                      config={ORDER_STATUS}
+                    />
                     {order.revisionNumber > 1 && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400">
                         v{order.revisionNumber}
                       </span>
                     )}
                   </div>
-                  <span className="text-xs text-text-secondary truncate hidden sm:inline">
+                  <span className="text-xs text-muted-foreground truncate hidden sm:inline">
                     {order.contactName ?? "Unknown"}
-                    {vehicleStr && ` · ${vehicleStr}`}
+                    {vehicleStr && ` \u00B7 ${vehicleStr}`}
                   </span>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-xs text-text-secondary hidden sm:inline">
+                  <span className="text-xs text-muted-foreground hidden sm:inline">
                     {formatDateTime(order.createdAt)}
                   </span>
                   {items.length > 0 && (
-                    <span className="text-xs font-medium text-text">
+                    <span className="text-xs font-medium text-foreground">
                       {formatCents(order.subtotalCents ?? 0)}
                     </span>
                   )}
-                  <ChevronRight className="w-4 h-4 text-text-secondary group-hover:text-text transition-colors" />
+                  <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                 </div>
               </Link>
             );
