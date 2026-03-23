@@ -4,13 +4,38 @@
 
 /* ── Light palette (default) ── */
 :root {
-  --background: #fafafa;
-  --foreground: #171717;
-  --primary: #dc2626;
+  --background: oklch(0.985 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.577 0.245 27.325);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.96 0.003 264.542);
+  --secondary-foreground: oklch(0.205 0.015 264.542);
+  --muted: oklch(0.96 0.003 264.542);
+  --muted-foreground: oklch(0.556 0.015 264.542);
+  --accent: oklch(0.96 0.003 264.542);
+  --accent-foreground: oklch(0.205 0.015 264.542);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0.004 264.542);
+  --input: oklch(0.922 0.004 264.542);
+  --ring: oklch(0.577 0.245 27.325);
+  --radius: 0.625rem;
+  --sidebar-background: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.577 0.245 27.325);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.96 0.003 264.542);
+  --sidebar-accent-foreground: oklch(0.205 0.015 264.542);
+  --sidebar-border: oklch(0.922 0.004 264.542);
+  --sidebar-ring: oklch(0.577 0.245 27.325);
+
+  /* Legacy custom vars (used by existing pages) */
   --surface: #ffffff;
   --surface-alt: #f5f5f5;
   --surface-hover: #fef2f2;
-  --border: #e5e5e5;
   --border-hover: #dc2626;
   --text: #171717;
   --text-secondary: #737373;
@@ -23,13 +48,37 @@
 
 /* ── Dark palette ── */
 .dark {
-  --background: #1c1917;
-  --foreground: #fafaf9;
-  --primary: #ef4444;
+  --background: oklch(0.141 0.005 285.823);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.228 0.006 285.823);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.228 0.006 285.823);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.637 0.237 25.331);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.274 0.006 286.032);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.274 0.006 286.032);
+  --muted-foreground: oklch(0.705 0.015 286.032);
+  --accent: oklch(0.274 0.006 286.032);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.637 0.237 25.331);
+  --border: oklch(0.365 0.014 285.823);
+  --input: oklch(0.365 0.014 285.823);
+  --ring: oklch(0.637 0.237 25.331);
+  --sidebar-background: oklch(0.141 0.005 285.823);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.637 0.237 25.331);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.274 0.006 286.032);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.365 0.014 285.823);
+  --sidebar-ring: oklch(0.637 0.237 25.331);
+
+  /* Legacy custom vars (used by existing pages) */
   --surface: #292524;
   --surface-alt: #1c1917;
   --surface-hover: #44403c;
-  --border: #44403c;
   --border-hover: #ef4444;
   --text: #fafaf9;
   --text-secondary: #a8a29e;
@@ -58,15 +107,43 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  /* Fonts */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --font-display: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
+
+  /* shadcn color system */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar-background: var(--sidebar-background);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Legacy color aliases (used by existing pages) */
   --color-surface: var(--surface);
   --color-surface-alt: var(--surface-alt);
   --color-surface-hover: var(--surface-hover);
-  --color-border: var(--border);
   --color-border-hover: var(--border-hover);
   --color-text: var(--text);
   --color-text-secondary: var(--text-secondary);
@@ -79,6 +156,12 @@
   --color-footer-muted: var(--footer-muted);
   --color-footer-border: var(--footer-border);
   --color-footer-dim: var(--footer-dim);
+
+  /* Radius */
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
 html {
@@ -165,7 +248,7 @@ body {
   transition-delay: 0.5s;
 }
 
-/* Hero entrance — CSS keyframe animation, no JS needed */
+/* Hero entrance -- CSS keyframe animation, no JS needed */
 @keyframes hero-fade-up {
   from {
     opacity: 0;
@@ -281,7 +364,7 @@ body {
   animation: none;
 }
 
-/* Leaflet attribution — subtle but present for license compliance */
+/* Leaflet attribution -- subtle but present for license compliance */
 .leaflet-control-attribution {
   font-size: 9px;
   opacity: 0.3;

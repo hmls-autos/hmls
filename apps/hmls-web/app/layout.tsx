@@ -1,15 +1,13 @@
+import { GeistMono } from "geist/font/mono";
+import { GeistSans } from "geist/font/sans";
 import type { Metadata } from "next";
-import { Barlow, Inter } from "next/font/google";
+import { Barlow } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import { Toaster } from "sonner";
 import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
 import { JsonLd } from "@/components/JsonLd";
-import Navbar from "@/components/Navbar";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-});
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const barlow = Barlow({
   subsets: ["latin"],
@@ -69,11 +67,11 @@ export default function RootLayout({
         <meta name="color-scheme" content="light dark" />
       </head>
       <body
-        className={`${inter.variable} ${barlow.variable} font-sans antialiased bg-background text-text min-h-dvh flex flex-col`}
+        className={`${GeistSans.variable} ${GeistMono.variable} ${barlow.variable} font-sans antialiased bg-background text-foreground min-h-dvh flex flex-col`}
       >
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-red-primary focus:text-white focus:rounded-lg focus:text-sm focus:font-medium"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-lg focus:text-sm focus:font-medium"
         >
           Skip to content
         </a>
@@ -87,10 +85,12 @@ export default function RootLayout({
         />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <AuthProvider>
-            <Navbar />
-            <div id="main-content" className="flex-1 flex flex-col">
-              {children}
-            </div>
+            <TooltipProvider>
+              <div id="main-content" className="flex-1 flex flex-col">
+                {children}
+              </div>
+              <Toaster richColors position="bottom-right" />
+            </TooltipProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>
