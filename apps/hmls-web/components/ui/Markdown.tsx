@@ -22,18 +22,16 @@ export function Markdown({ content, className = "" }: MarkdownProps) {
           ),
           li: ({ children }) => <li className="mb-1">{children}</li>,
           strong: ({ children }) => (
-            <strong className="font-semibold text-red-primary">
-              {children}
-            </strong>
+            <strong className="font-semibold text-primary">{children}</strong>
           ),
           em: ({ children }) => <em className="italic">{children}</em>,
           code: ({ children }) => (
-            <code className="bg-surface-alt px-1.5 py-0.5 rounded text-xs font-mono">
+            <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">
               {children}
             </code>
           ),
           pre: ({ children }) => (
-            <pre className="bg-surface-alt p-3 rounded-lg overflow-x-auto my-2">
+            <pre className="bg-muted p-3 rounded-lg overflow-x-auto my-2">
               {children}
             </pre>
           ),
@@ -42,7 +40,7 @@ export function Markdown({ content, className = "" }: MarkdownProps) {
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-red-primary hover:underline"
+              className="text-primary hover:underline"
             >
               {children}
             </a>

@@ -7,7 +7,11 @@ import { useAuth } from "@/components/AuthProvider";
 import { EstimateCard } from "@/components/EstimateCard";
 import { QuestionCard } from "@/components/QuestionCard";
 import { SlotPicker } from "@/components/SlotPicker";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Markdown } from "@/components/ui/Markdown";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAgentChat } from "@/hooks/useAgentChat";
 import { toolDisplayNames } from "@/lib/agent-tools";
 import { AGENT_URL } from "@/lib/config";
@@ -90,8 +94,9 @@ export default function AdminChatPage() {
               </p>
             </div>
           </div>
-          <motion.button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => {
               if (
                 messages.length === 0 ||
@@ -100,12 +105,9 @@ export default function AdminChatPage() {
                 clearMessages();
               }
             }}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors px-4 py-2 rounded-lg hover:bg-muted"
           >
             Clear
-          </motion.button>
+          </Button>
         </motion.div>
 
         {/* Messages Area */}
@@ -169,7 +171,7 @@ export default function AdminChatPage() {
                       transition={{ delay: 0.6 + index * 0.1 }}
                       whileHover={{
                         scale: 1.05,
-                        borderColor: "rgb(220 38 38 / 0.5)",
+                        borderColor: "hsl(var(--primary) / 0.5)",
                       }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => sendMessage(suggestion)}
@@ -213,7 +215,7 @@ export default function AdminChatPage() {
                   transition={{ duration: 0.2, delay: 0.05 }}
                   className={`max-w-[80%] px-5 py-3 rounded-2xl ${
                     msg.role === "user"
-                      ? "bg-primary text-white rounded-br-md"
+                      ? "bg-primary text-primary-foreground rounded-br-md"
                       : "bg-muted border border-border text-foreground rounded-bl-md"
                   }`}
                 >
@@ -265,9 +267,9 @@ export default function AdminChatPage() {
               >
                 <div className="bg-muted border border-border px-4 py-2 rounded-xl flex items-center gap-2">
                   <Loader2 className="w-4 h-4 text-primary animate-spin" />
-                  <span className="text-sm text-muted-foreground">
+                  <Badge variant="secondary" className="text-xs">
                     {toolDisplayNames[currentTool] || currentTool}...
-                  </span>
+                  </Badge>
                 </div>
               </motion.div>
             )}
@@ -282,22 +284,25 @@ export default function AdminChatPage() {
                 exit={{ opacity: 0, y: -10 }}
                 className="flex justify-start"
               >
-                <div className="max-w-[80%] bg-red-50 border border-red-200 px-5 py-3 rounded-2xl rounded-bl-md">
-                  <p className="text-xs font-medium text-red-600 mb-1">Error</p>
-                  <p className="text-sm text-red-700">{error}</p>
-                  <button
-                    type="button"
+                <div className="max-w-[80%] bg-destructive/10 border border-destructive/20 px-5 py-3 rounded-2xl rounded-bl-md">
+                  <p className="text-xs font-medium text-destructive mb-1">
+                    Error
+                  </p>
+                  <p className="text-sm text-destructive">{error}</p>
+                  <Button
+                    variant="link"
+                    size="xs"
                     onClick={clearError}
-                    className="text-xs text-red-500 hover:text-red-700 mt-1 underline"
+                    className="text-destructive px-0 mt-1"
                   >
                     Dismiss
-                  </button>
+                  </Button>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* Loading dots */}
+          {/* Loading skeleton */}
           <AnimatePresence>
             {isLoading &&
               !currentTool &&
@@ -308,12 +313,10 @@ export default function AdminChatPage() {
                   exit={{ opacity: 0 }}
                   className="flex justify-start"
                 >
-                  <div className="bg-muted border border-border px-5 py-3 rounded-2xl rounded-bl-md">
-                    <div className="flex gap-1">
-                      <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" />
-                      <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:0.1s]" />
-                      <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:0.2s]" />
-                    </div>
+                  <div className="bg-muted border border-border px-5 py-3 rounded-2xl rounded-bl-md space-y-2">
+                    <Skeleton className="h-3 w-48" />
+                    <Skeleton className="h-3 w-36" />
+                    <Skeleton className="h-3 w-24" />
                   </div>
                 </motion.div>
               )}
@@ -338,7 +341,7 @@ export default function AdminChatPage() {
             <label htmlFor="staff-chat-input" className="sr-only">
               Message
             </label>
-            <input
+            <Input
               ref={inputRef}
               id="staff-chat-input"
               type="text"
@@ -349,18 +352,17 @@ export default function AdminChatPage() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="Create an order, check labor times..."
               disabled={isLoading || !!pendingQuestion}
-              className="flex-1 bg-card border border-border rounded-xl px-5 py-4 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring disabled:opacity-50 transition-colors"
+              className="flex-1 h-14 rounded-xl px-5 text-base"
             />
-            <motion.button
+            <Button
               type="submit"
               aria-label="Send"
               disabled={isLoading || !input.trim() || !!pendingQuestion}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="w-14 h-14 rounded-xl bg-primary text-white flex items-center justify-center hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-14 h-14 rounded-xl"
+              size="icon-lg"
             >
               <Send size={20} />
-            </motion.button>
+            </Button>
           </div>
         </motion.form>
       </div>
