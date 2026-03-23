@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Home, Menu } from "lucide-react";
+import { BarChart3, Menu } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ComponentType } from "react";
@@ -142,18 +142,6 @@ export function DashboardLayout({
             HMLS<span className="text-red-500">.</span>
           </span>
         </div>
-        <div className="px-2 mb-2">
-          <Button
-            variant="ghost"
-            asChild
-            className="justify-start gap-3 h-auto px-3 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground w-full"
-          >
-            <Link href="/">
-              <Home className="w-4 h-4 shrink-0" />
-              Home
-            </Link>
-          </Button>
-        </div>
         {navContent}
       </aside>
 
@@ -165,18 +153,6 @@ export function DashboardLayout({
               {title}
             </SheetTitle>
           </SheetHeader>
-          <div className="px-2 mb-2">
-            <Button
-              variant="ghost"
-              asChild
-              className="justify-start gap-3 h-auto px-3 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground w-full"
-            >
-              <Link href="/">
-                <Home className="w-4 h-4 shrink-0" />
-                Home
-              </Link>
-            </Button>
-          </div>
           {navContent}
         </SheetContent>
       </Sheet>
