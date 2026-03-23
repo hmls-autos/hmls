@@ -75,6 +75,22 @@ function sendAutomaticallyWhenNotAskUser({
   return true;
 }
 
+const STORAGE_KEY = "hmls-chat-history";
+
+function loadStoredMessages(): UIMessage[] | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {
+    /* ignore corrupt data */
+  }
+  return undefined;
+}
+
 export function useAgentChat(options: UseAgentChatOptions = {}) {
   const {
     scrollRef,
@@ -91,6 +107,9 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
 
   // Track which tool invocations we've already processed to avoid duplicates
   const processedInvocationsRef = useRef<Set<string>>(new Set());
+
+  // Load persisted messages once on mount
+  const [initialMessages] = useState(loadStoredMessages);
 
   const scrollToBottom = useCallback(() => {
     scrollRef?.current?.scrollIntoView({ behavior: "smooth" });
@@ -127,6 +146,7 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
     setMessages: setChatMessages,
     clearError: chatClearError,
   } = useChat({
+    messages: initialMessages,
     transport: transportRef.current,
     sendAutomaticallyWhen: sendAutomaticallyWhenNotAskUser,
     onFinish: () => {
@@ -147,6 +167,19 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
       processedInvocationsRef.current.clear();
     }
   }, [chatMessages.length]);
+
+  // Persist messages to localStorage
+  useEffect(() => {
+    try {
+      if (chatMessages.length > 0) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(chatMessages));
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    } catch {
+      /* localStorage full or unavailable */
+    }
+  }, [chatMessages]);
 
   // Derive tool call state from streaming messages
   useEffect(() => {
@@ -332,6 +365,11 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
     setPendingQuestion(null);
     setPendingSlotPicker(null);
     processedInvocationsRef.current.clear();
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
   }, [setChatMessages]);
 
   const clearError = useCallback(() => {

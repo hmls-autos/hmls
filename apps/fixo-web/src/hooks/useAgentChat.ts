@@ -62,12 +62,31 @@ function getToolParts(msg: UIMessage) {
   return msg.parts.filter(isToolOrDynamicToolUIPart);
 }
 
+const STORAGE_KEY = "fixo-chat-history";
+
+function loadStoredMessages(): UIMessage[] | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {
+    /* ignore corrupt data */
+  }
+  return undefined;
+}
+
 export function useAgentChat(options: UseAgentChatOptions = {}) {
   const { scrollRef, inputRef, accessToken } = options;
   const [currentTool, setCurrentTool] = useState<string | null>(null);
   const [pendingEstimate, setPendingEstimate] =
     useState<FixoEstimateData | null>(null);
   const imageUrlMapRef = useRef<Map<string, string>>(new Map());
+
+  // Load persisted messages once on mount
+  const [initialMessages] = useState(loadStoredMessages);
   // Tracks imageUrls by message index for new messages whose IDs aren't
   // known until after AI SDK v6 assigns them internally.
   const pendingImageUrlRef = useRef<{ index: number; url: string } | null>(
@@ -109,6 +128,7 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
     setMessages: setChatMessages,
     clearError: chatClearError,
   } = useChat({
+    messages: initialMessages,
     transport: transportRef.current,
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
     onFinish: () => {
@@ -122,6 +142,19 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
   });
 
   const isLoading = status === "submitted" || status === "streaming";
+
+  // Persist messages to localStorage
+  useEffect(() => {
+    try {
+      if (chatMessages.length > 0) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(chatMessages));
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    } catch {
+      /* localStorage full or unavailable */
+    }
+  }, [chatMessages]);
 
   // Track active tool calls and detect create_fixo_estimate output
   useEffect(() => {
@@ -203,6 +236,11 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
   const clearMessages = useCallback(() => {
     setChatMessages([]);
     imageUrlMapRef.current.clear();
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
   }, [setChatMessages]);
 
   const clearError = useCallback(() => {
