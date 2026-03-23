@@ -118,7 +118,7 @@ export function DashboardLayout({
               className={cn(
                 "justify-start gap-3 h-auto px-3 py-2.5 text-sm font-medium",
                 isActive
-                  ? "bg-primary/10 text-primary hover:bg-primary/15"
+                  ? "bg-red-500/10 text-red-500 hover:bg-red-500/15 dark:text-red-400"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -137,6 +137,11 @@ export function DashboardLayout({
     <div className="flex flex-1 min-h-0">
       {/* Desktop sidebar */}
       <aside className="hidden md:flex sticky top-16 z-auto h-[calc(100dvh-4rem)] w-60 bg-sidebar-background border-r border-sidebar-border flex-col py-4">
+        <div className="px-5 mb-4">
+          <span className="text-lg font-display font-extrabold tracking-tight text-foreground">
+            HMLS<span className="text-red-500">.</span>
+          </span>
+        </div>
         <div className="px-2 mb-2">
           <Button
             variant="ghost"

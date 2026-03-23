@@ -128,21 +128,21 @@ export default function PortalDashboard() {
           count={pendingAction}
           icon={ClipboardList}
           href="/portal/orders"
-          color="bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
+          color="bg-red-500/10 text-red-500 dark:bg-red-900/30 dark:text-red-400"
         />
         <SummaryCard
           label="Active Orders"
           count={activeOrders}
           icon={Loader}
           href="/portal/orders"
-          color="bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+          color="bg-red-500/10 text-red-500 dark:bg-red-900/30 dark:text-red-400"
         />
         <SummaryCard
           label="Completed"
           count={completed}
           icon={CheckCircle}
           href="/portal/orders"
-          color="bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
+          color="bg-red-500/10 text-red-500 dark:bg-red-900/30 dark:text-red-400"
         />
       </div>
 
