@@ -48,37 +48,37 @@
 
 /* ── Dark palette (warm stone tones) ── */
 .dark {
-  --background: oklch(0.178 0.004 55);
+  --background: oklch(0.27 0.005 55);
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.225 0.005 50);
+  --card: oklch(0.31 0.006 50);
   --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.225 0.005 50);
+  --popover: oklch(0.31 0.006 50);
   --popover-foreground: oklch(0.985 0 0);
   --primary: oklch(0.637 0.237 25.331);
   --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.265 0.006 55);
+  --secondary: oklch(0.35 0.007 55);
   --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.265 0.006 55);
-  --muted-foreground: oklch(0.705 0.015 55);
-  --accent: oklch(0.265 0.006 55);
+  --muted: oklch(0.35 0.007 55);
+  --muted-foreground: oklch(0.72 0.015 55);
+  --accent: oklch(0.35 0.007 55);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.637 0.237 25.331);
-  --border: oklch(0.32 0.008 50);
-  --input: oklch(0.32 0.008 50);
+  --border: oklch(0.4 0.008 50);
+  --input: oklch(0.4 0.008 50);
   --ring: oklch(0.637 0.237 25.331);
-  --sidebar-background: oklch(0.155 0.004 55);
+  --sidebar-background: oklch(0.23 0.005 55);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.637 0.237 25.331);
   --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.265 0.006 55);
+  --sidebar-accent: oklch(0.35 0.007 55);
   --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.3 0.006 50);
+  --sidebar-border: oklch(0.37 0.006 50);
   --sidebar-ring: oklch(0.637 0.237 25.331);
 
   /* Legacy custom vars (used by existing pages) */
-  --surface: #292524;
-  --surface-alt: #1c1917;
-  --surface-hover: #44403c;
+  --surface: #3d3935;
+  --surface-alt: #332f2c;
+  --surface-hover: #504a46;
   --border-hover: #ef4444;
   --text: #fafaf9;
   --text-secondary: #a8a29e;
