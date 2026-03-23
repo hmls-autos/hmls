@@ -1,4 +1,3 @@
-import Footer from "@/components/Footer";
 import { JsonLd } from "@/components/JsonLd";
 import About from "@/components/sections/About";
 import CTA from "@/components/sections/CTA";
@@ -10,7 +9,7 @@ import TrustBar from "@/components/sections/TrustBar";
 
 export default function Home() {
   return (
-    <main className="bg-background text-text">
+    <main className="bg-background text-foreground">
       <JsonLd
         data={{
           "@context": "https://schema.org",
@@ -44,7 +43,6 @@ export default function Home() {
       <About />
       <ServiceArea />
       <CTA />
-      <Footer />
     </main>
   );
 }

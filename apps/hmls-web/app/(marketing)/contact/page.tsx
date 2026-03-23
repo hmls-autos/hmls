@@ -1,6 +1,5 @@
 import { Mail, MapPin, Phone } from "lucide-react";
 import type { Metadata } from "next";
-import Footer from "@/components/Footer";
 import { FadeIn } from "@/components/ui/Animations";
 import LazyMap from "@/components/ui/LazyMap";
 
@@ -78,8 +77,6 @@ export default function Contact() {
           </FadeIn>
         </div>
       </section>
-
-      <Footer />
     </main>
   );
 }

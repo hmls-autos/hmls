@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Footer from "@/components/Footer";
 import { FadeIn } from "@/components/ui/Animations";
 
 export const metadata: Metadata = {
@@ -103,8 +102,6 @@ export default function Privacy() {
           </div>
         </FadeIn>
       </section>
-
-      <Footer />
     </main>
   );
 }
