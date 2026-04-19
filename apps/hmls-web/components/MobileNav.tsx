@@ -17,11 +17,11 @@ import { useAuth } from "@/components/AuthProvider";
 import { isSectionNavActive } from "@/lib/nav";
 import ThemeToggle from "./ThemeToggle";
 
-const navLinks = [
+const marketingLinks = [
   { href: "/", label: "Home" },
   { href: "/contact", label: "Contact" },
-  { href: "/chat", label: "Chat" },
 ];
+const customerChatLink = { href: "/chat", label: "Chat" };
 
 const portalLink = { href: "/portal", label: "My Portal" };
 const adminLink = { href: "/admin", label: "Admin" };
@@ -126,7 +126,7 @@ export default function MobileNav({
               </>
             )}
 
-            {navLinks.map(({ href, label }) => (
+            {marketingLinks.map(({ href, label }) => (
               <Link
                 key={href}
                 href={href}
@@ -140,19 +140,34 @@ export default function MobileNav({
                 {label}
               </Link>
             ))}
+            {!isAdmin && (
+              <Link
+                href={customerChatLink.href}
+                onClick={close}
+                className={`text-sm transition-colors ${
+                  pathname === customerChatLink.href
+                    ? "text-red-400 font-medium"
+                    : "text-text-secondary hover:text-text"
+                }`}
+              >
+                {customerChatLink.label}
+              </Link>
+            )}
             {user && (
               <>
-                <Link
-                  href={portalLink.href}
-                  onClick={close}
-                  className={`text-sm transition-colors ${
-                    pathname.startsWith(portalLink.href)
-                      ? "text-red-400 font-medium"
-                      : "text-text-secondary hover:text-text"
-                  }`}
-                >
-                  {portalLink.label}
-                </Link>
+                {!isAdmin && (
+                  <Link
+                    href={portalLink.href}
+                    onClick={close}
+                    className={`text-sm transition-colors ${
+                      pathname.startsWith(portalLink.href)
+                        ? "text-red-400 font-medium"
+                        : "text-text-secondary hover:text-text"
+                    }`}
+                  >
+                    {portalLink.label}
+                  </Link>
+                )}
                 {isAdmin && (
                   <Link
                     href={adminLink.href}
@@ -208,13 +223,15 @@ export default function MobileNav({
                   Sign In
                 </Link>
               ))}
-            <Link
-              href="/chat"
-              onClick={close}
-              className="px-4 py-3 bg-red-primary text-white text-center rounded-lg font-medium hover:bg-red-dark transition-colors"
-            >
-              Get a Quote
-            </Link>
+            {!isAdmin && (
+              <Link
+                href="/chat"
+                onClick={close}
+                className="px-4 py-3 bg-red-primary text-white text-center rounded-lg font-medium hover:bg-red-dark transition-colors"
+              >
+                Get a Quote
+              </Link>
+            )}
           </div>
         </nav>
       )}
