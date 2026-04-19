@@ -143,13 +143,8 @@ export function DashboardLayout({
 
   return (
     <div className="flex flex-1 min-h-0">
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar — logo lives in the top Navbar, not here */}
       <aside className="hidden md:flex sticky top-16 z-auto h-[calc(100dvh-4rem)] w-60 bg-sidebar-background border-r border-sidebar-border flex-col py-4">
-        <div className="px-5 mb-4">
-          <span className="text-lg font-display font-extrabold tracking-tight text-foreground">
-            HMLS<span className="text-red-500">.</span>
-          </span>
-        </div>
         {navContent}
       </aside>
 

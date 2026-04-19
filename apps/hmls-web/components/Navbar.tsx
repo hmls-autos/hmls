@@ -13,6 +13,7 @@ const marketingLinks = [
   { href: "/contact", label: "Contact" },
 ];
 const customerChatLink = { href: "/chat", label: "Chat" };
+const adminChatLink = { href: "/admin/chat", label: "Chat" };
 
 const portalLink = { href: "/portal", label: "My Portal" };
 const adminLink = { href: "/admin", label: "Admin", icon: LayoutDashboard };
@@ -70,20 +71,23 @@ export default function Navbar() {
               {label}
             </Link>
           ))}
-          {!isAdmin && (
-            <Link
-              href={customerChatLink.href}
-              className={`text-sm transition-colors rounded focus-visible:ring-2 focus-visible:ring-red-primary ${
-                pathname === customerChatLink.href
-                  ? "text-red-400"
-                  : isTransparent
-                    ? "text-white/70 hover:text-white"
-                    : "text-text-secondary hover:text-text"
-              }`}
-            >
-              {customerChatLink.label}
-            </Link>
-          )}
+          {(() => {
+            const link = isAdmin ? adminChatLink : customerChatLink;
+            return (
+              <Link
+                href={link.href}
+                className={`text-sm transition-colors rounded focus-visible:ring-2 focus-visible:ring-red-primary ${
+                  pathname === link.href
+                    ? "text-red-400"
+                    : isTransparent
+                      ? "text-white/70 hover:text-white"
+                      : "text-text-secondary hover:text-text"
+                }`}
+              >
+                {link.label}
+              </Link>
+            );
+          })()}
           {isUserLoggedIn && (
             <>
               {!isAdmin && (
