@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   Users,
+  Wrench,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { DashboardLayout, type NavItem } from "@/components/DashboardLayout";
@@ -15,6 +16,7 @@ const navItems: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/orders", label: "Orders", icon: ClipboardList },
   { href: "/admin/schedule", label: "Schedule", icon: CalendarDays },
+  { href: "/admin/mechanics", label: "Mechanics", icon: Wrench },
   { href: "/admin/customers", label: "Customers", icon: Users },
   { href: "/admin/chat", label: "Chat", icon: MessageSquare },
 ];
