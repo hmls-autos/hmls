@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { type AgentConfig, runHmlsAgent, runStaffAgent, type UserContext } from "@hmls/agent";
 import { db, schema } from "@hmls/agent/db";
 import { Errors } from "@hmls/shared/errors";
-import { optionalAuth, type OptionalAuthEnv } from "../middleware/auth.ts";
+import { type AuthUserEnv, requireAuthUser } from "../middleware/auth.ts";
 import { type AdminEnv, requireAdmin } from "../middleware/admin.ts";
 import { getGatewayLogger } from "../logger.ts";
 
@@ -56,11 +56,11 @@ async function resolveCustomer(
   };
 }
 
-const chat = new Hono<OptionalAuthEnv>();
+const chat = new Hono<AuthUserEnv>();
 const staffChat = new Hono<AdminEnv>();
 
 // AI SDK data stream endpoint
-chat.post("/", optionalAuth, async (c) => {
+chat.post("/", requireAuthUser, async (c) => {
   let body;
   try {
     body = await c.req.json();
@@ -82,15 +82,12 @@ chat.post("/", optionalAuth, async (c) => {
     throw Errors.validation("Invalid request", "messages array is required");
   }
 
-  // Resolve authenticated user -> customer record via JWT
-  let userContext: UserContext | undefined;
+  // Resolve authenticated user -> customer record (upsert on first contact).
   const authUser = c.get("authUser");
-  if (authUser) {
-    userContext = await resolveCustomer({ email: authUser.email });
-  }
+  const userContext = await resolveCustomer({ email: authUser.email });
 
   const startTime = Date.now();
-  const userId = userContext?.id ?? "anonymous";
+  const userId = userContext?.id ?? authUser.email;
   const messageCount = messages.length;
   logger.info("Request received", { userId, messageCount });
 

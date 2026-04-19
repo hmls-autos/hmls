@@ -74,3 +74,40 @@ export const optionalAuth = createMiddleware<OptionalAuthEnv>(async (c, next) =>
   }
   await next();
 });
+
+/**
+ * Env type for routes that require a signed-in user but manage their own
+ * customer record (e.g. upsert-on-first-contact).
+ */
+export type AuthUserEnv = Env & {
+  Variables: {
+    authUser: AuthUser;
+  };
+};
+
+/**
+ * Requires a valid JWT but does NOT require a pre-existing customer row.
+ * Use for routes whose handler creates or upserts the customer inline
+ * (e.g. first-contact chat). Returns 401 on missing/invalid token.
+ */
+export const requireAuthUser = createMiddleware<AuthUserEnv>(async (c, next) => {
+  const auth = c.req.header("Authorization");
+  if (!auth?.startsWith("Bearer ")) {
+    return c.json(
+      { error: { code: "UNAUTHORIZED", message: "Sign in required" } },
+      401,
+    );
+  }
+
+  const token = auth.slice(7);
+  const user = await verifyToken(token);
+  if (!user) {
+    return c.json(
+      { error: { code: "UNAUTHORIZED", message: "Invalid or expired token" } },
+      401,
+    );
+  }
+
+  c.set("authUser", user);
+  await next();
+});
