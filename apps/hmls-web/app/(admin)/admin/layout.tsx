@@ -34,7 +34,6 @@ export default function AdminLayout({
         navItems={navItems}
         title="Admin"
         maxWidth="max-w-6xl"
-        adminCheck
         adminPanelLabel="Admin Panel"
         fullHeight={isChatPage}
       >

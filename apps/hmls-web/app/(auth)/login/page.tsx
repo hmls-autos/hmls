@@ -50,7 +50,7 @@ type Step = "email" | "password";
 export default function LoginPage() {
   const fadeSlide = useFadeSlide();
   const router = useRouter();
-  const { supabase, session } = useAuth();
+  const { supabase } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [step, setStep] = useState<Step>("email");
@@ -59,11 +59,8 @@ export default function LoginPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [mode, setMode] = useState<"login" | "signup">("login");
 
-  useEffect(() => {
-    if (session) {
-      router.push("/chat");
-    }
-  }, [session, router]);
+  // Authenticated users are bounced away from /login by the middleware;
+  // this page only renders for signed-out visitors.
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
