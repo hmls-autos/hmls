@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
       headers.Authorization = authorization;
     }
 
-    const upstream = await fetch(`${GATEWAY_URL}/task`, {
+    const upstream = await fetch(`${GATEWAY_URL}/api/chat`, {
       method: "POST",
       headers,
       body: JSON.stringify(json),

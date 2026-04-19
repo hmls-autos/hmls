@@ -7,7 +7,8 @@ import { portal } from "./routes/portal.ts";
 import { admin } from "./routes/admin.ts";
 import { mechanic } from "./routes/mechanic.ts";
 import { orders, ordersPdf } from "./routes/orders.ts";
-import { chat, initChat, staffChat } from "./routes/chat.ts";
+import { chat, initChat } from "./routes/chat.ts";
+import { initStaffChat, staffChat } from "./routes/staff-chat.ts";
 import { createWebhookRoute } from "./routes/webhook.ts";
 
 interface HmlsAppOptions {
@@ -17,12 +18,14 @@ interface HmlsAppOptions {
 export function createHmlsApp(options: HmlsAppOptions) {
   const { googleApiKey } = options;
 
-  // Initialize chat agent config
-  initChat({
+  // Initialize chat agent configs (customer + staff)
+  const agentConfig = {
     googleApiKey,
     stripeSecretKey: Deno.env.get("STRIPE_SECRET_KEY") ?? "",
     agentModel: Deno.env.get("AGENT_MODEL"),
-  });
+  };
+  initChat(agentConfig);
+  initStaffChat(agentConfig);
 
   const app = new Hono();
 
@@ -76,8 +79,8 @@ export function createHmlsApp(options: HmlsAppOptions) {
   app.route("/api/admin", admin);
   app.route("/api/admin/orders", orders);
   app.route("/api/mechanic", mechanic);
-  app.route("/task", chat);
-  app.route("/staff-task", staffChat);
+  app.route("/api/chat", chat);
+  app.route("/api/admin/chat", staffChat);
 
   return app;
 }

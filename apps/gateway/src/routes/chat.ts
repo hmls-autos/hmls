@@ -1,11 +1,10 @@
 import { Hono } from "hono";
 import { convertToModelMessages } from "ai";
 import { eq } from "drizzle-orm";
-import { type AgentConfig, runHmlsAgent, runStaffAgent, type UserContext } from "@hmls/agent";
+import { type AgentConfig, runHmlsAgent, type UserContext } from "@hmls/agent";
 import { db, schema } from "@hmls/agent/db";
 import { Errors } from "@hmls/shared/errors";
 import { type AuthUserEnv, requireAuthUser } from "../middleware/auth.ts";
-import { type AdminEnv, requireAdmin } from "../middleware/admin.ts";
 import { getGatewayLogger } from "../logger.ts";
 
 const logger = getGatewayLogger("chat");
@@ -57,7 +56,6 @@ async function resolveCustomer(
 }
 
 const chat = new Hono<AuthUserEnv>();
-const staffChat = new Hono<AdminEnv>();
 
 // AI SDK data stream endpoint
 chat.post("/", requireAuthUser, async (c) => {
@@ -125,64 +123,4 @@ chat.post("/", requireAuthUser, async (c) => {
   }
 });
 
-// Staff chat endpoint — requires admin JWT
-staffChat.post("/", requireAdmin, async (c) => {
-  let body;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json(
-      { error: { code: "BAD_REQUEST", message: "Invalid JSON body" } },
-      400,
-    );
-  }
-
-  const { messages } = body;
-  if (!messages || !Array.isArray(messages)) {
-    throw Errors.validation("Invalid request", "messages array is required");
-  }
-
-  const authUser = c.get("authUser");
-  const startTime = Date.now();
-  logger.info("Staff request received", {
-    userId: authUser.id,
-    messageCount: messages.length,
-  });
-
-  try {
-    const modelMessages = await convertToModelMessages(messages);
-
-    const result = runStaffAgent({
-      messages: modelMessages,
-      config: _config,
-    });
-
-    const response = result.toUIMessageStreamResponse();
-    const duration = Date.now() - startTime;
-    logger.info("Staff request finished", {
-      userId: authUser.id,
-      messageCount: messages.length,
-      duration,
-    });
-    return response;
-  } catch (error) {
-    const duration = Date.now() - startTime;
-    logger.error("Staff agent failed", {
-      userId: authUser.id,
-      duration,
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    });
-    return c.json(
-      {
-        error: {
-          code: "AGENT_ERROR",
-          message: error instanceof Error ? error.message : String(error),
-        },
-      },
-      500,
-    );
-  }
-});
-
-export { chat, staffChat };
+export { chat };
