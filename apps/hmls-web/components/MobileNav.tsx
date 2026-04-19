@@ -22,6 +22,7 @@ const marketingLinks = [
   { href: "/contact", label: "Contact" },
 ];
 const customerChatLink = { href: "/chat", label: "Chat" };
+const adminChatLink = { href: "/admin/chat", label: "Chat" };
 
 const portalLink = { href: "/portal", label: "My Portal" };
 const adminLink = { href: "/admin", label: "Admin" };
@@ -140,19 +141,22 @@ export default function MobileNav({
                 {label}
               </Link>
             ))}
-            {!isAdmin && (
-              <Link
-                href={customerChatLink.href}
-                onClick={close}
-                className={`text-sm transition-colors ${
-                  pathname === customerChatLink.href
-                    ? "text-red-400 font-medium"
-                    : "text-text-secondary hover:text-text"
-                }`}
-              >
-                {customerChatLink.label}
-              </Link>
-            )}
+            {(() => {
+              const link = isAdmin ? adminChatLink : customerChatLink;
+              return (
+                <Link
+                  href={link.href}
+                  onClick={close}
+                  className={`text-sm transition-colors ${
+                    pathname === link.href
+                      ? "text-red-400 font-medium"
+                      : "text-text-secondary hover:text-text"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              );
+            })()}
             {user && (
               <>
                 {!isAdmin && (
