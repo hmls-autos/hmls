@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetcher } from "@/lib/fetcher";
+import { isSectionNavActive } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 export interface NavItem {
@@ -106,10 +107,7 @@ export function DashboardLayout({
       )}
       <nav className="flex flex-col gap-1 px-2">
         {navItems.map(({ href, label, icon: Icon }) => {
-          const isActive =
-            href === basePath
-              ? pathname === basePath
-              : pathname.startsWith(href);
+          const isActive = isSectionNavActive(pathname, href, basePath);
           return (
             <Button
               key={href}

@@ -14,6 +14,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import { isSectionNavActive } from "@/lib/nav";
 import ThemeToggle from "./ThemeToggle";
 
 const navLinks = [
@@ -70,6 +71,7 @@ export default function MobileNav({
     : isOnAdmin && isAdmin
       ? adminSubNav
       : null;
+  const subNavRoot = isOnPortal ? "/portal" : "/admin";
 
   return (
     <div className="md:hidden">
@@ -97,10 +99,11 @@ export default function MobileNav({
               <>
                 <div className="flex flex-col gap-1">
                   {subNav.map(({ href, label, icon: Icon }) => {
-                    const isActive =
-                      href === "/portal" || href === "/admin"
-                        ? pathname === href
-                        : pathname.startsWith(href);
+                    const isActive = isSectionNavActive(
+                      pathname,
+                      href,
+                      subNavRoot,
+                    );
                     return (
                       <Link
                         key={href}
