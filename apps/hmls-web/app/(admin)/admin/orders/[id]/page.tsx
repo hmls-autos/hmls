@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
+import { ReassignBookingDialog } from "@/components/admin/mechanics/ReassignBookingDialog";
 import { OrderProgressBar } from "@/components/OrderProgressBar";
 import { CustomerEditor } from "@/components/order/CustomerEditor";
 import { ItemEditor } from "@/components/order/ItemEditor";
@@ -500,6 +501,7 @@ export default function OrderDetailPage() {
   const { data, isLoading, isError, mutate } = useAdminOrder(orderId);
 
   const [editMode, setEditMode] = useState<null | "items" | "customer">(null);
+  const [reassignOpen, setReassignOpen] = useState(false);
   const {
     transitionStatus,
     saveItems,
@@ -885,10 +887,21 @@ export default function OrderDetailPage() {
                   </div>
                 )}
                 {order.bookingId && (
-                  <div className="flex justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground">Booking</span>
-                    <span className="text-foreground font-mono">
-                      #{order.bookingId}
+                    <span className="flex items-center gap-2">
+                      <span className="text-foreground font-mono">
+                        #{order.bookingId}
+                      </span>
+                      {data.booking && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setReassignOpen(true)}
+                        >
+                          Reassign
+                        </Button>
+                      )}
                     </span>
                   </div>
                 )}
@@ -913,6 +926,15 @@ export default function OrderDetailPage() {
           <ActivityTimeline events={data.events ?? []} />
         </CardContent>
       </Card>
+
+      {data.booking && (
+        <ReassignBookingDialog
+          booking={data.booking}
+          open={reassignOpen}
+          onOpenChange={setReassignOpen}
+          onReassigned={() => mutate()}
+        />
+      )}
     </div>
   );
 }
