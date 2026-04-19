@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Loader2, Send, Wrench } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { type FormEvent, Suspense, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { BookingConfirmation } from "@/components/BookingConfirmation";
@@ -16,16 +16,7 @@ import { toolDisplayNames } from "@/lib/agent-tools";
 function ChatPageInner() {
   const prefersReducedMotion = useReducedMotion();
   const { session, isLoading: authLoading } = useAuth();
-  const router = useRouter();
   const searchParams = useSearchParams();
-
-  // Redirect unauthenticated visitors to /login so they never hit the
-  // gateway's 401 on send. Runs only after auth has resolved.
-  useEffect(() => {
-    if (authLoading || session) return;
-    router.replace("/login");
-  }, [authLoading, session, router]);
-
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -99,8 +90,10 @@ function ChatPageInner() {
     setInput("");
   };
 
-  // Show loading state while auth resolves or while redirecting unauthenticated users to /login
-  if (authLoading || !session) {
+  // The middleware gates /chat server-side for unauthenticated users;
+  // this fallback covers the brief window while the client-side auth
+  // context is still hydrating.
+  if (authLoading) {
     return (
       <main className="flex flex-col flex-1 bg-background text-text">
         <div className="flex-1 flex flex-col items-center justify-center px-4">
