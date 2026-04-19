@@ -14,7 +14,7 @@ import { Markdown } from "@/components/ui/Markdown";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAgentChat } from "@/hooks/useAgentChat";
 import { toolDisplayNames } from "@/lib/agent-tools";
-import { AGENT_URL } from "@/lib/config";
+import { STAFF_CHAT_ENDPOINT } from "@/lib/config";
 
 const STAFF_SUGGESTIONS = [
   "Create a new order",
@@ -44,7 +44,8 @@ export default function AdminChatPage() {
     clearError,
   } = useAgentChat({
     accessToken: session?.access_token,
-    endpoint: `${AGENT_URL}/staff-task`,
+    endpoint: STAFF_CHAT_ENDPOINT,
+    storageKey: "hmls-staff-chat-history",
     inputRef,
   });
 

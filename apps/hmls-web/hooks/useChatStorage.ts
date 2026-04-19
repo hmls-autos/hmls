@@ -3,15 +3,17 @@
 import type { UIMessage } from "ai";
 import { useEffect } from "react";
 
-const CHAT_STORAGE_KEY = "hmls-chat-history";
+export const DEFAULT_CHAT_STORAGE_KEY = "hmls-chat-history";
 const CHAT_STORAGE_VERSION = 1;
 
 type StoredChat = { v: number; messages: UIMessage[] };
 
-export function loadStoredChatMessages(): UIMessage[] | undefined {
+export function loadStoredChatMessages(
+  storageKey: string = DEFAULT_CHAT_STORAGE_KEY,
+): UIMessage[] | undefined {
   if (typeof window === "undefined") return undefined;
   try {
-    const raw = localStorage.getItem(CHAT_STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) return undefined;
     const parsed: unknown = JSON.parse(raw);
     if (
@@ -33,30 +35,33 @@ export function loadStoredChatMessages(): UIMessage[] | undefined {
   return undefined;
 }
 
-export function clearStoredChat() {
+export function clearStoredChat(storageKey: string = DEFAULT_CHAT_STORAGE_KEY) {
   try {
-    localStorage.removeItem(CHAT_STORAGE_KEY);
+    localStorage.removeItem(storageKey);
   } catch {
     /* ignore */
   }
 }
 
-export function useChatPersist(chatMessages: UIMessage[]) {
+export function useChatPersist(
+  chatMessages: UIMessage[],
+  storageKey: string = DEFAULT_CHAT_STORAGE_KEY,
+) {
   useEffect(() => {
     try {
       if (chatMessages.length > 0) {
         localStorage.setItem(
-          CHAT_STORAGE_KEY,
+          storageKey,
           JSON.stringify({
             v: CHAT_STORAGE_VERSION,
             messages: chatMessages,
           } satisfies StoredChat),
         );
       } else {
-        localStorage.removeItem(CHAT_STORAGE_KEY);
+        localStorage.removeItem(storageKey);
       }
     } catch {
       /* localStorage full or unavailable */
     }
-  }, [chatMessages]);
+  }, [chatMessages, storageKey]);
 }

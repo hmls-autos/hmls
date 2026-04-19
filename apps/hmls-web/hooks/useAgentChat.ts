@@ -20,6 +20,7 @@ import type { BookingConfirmationData } from "@/components/BookingConfirmation";
 import type { EstimateCardData } from "@/components/EstimateCard";
 import {
   clearStoredChat,
+  DEFAULT_CHAT_STORAGE_KEY,
   loadStoredChatMessages,
   useChatPersist,
 } from "@/hooks/useChatStorage";
@@ -39,6 +40,9 @@ interface UseAgentChatOptions {
   inputRef?: RefObject<HTMLInputElement | null>;
   accessToken?: string | null;
   endpoint?: string;
+  /** localStorage key for chat history. Use distinct keys per chat surface
+   * (e.g. customer vs. staff) so conversations don't cross-contaminate. */
+  storageKey?: string;
 }
 
 /** Extract concatenated text from a UIMessage's parts. */
@@ -77,9 +81,10 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
     inputRef,
     accessToken,
     endpoint = CHAT_ENDPOINT,
+    storageKey = DEFAULT_CHAT_STORAGE_KEY,
   } = options;
 
-  const [initialMessages] = useState(loadStoredChatMessages);
+  const [initialMessages] = useState(() => loadStoredChatMessages(storageKey));
   const [currentTool, setCurrentTool] = useState<string | null>(null);
 
   const focusInput = useCallback(() => {
@@ -132,7 +137,7 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
     reset: resetToolEvents,
   } = useChatToolEvents(chatMessages, setCurrentTool);
 
-  useChatPersist(chatMessages);
+  useChatPersist(chatMessages, storageKey);
 
   // Scroll on new messages
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll when messages change
@@ -271,8 +276,8 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
   const clearMessages = useCallback(() => {
     setChatMessages([]);
     resetToolEvents();
-    clearStoredChat();
-  }, [setChatMessages, resetToolEvents]);
+    clearStoredChat(storageKey);
+  }, [setChatMessages, resetToolEvents, storageKey]);
 
   return {
     messages,
