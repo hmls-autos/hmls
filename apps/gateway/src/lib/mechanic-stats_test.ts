@@ -68,6 +68,23 @@ Deno.test("availableMinutesForWeek adds extra-hours overrides on non-working day
   assertEquals(mins, 240);
 });
 
+Deno.test("availableMinutesForWeek stacks extra-hours overrides on top of weekly hours", () => {
+  // Monday weekly 09:00-17:00 (480). Extra-hours override 17:00-19:00 (+120).
+  // Result must be 600 — earlier bug replaced the weekly slot with the override.
+  const weekly = [
+    { dayOfWeek: 1, startTime: "09:00:00", endTime: "17:00:00" },
+  ];
+  const overrides = [
+    {
+      overrideDate: "2026-04-20", // Monday this week
+      isAvailable: true,
+      startTime: "17:00:00",
+      endTime: "19:00:00",
+    },
+  ];
+  assertEquals(availableMinutesForWeek(weekly, overrides, NOW), 600);
+});
+
 Deno.test("bookedMinutesForWeek sums durations of bookings in the week", () => {
   const bookings = [
     {

@@ -83,21 +83,21 @@ export function ScheduleStrip({
         const dow = day.getDay();
         const override = overrideByDate.get(dateKey);
 
+        // Unavailable override blanks the day. Extra-hours override stacks
+        // on top of the weekly schedule (matches backend utilization math).
         let availableRanges: Array<{ startMin: number; endMin: number }> = [];
-        if (override) {
-          if (override.isAvailable && override.startTime && override.endTime) {
-            availableRanges = [
-              {
-                startMin: toMin(override.startTime),
-                endMin: toMin(override.endTime),
-              },
-            ];
-          }
-        } else {
+        const blanked = override && !override.isAvailable;
+        if (!blanked) {
           availableRanges = (weeklyByDow.get(dow) ?? []).map((w) => ({
             startMin: toMin(w.startTime),
             endMin: toMin(w.endTime),
           }));
+          if (override?.isAvailable && override.startTime && override.endTime) {
+            availableRanges.push({
+              startMin: toMin(override.startTime),
+              endMin: toMin(override.endTime),
+            });
+          }
         }
 
         const dayStart = DAY_START_HOUR * 60;

@@ -32,35 +32,16 @@ export function ReassignBookingDialog({
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const bookingStart = booking ? new Date(booking.scheduledAt) : null;
-  const bookingEnd =
-    booking && bookingStart
-      ? new Date(bookingStart.getTime() + booking.durationMinutes * 60_000)
-      : null;
-
   const candidates = useMemo(() => {
-    return mechanics
-      .filter((m) => m.isActive && m.id !== booking?.providerId)
-      .map((m) => {
-        const busy =
-          m.isOnJobNow &&
-          bookingStart != null &&
-          bookingEnd != null &&
-          bookingStart.getTime() <= Date.now() &&
-          Date.now() < bookingEnd.getTime();
-        return { ...m, busy };
-      });
-  }, [mechanics, booking, bookingStart, bookingEnd]);
-
-  const warn =
-    targetId != null && candidates.find((c) => c.id === targetId)?.busy;
+    return mechanics.filter((m) => m.isActive && m.id !== booking?.providerId);
+  }, [mechanics, booking]);
 
   async function handleConfirm() {
     if (!booking || targetId == null) return;
     setIsSaving(true);
     setError(null);
     try {
-      await reassignBooking(booking.id, targetId, !!warn);
+      await reassignBooking(booking.id, targetId);
       setTargetId(null);
       onOpenChange(false);
       onReassigned?.();
@@ -95,16 +76,13 @@ export function ReassignBookingDialog({
             {candidates.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
-                {c.busy ? " (busy now)" : ""}
               </option>
             ))}
           </select>
-          {warn && (
-            <p className="text-xs text-amber-600">
-              Heads up — this mechanic appears busy. Confirming will still
-              reassign.
-            </p>
-          )}
+          <p className="text-xs text-muted-foreground">
+            Admin can reassign regardless of schedule conflicts — verify the
+            target mechanic is free at this booking's time before confirming.
+          </p>
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
         <DialogFooter>

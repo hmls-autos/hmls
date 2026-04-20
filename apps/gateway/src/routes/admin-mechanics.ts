@@ -6,6 +6,7 @@ import {
   availableMinutesForWeek,
   bookedMinutesForWeek,
   computeUtilization,
+  endOfWeek,
   isOnJobNow,
 } from "../lib/mechanic-stats.ts";
 
@@ -111,6 +112,7 @@ adminMechanics.get("/", async (c) => {
         and(
           inArray(schema.bookings.providerId, providerIds),
           gte(schema.bookings.scheduledAt, now),
+          lte(schema.bookings.scheduledAt, endOfWeek(now)),
           sql`${schema.bookings.status} IN ('requested', 'confirmed')`,
         ),
       )
@@ -613,12 +615,14 @@ adminMechanics.get("/:id/bookings", async (c) => {
       customerName: schema.customers.name,
       customerEmail: schema.customers.email,
       customerPhone: schema.customers.phone,
+      orderId: schema.orders.id,
     })
     .from(schema.bookings)
     .leftJoin(
       schema.customers,
       eq(schema.bookings.customerId, schema.customers.id),
     )
+    .leftJoin(schema.orders, eq(schema.orders.bookingId, schema.bookings.id))
     .where(and(...conditions))
     .orderBy(asc(schema.bookings.scheduledAt))
     .limit(200);
@@ -626,6 +630,7 @@ adminMechanics.get("/:id/bookings", async (c) => {
   return c.json(
     rows.map((r) => ({
       ...r.booking,
+      orderId: r.orderId,
       customer: {
         name: r.customerName,
         email: r.customerEmail,

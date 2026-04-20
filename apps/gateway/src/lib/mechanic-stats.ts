@@ -78,12 +78,14 @@ export function availableMinutesForWeek(
     const dateKey = day.toISOString().slice(0, 10);
     const override = overridesByDate.get(dateKey);
 
-    if (override) {
-      if (override.isAvailable && override.startTime && override.endTime) {
-        minutes += timeToMinutes(override.endTime) -
-          timeToMinutes(override.startTime);
-      }
-      continue;
+    // Unavailable override (time off) cancels the day entirely.
+    if (override && !override.isAvailable) continue;
+
+    // Extra-hours override: add the override window on top of the weekly
+    // schedule, not replace it. The UI surfaces overrides as "extra hours".
+    if (override?.isAvailable && override.startTime && override.endTime) {
+      minutes += timeToMinutes(override.endTime) -
+        timeToMinutes(override.startTime);
     }
 
     for (const row of weeklyByDow.get(dow) ?? []) {

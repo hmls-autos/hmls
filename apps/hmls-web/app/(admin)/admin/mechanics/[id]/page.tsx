@@ -148,9 +148,11 @@ function BookingRow({
           <DropdownMenuItem onSelect={() => onReassign(b)}>
             Reassign…
           </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link href={`/admin/orders?bookingId=${b.id}`}>Open order</Link>
-          </DropdownMenuItem>
+          {b.orderId && (
+            <DropdownMenuItem asChild>
+              <Link href={`/admin/orders/${b.orderId}`}>Open order</Link>
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -178,15 +180,21 @@ export default function MechanicDetailPage({
   const { id: idStr } = use(params);
   const id = Number(idStr);
   const { mechanic, isLoading } = useAdminMechanic(id);
+  // Pull a full year back so "Jobs completed" and "Recent completed" surface
+  // historical data, not just the last 7 days. Server caps at 200 rows.
   const { bookings, mutate: mutateBookings } = useAdminMechanicBookings(
     id,
-    new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
   );
   const { availability } = useAdminMechanicAvailability(id);
-  const { overrides } = useAdminMechanicOverrides(
+  const overridesFrom = new Date().toISOString().slice(0, 10);
+  const overridesTo = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+  const { overrides, mutate: mutateOverrides } = useAdminMechanicOverrides(
     id,
-    new Date().toISOString().slice(0, 10),
-    new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    overridesFrom,
+    overridesTo,
   );
   const { mechanics } = useAdminMechanics();
   const listRow = mechanics.find((m) => m.id === id);
@@ -340,6 +348,9 @@ export default function MechanicDetailPage({
         mechanicId={id}
         open={timeOffOpen}
         onOpenChange={setTimeOffOpen}
+        onSaved={async () => {
+          await mutateOverrides();
+        }}
       />
       <ReassignBookingDialog
         booking={reassignTarget}

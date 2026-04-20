@@ -44,6 +44,7 @@ export interface ScheduleOverride {
 }
 
 export type MechanicBookingRow = Booking & {
+  orderId: number | null;
   customer: {
     name: string | null;
     email: string | null;

@@ -17,9 +17,18 @@ interface Props {
   mechanicId: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Called after a successful save so the caller can revalidate its own
+   * ranged overrides cache (the hook inside this dialog only knows about
+   * the unscoped key). */
+  onSaved?: () => void | Promise<void>;
 }
 
-export function AddTimeOffDialog({ mechanicId, open, onOpenChange }: Props) {
+export function AddTimeOffDialog({
+  mechanicId,
+  open,
+  onOpenChange,
+  onSaved,
+}: Props) {
   const { addOverride } = useAdminMechanicOverrides(mechanicId);
   const [date, setDate] = useState("");
   const [isAvailable, setIsAvailable] = useState(false);
@@ -62,6 +71,7 @@ export function AddTimeOffDialog({ mechanicId, open, onOpenChange }: Props) {
       setReason("");
       setIsAvailable(false);
       onOpenChange(false);
+      await onSaved?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save");
     } finally {
