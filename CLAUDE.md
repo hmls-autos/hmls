@@ -53,8 +53,8 @@ completed. No payment automation by default — shops record payments manually. 
 dormant for shops that want opt-in auto-capture later.
 
 **Single source of truth**: `orders` is THE entity. All work-lifecycle data (including scheduling,
-provider assignment, location, symptoms, photos) lives on the order. Legacy tables
-(`estimates`, `quotes`, `bookings`) are **dropped** (Layer 3 complete).
+provider assignment, location, symptoms, photos) lives on the order. Legacy tables (`estimates`,
+`quotes`, `bookings`) are **dropped** (Layer 3 complete).
 
 ## Order lifecycle (simplified status machine)
 
@@ -323,16 +323,15 @@ vercel env add NEXT_PUBLIC_AGENT_URL --scope spinsirrs-projects  # https://api.f
   deleted — Assign/Confirm/Reject actions migrated into order detail page BookingPanel.
   `/admin/estimates` and `/admin/quotes` admin routes deleted.
 - **Layer 3 done**: orders absorbed bookings. Migrations `0009` (add scheduling columns + trigger +
-  backfill) and `0010` (drop bookings/estimates/quotes + legacy FK columns) applied. All code
-  paths read/write `orders` directly. `notifyBookingStatusChange` removed; mechanic's
-  confirm/reject booking flow removed (admin does it via order status transitions). Customer
-  cancel-booking is now an order-level action (`scheduled → cancelled`). Stripe webhook is now a
-  no-op (dormant).
+  backfill) and `0010` (drop bookings/estimates/quotes + legacy FK columns) applied. All code paths
+  read/write `orders` directly. `notifyBookingStatusChange` removed; mechanic's confirm/reject
+  booking flow removed (admin does it via order status transitions). Customer cancel-booking is now
+  an order-level action (`scheduled → cancelled`). Stripe webhook is now a no-op (dormant).
 - **Agent UX hardened**: EstimateCard shows "Pending review" badge when order is draft.
   `create_estimate` pulls customerId from auth context for customer chat; staff agent still passes
   it explicitly for walk-ins. SlotPicker is date + time dropdowns, orders created unassigned (admin
   dispatches).
-- **Known deferred**: Multi-shop tenancy — `shops` table exists but no code path scopes by
-  `shop_id` yet. BAR § 3353 compliance flow — design in the air, not implemented. Stripe auto-
-  capture is dormant — needs re-implementation if a shop opts in (add payment columns back
-  selectively, wire webhook handlers).
+- **Known deferred**: Multi-shop tenancy — `shops` table exists but no code path scopes by `shop_id`
+  yet. BAR § 3353 compliance flow — design in the air, not implemented. Stripe auto- capture is
+  dormant — needs re-implementation if a shop opts in (add payment columns back selectively, wire
+  webhook handlers).
