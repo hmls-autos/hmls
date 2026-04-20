@@ -27,3 +27,5 @@ build
 apps/fixo-web/.env.vercel
 olp-labor-times.db*
 .env.production
+.playwright-mcp/
+.claude/scheduled_tasks.lock
