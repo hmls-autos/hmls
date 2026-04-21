@@ -1,10 +1,9 @@
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
-import type { Booking, Customer, Order, OrderDetail } from "@/lib/types";
+import type { Customer, Order, OrderDetail } from "@/lib/types";
 
 export type PortalCustomer = Customer;
 export type PortalOrder = Order;
-export type PortalBooking = Booking;
 
 export function usePortalCustomer() {
   const { data, error, isLoading, mutate } = useSWR<PortalCustomer>(
@@ -30,8 +29,11 @@ export function usePortalOrder(id: string | number | null) {
   return { data, isLoading, isError: !!error, mutate };
 }
 
+/**
+ * Bookings view = orders with scheduledAt set. The server filters server-side.
+ */
 export function usePortalBookings() {
-  const { data, error, isLoading, mutate } = useSWR<PortalBooking[]>(
+  const { data, error, isLoading, mutate } = useSWR<PortalOrder[]>(
     "/api/portal/me/bookings",
     fetcher,
   );

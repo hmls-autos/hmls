@@ -30,6 +30,11 @@ adminMechanics.get("/", async (c) => {
 
   const providerIds = providers.map((p) => p.id);
 
+  // All scheduling queries target `orders` directly now. An order is "active
+  // on a mechanic's schedule" when it has a providerId + scheduledAt and its
+  // status is not cancelled/declined.
+  const activeStatusSql = sql`${schema.orders.status} NOT IN ('cancelled', 'declined')`;
+
   const [
     availability,
     overrides,
@@ -51,86 +56,84 @@ adminMechanics.get("/", async (c) => {
       ),
     db
       .select({
-        providerId: schema.bookings.providerId,
-        scheduledAt: schema.bookings.scheduledAt,
-        durationMinutes: schema.bookings.durationMinutes,
-        status: schema.bookings.status,
+        providerId: schema.orders.providerId,
+        scheduledAt: schema.orders.scheduledAt,
+        durationMinutes: schema.orders.durationMinutes,
+        status: schema.orders.status,
       })
-      .from(schema.bookings)
+      .from(schema.orders)
       .where(
         and(
-          inArray(schema.bookings.providerId, providerIds),
-          gte(schema.bookings.scheduledAt, weekStart),
+          inArray(schema.orders.providerId, providerIds),
+          gte(schema.orders.scheduledAt, weekStart),
+          activeStatusSql,
         ),
       ),
-    // Snapshot bookings around "now" (±24h) for isOnJobNow.
+    // Snapshot orders around "now" (±24h) for isOnJobNow.
     db
       .select({
-        providerId: schema.bookings.providerId,
-        scheduledAt: schema.bookings.scheduledAt,
-        durationMinutes: schema.bookings.durationMinutes,
-        status: schema.bookings.status,
+        providerId: schema.orders.providerId,
+        scheduledAt: schema.orders.scheduledAt,
+        durationMinutes: schema.orders.durationMinutes,
+        status: schema.orders.status,
       })
-      .from(schema.bookings)
+      .from(schema.orders)
       .where(
         and(
-          inArray(schema.bookings.providerId, providerIds),
+          inArray(schema.orders.providerId, providerIds),
           between(
-            schema.bookings.scheduledAt,
+            schema.orders.scheduledAt,
             new Date(now.getTime() - 24 * 60 * 60 * 1000),
             new Date(now.getTime() + 24 * 60 * 60 * 1000),
           ),
+          activeStatusSql,
         ),
       ),
-    // Earnings 30d: orders.bookingId → bookings.providerId, orders paid/completed recently
+    // Earnings 30d: completed orders assigned to these providers.
     db
       .select({
-        providerId: schema.bookings.providerId,
+        providerId: schema.orders.providerId,
         amountCents: sql<
           number
         >`COALESCE(${schema.orders.capturedAmountCents}, ${schema.orders.subtotalCents})`,
       })
       .from(schema.orders)
-      .innerJoin(
-        schema.bookings,
-        eq(schema.orders.bookingId, schema.bookings.id),
-      )
       .where(
         and(
-          inArray(schema.bookings.providerId, providerIds),
-          sql`${schema.orders.status} IN ('paid', 'completed', 'archived')`,
+          inArray(schema.orders.providerId, providerIds),
+          eq(schema.orders.status, "completed"),
           gte(schema.orders.createdAt, thirtyDaysAgo),
         ),
       ),
     db
       .select({
-        providerId: schema.bookings.providerId,
+        providerId: schema.orders.providerId,
         count: sql<number>`COUNT(*)::int`,
       })
-      .from(schema.bookings)
+      .from(schema.orders)
       .where(
         and(
-          inArray(schema.bookings.providerId, providerIds),
-          gte(schema.bookings.scheduledAt, now),
-          lte(schema.bookings.scheduledAt, endOfWeek(now)),
-          sql`${schema.bookings.status} IN ('requested', 'confirmed')`,
+          inArray(schema.orders.providerId, providerIds),
+          gte(schema.orders.scheduledAt, now),
+          lte(schema.orders.scheduledAt, endOfWeek(now)),
+          sql`${schema.orders.status} IN ('scheduled', 'in_progress')`,
         ),
       )
-      .groupBy(schema.bookings.providerId),
+      .groupBy(schema.orders.providerId),
     db
       .select({
-        providerId: schema.bookings.providerId,
-        scheduledAt: sql<Date>`MIN(${schema.bookings.scheduledAt})`,
+        providerId: schema.orders.providerId,
+        scheduledAt: sql<Date>`MIN(${schema.orders.scheduledAt})`,
       })
-      .from(schema.bookings)
+      .from(schema.orders)
       .where(
         and(
-          inArray(schema.bookings.providerId, providerIds),
-          gte(schema.bookings.scheduledAt, now),
-          sql`${schema.bookings.status} IN ('requested', 'confirmed')`,
+          inArray(schema.orders.providerId, providerIds),
+          gte(schema.orders.scheduledAt, now),
+          sql`${schema.orders.status} IN ('scheduled', 'in_progress')`,
         ),
       )
-      .groupBy(schema.bookings.providerId),
+      .groupBy(schema.orders.providerId),
   ]);
 
   const groupBy = <T extends { providerId: number | null }>(
@@ -173,16 +176,20 @@ adminMechanics.get("/", async (c) => {
   const result = providers.map((p) => {
     const avail = availByProvider.get(p.id) ?? [];
     const ovr = overridesByProvider.get(p.id) ?? [];
-    const weekB = (weekByProvider.get(p.id) ?? []).map((b) => ({
-      scheduledAt: new Date(b.scheduledAt),
-      durationMinutes: b.durationMinutes,
-      status: b.status,
-    }));
-    const nowB = (nowByProvider.get(p.id) ?? []).map((b) => ({
-      scheduledAt: new Date(b.scheduledAt),
-      durationMinutes: b.durationMinutes,
-      status: b.status,
-    }));
+    const weekB = (weekByProvider.get(p.id) ?? [])
+      .filter((b) => b.scheduledAt != null)
+      .map((b) => ({
+        scheduledAt: new Date(b.scheduledAt as Date | string),
+        durationMinutes: b.durationMinutes ?? 60,
+        status: b.status,
+      }));
+    const nowB = (nowByProvider.get(p.id) ?? [])
+      .filter((b) => b.scheduledAt != null)
+      .map((b) => ({
+        scheduledAt: new Date(b.scheduledAt as Date | string),
+        durationMinutes: b.durationMinutes ?? 60,
+        status: b.status,
+      }));
 
     const availableMinutes = availableMinutesForWeek(avail, ovr, now);
     const bookedMinutes = bookedMinutesForWeek(weekB, now);
@@ -586,8 +593,8 @@ adminMechanics.delete("/:id/overrides/:overrideId", async (c) => {
   return c.json({ ok: true });
 });
 
-// GET /:id/bookings — bookings assigned to this mechanic, with customer join
-adminMechanics.get("/:id/bookings", async (c) => {
+// GET /:id/orders — scheduled orders assigned to this mechanic, with customer join
+adminMechanics.get("/:id/orders", async (c) => {
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id) || id <= 0) {
     return c.json(
@@ -598,39 +605,36 @@ adminMechanics.get("/:id/bookings", async (c) => {
   const from = c.req.query("from");
   const to = c.req.query("to");
 
-  const conditions = [eq(schema.bookings.providerId, id)];
+  const conditions = [eq(schema.orders.providerId, id)];
   if (from && to) {
     conditions.push(
-      between(schema.bookings.scheduledAt, new Date(from), new Date(to)),
+      between(schema.orders.scheduledAt, new Date(from), new Date(to)),
     );
   } else if (from) {
-    conditions.push(gte(schema.bookings.scheduledAt, new Date(from)));
+    conditions.push(gte(schema.orders.scheduledAt, new Date(from)));
   } else if (to) {
-    conditions.push(lte(schema.bookings.scheduledAt, new Date(to)));
+    conditions.push(lte(schema.orders.scheduledAt, new Date(to)));
   }
 
   const rows = await db
     .select({
-      booking: schema.bookings,
+      order: schema.orders,
       customerName: schema.customers.name,
       customerEmail: schema.customers.email,
       customerPhone: schema.customers.phone,
-      orderId: schema.orders.id,
     })
-    .from(schema.bookings)
+    .from(schema.orders)
     .leftJoin(
       schema.customers,
-      eq(schema.bookings.customerId, schema.customers.id),
+      eq(schema.orders.customerId, schema.customers.id),
     )
-    .leftJoin(schema.orders, eq(schema.orders.bookingId, schema.bookings.id))
     .where(and(...conditions))
-    .orderBy(asc(schema.bookings.scheduledAt))
+    .orderBy(asc(schema.orders.scheduledAt))
     .limit(200);
 
   return c.json(
     rows.map((r) => ({
-      ...r.booking,
-      orderId: r.orderId,
+      ...r.order,
       customer: {
         name: r.customerName,
         email: r.customerEmail,
@@ -640,12 +644,12 @@ adminMechanics.get("/:id/bookings", async (c) => {
   );
 });
 
-// POST /bookings/:bookingId/reassign — change assigned mechanic
-adminMechanics.post("/bookings/:bookingId/reassign", async (c) => {
-  const bookingId = Number(c.req.param("bookingId"));
-  if (!Number.isInteger(bookingId) || bookingId <= 0) {
+// POST /orders/:orderId/assign — assign / reassign the mechanic on an order
+adminMechanics.post("/orders/:orderId/assign", async (c) => {
+  const orderId = Number(c.req.param("orderId"));
+  if (!Number.isInteger(orderId) || orderId <= 0) {
     return c.json(
-      { error: { code: "BAD_REQUEST", message: "Invalid booking ID" } },
+      { error: { code: "BAD_REQUEST", message: "Invalid order ID" } },
       400,
     );
   }
@@ -665,23 +669,23 @@ adminMechanics.post("/bookings/:bookingId/reassign", async (c) => {
     );
   }
 
-  const [booking] = await db
+  const [order] = await db
     .select()
-    .from(schema.bookings)
-    .where(eq(schema.bookings.id, bookingId))
+    .from(schema.orders)
+    .where(eq(schema.orders.id, orderId))
     .limit(1);
-  if (!booking) {
+  if (!order) {
     return c.json(
-      { error: { code: "NOT_FOUND", message: "Booking not found" } },
+      { error: { code: "NOT_FOUND", message: "Order not found" } },
       404,
     );
   }
-  if (booking.providerId === body.providerId) {
+  if (order.providerId === body.providerId) {
     return c.json(
       {
         error: {
           code: "BAD_REQUEST",
-          message: "Booking already assigned to that mechanic",
+          message: "Order already assigned to that mechanic",
         },
       },
       400,
@@ -704,7 +708,7 @@ adminMechanics.post("/bookings/:bookingId/reassign", async (c) => {
       {
         error: {
           code: "BAD_REQUEST",
-          message: "Target mechanic is inactive. Pass force:true to reassign anyway.",
+          message: "Target mechanic is inactive. Pass force:true to assign anyway.",
         },
       },
       400,
@@ -712,9 +716,9 @@ adminMechanics.post("/bookings/:bookingId/reassign", async (c) => {
   }
 
   const [updated] = await db
-    .update(schema.bookings)
+    .update(schema.orders)
     .set({ providerId: body.providerId, updatedAt: new Date() })
-    .where(eq(schema.bookings.id, bookingId))
+    .where(eq(schema.orders.id, orderId))
     .returning();
 
   return c.json(updated);

@@ -10,22 +10,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { reassignBooking, useAdminMechanics } from "@/hooks/useAdminMechanics";
+import { assignMechanic, useAdminMechanics } from "@/hooks/useAdminMechanics";
 import { formatDateTime } from "@/lib/format";
-import type { Booking } from "@/lib/types";
+import type { Order } from "@/lib/types";
 
 interface Props {
-  booking: Booking | null;
+  order: Order | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onReassigned?: () => void;
+  onAssigned?: () => void;
 }
 
 export function ReassignBookingDialog({
-  booking,
+  order,
   open,
   onOpenChange,
-  onReassigned,
+  onAssigned,
 }: Props) {
   const { mechanics } = useAdminMechanics();
   const [targetId, setTargetId] = useState<number | null>(null);
@@ -33,20 +33,20 @@ export function ReassignBookingDialog({
   const [isSaving, setIsSaving] = useState(false);
 
   const candidates = useMemo(() => {
-    return mechanics.filter((m) => m.isActive && m.id !== booking?.providerId);
-  }, [mechanics, booking]);
+    return mechanics.filter((m) => m.isActive && m.id !== order?.providerId);
+  }, [mechanics, order]);
 
   async function handleConfirm() {
-    if (!booking || targetId == null) return;
+    if (!order || targetId == null) return;
     setIsSaving(true);
     setError(null);
     try {
-      await reassignBooking(booking.id, targetId);
+      await assignMechanic(order.id, targetId);
       setTargetId(null);
       onOpenChange(false);
-      onReassigned?.();
+      onAssigned?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to reassign");
+      setError(e instanceof Error ? e.message : "Failed to assign");
     } finally {
       setIsSaving(false);
     }
@@ -56,11 +56,15 @@ export function ReassignBookingDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Reassign booking</DialogTitle>
-          {booking && (
+          <DialogTitle>
+            {order?.providerId ? "Reassign mechanic" : "Assign mechanic"}
+          </DialogTitle>
+          {order && (
             <DialogDescription>
-              #{booking.id} · {formatDateTime(booking.scheduledAt)} ·{" "}
-              {booking.serviceType}
+              Order #{order.id}
+              {order.scheduledAt
+                ? ` · ${formatDateTime(order.scheduledAt)}`
+                : ""}
             </DialogDescription>
           )}
         </DialogHeader>
@@ -80,8 +84,9 @@ export function ReassignBookingDialog({
             ))}
           </select>
           <p className="text-xs text-muted-foreground">
-            Admin can reassign regardless of schedule conflicts — verify the
-            target mechanic is free at this booking's time before confirming.
+            {order?.providerId
+              ? "Verify the target mechanic is free at this appointment time before confirming."
+              : "Verify the selected mechanic is free at this appointment time before confirming."}
           </p>
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
@@ -97,7 +102,7 @@ export function ReassignBookingDialog({
             onClick={handleConfirm}
             disabled={isSaving || targetId == null}
           >
-            {isSaving ? "Reassigning..." : "Confirm"}
+            {isSaving ? "Saving…" : "Confirm"}
           </Button>
         </DialogFooter>
       </DialogContent>

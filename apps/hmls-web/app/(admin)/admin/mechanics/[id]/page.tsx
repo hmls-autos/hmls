@@ -19,10 +19,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  type MechanicBookingRow,
+  type MechanicOrderRow,
   useAdminMechanic,
   useAdminMechanicAvailability,
-  useAdminMechanicBookings,
+  useAdminMechanicOrders,
   useAdminMechanicOverrides,
   useAdminMechanics,
 } from "@/hooks/useAdminMechanics";
@@ -117,30 +117,37 @@ function BookingRow({
   b,
   onReassign,
 }: {
-  b: MechanicBookingRow;
-  onReassign: (b: MechanicBookingRow) => void;
+  b: MechanicOrderRow;
+  onReassign: (b: MechanicOrderRow) => void;
 }) {
-  const statusCfg = BOOKING_STATUS[b.status];
+  const statusCfg = BOOKING_STATUS[b.status] ?? {
+    label: b.status,
+    color: "bg-neutral-100 text-neutral-500",
+  };
+  const vehicle = b.vehicleInfo;
+  const vehicleStr = vehicle
+    ? [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ")
+    : null;
   return (
     <div className="flex items-start gap-3 px-3 py-2 border-b border-border last:border-b-0">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <p className="text-sm font-medium text-foreground">
-            {formatDateTime(b.scheduledAt)}
+            {b.scheduledAt ? formatDateTime(b.scheduledAt) : "Unscheduled"}
           </p>
-          {statusCfg && (
-            <Badge className={cn("border-transparent", statusCfg.color)}>
-              {statusCfg.label}
-            </Badge>
-          )}
+          <Badge className={cn("border-transparent", statusCfg.color)}>
+            {statusCfg.label}
+          </Badge>
         </div>
         <p className="text-xs text-muted-foreground truncate">
-          {b.serviceType} · {b.customer.name ?? "Customer"}
+          Order #{b.id}
+          {vehicleStr ? ` · ${vehicleStr}` : ""} ·{" "}
+          {b.customer.name ?? b.contactName ?? "Customer"}
         </p>
       </div>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" aria-label="Booking actions">
+          <Button variant="ghost" size="icon" aria-label="Order actions">
             <MoreHorizontal className="size-4" />
           </Button>
         </DropdownMenuTrigger>
@@ -148,11 +155,9 @@ function BookingRow({
           <DropdownMenuItem onSelect={() => onReassign(b)}>
             Reassign…
           </DropdownMenuItem>
-          {b.orderId && (
-            <DropdownMenuItem asChild>
-              <Link href={`/admin/orders/${b.orderId}`}>Open order</Link>
-            </DropdownMenuItem>
-          )}
+          <DropdownMenuItem asChild>
+            <Link href={`/admin/orders/${b.id}`}>Open order</Link>
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -182,10 +187,11 @@ export default function MechanicDetailPage({
   const { mechanic, isLoading } = useAdminMechanic(id);
   // Pull a full year back so "Jobs completed" and "Recent completed" surface
   // historical data, not just the last 7 days. Server caps at 200 rows.
-  const { bookings, mutate: mutateBookings } = useAdminMechanicBookings(
-    id,
-    new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
-  );
+  const { orders: mechanicOrders, mutate: mutateMechanicOrders } =
+    useAdminMechanicOrders(
+      id,
+      new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
+    );
   const { availability } = useAdminMechanicAvailability(id);
   const overridesFrom = new Date().toISOString().slice(0, 10);
   const overridesTo = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
@@ -198,10 +204,13 @@ export default function MechanicDetailPage({
   );
   const { mechanics } = useAdminMechanics();
   const listRow = mechanics.find((m) => m.id === id);
-  const jobsCompleted = bookings.filter((b) => b.status === "completed").length;
+  const jobsCompleted = mechanicOrders.filter(
+    (b) => b.status === "completed",
+  ).length;
 
-  const [reassignTarget, setReassignTarget] =
-    useState<MechanicBookingRow | null>(null);
+  const [reassignTarget, setReassignTarget] = useState<MechanicOrderRow | null>(
+    null,
+  );
   const [editHoursOpen, setEditHoursOpen] = useState(false);
   const [timeOffOpen, setTimeOffOpen] = useState(false);
 
@@ -215,10 +224,10 @@ export default function MechanicDetailPage({
     );
   }
 
-  const upcoming = bookings.filter(
-    (b) => new Date(b.scheduledAt) >= new Date(),
+  const upcoming = mechanicOrders.filter(
+    (b) => b.scheduledAt && new Date(b.scheduledAt) >= new Date(),
   );
-  const recentCompleted = bookings
+  const recentCompleted = mechanicOrders
     .filter((b) => b.status === "completed")
     .slice(-10)
     .reverse();
@@ -293,7 +302,7 @@ export default function MechanicDetailPage({
             <ScheduleStrip
               weekly={availability}
               overrides={overrides}
-              bookings={bookings}
+              bookings={mechanicOrders}
             />
           </CardContent>
         </Card>
@@ -353,11 +362,11 @@ export default function MechanicDetailPage({
         }}
       />
       <ReassignBookingDialog
-        booking={reassignTarget}
+        order={reassignTarget}
         open={!!reassignTarget}
         onOpenChange={(o) => !o && setReassignTarget(null)}
-        onReassigned={() => {
-          mutateBookings();
+        onAssigned={() => {
+          mutateMechanicOrders();
           setReassignTarget(null);
         }}
       />

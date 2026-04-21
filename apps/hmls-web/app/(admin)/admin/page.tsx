@@ -1,8 +1,14 @@
 "use client";
 
-import { Calendar, DollarSign, FileText, Receipt, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Clock,
+  DollarSign,
+  PlayCircle,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAdminDashboard } from "@/hooks/useAdmin";
@@ -13,14 +19,16 @@ function StatCard({
   value,
   icon: Icon,
   color,
+  href,
 }: {
   label: string;
   value: string | number;
   icon: React.ComponentType<{ className?: string }>;
   color: string;
+  href?: string;
 }) {
-  return (
-    <Card className="gap-0 p-5">
+  const card = (
+    <Card className="gap-0 p-5 h-full">
       <CardContent className="p-0">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm text-muted-foreground">{label}</span>
@@ -33,6 +41,13 @@ function StatCard({
         </p>
       </CardContent>
     </Card>
+  );
+  return href ? (
+    <Link href={href} className="block hover:opacity-90 transition-opacity">
+      {card}
+    </Link>
+  ) : (
+    card
   );
 }
 
@@ -62,8 +77,8 @@ function DashboardSkeleton() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {["col-1", "col-2", "col-3"].map((colId) => (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {["col-1", "col-2"].map((colId) => (
           <div key={colId}>
             <div className="flex items-center justify-between mb-3">
               <Skeleton className="h-4 w-32" />
@@ -93,7 +108,7 @@ export default function AdminDashboard() {
     return <DashboardSkeleton />;
   }
 
-  const { stats, upcomingBookings, recentCustomers, pendingQuotes } = data;
+  const { stats, upcomingOrders, recentCustomers } = data;
 
   return (
     <div>
@@ -104,41 +119,66 @@ export default function AdminDashboard() {
         Business overview at a glance.
       </p>
 
+      {/* Pending Review banner */}
+      {stats.pendingReview > 0 && (
+        <Link href="/admin/orders?status=draft" className="block mb-6 group">
+          <Card className="border-amber-500/40 bg-amber-50 dark:bg-amber-950/20 gap-0 py-0 transition-colors hover:bg-amber-100 dark:hover:bg-amber-950/30">
+            <CardContent className="px-4 py-3 flex items-center gap-3">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                  {stats.pendingReview} AI-drafted estimate
+                  {stats.pendingReview === 1 ? "" : "s"} pending review
+                </p>
+                <p className="text-xs text-amber-800 dark:text-amber-300/90">
+                  Review and send to customers
+                </p>
+              </div>
+              <ArrowRight className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+            </CardContent>
+          </Card>
+        </Link>
+      )}
+
       {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-10">
         <StatCard
           label="Customers"
           value={stats.customers}
           icon={Users}
+          href="/admin/customers"
           color="bg-red-500/10 text-red-500 dark:bg-red-900/30 dark:text-red-400"
         />
         <StatCard
-          label="Bookings"
-          value={stats.bookings}
-          icon={Calendar}
-          color="bg-red-500/10 text-red-500 dark:bg-red-900/30 dark:text-red-400"
+          label="Pending Review"
+          value={stats.pendingReview}
+          icon={AlertTriangle}
+          href="/admin/orders?status=draft"
+          color="bg-amber-500/10 text-amber-500 dark:bg-amber-900/30 dark:text-amber-400"
         />
         <StatCard
-          label="Estimates"
-          value={stats.estimates}
-          icon={FileText}
-          color="bg-red-500/10 text-red-500 dark:bg-red-900/30 dark:text-red-400"
+          label="Awaiting Approval"
+          value={stats.pendingApprovals}
+          icon={Clock}
+          href="/admin/orders?status=estimated"
+          color="bg-indigo-500/10 text-indigo-500 dark:bg-indigo-900/30 dark:text-indigo-400"
         />
         <StatCard
-          label="Quotes"
-          value={stats.quotes}
-          icon={Receipt}
-          color="bg-red-500/10 text-red-500 dark:bg-red-900/30 dark:text-red-400"
+          label="Active Jobs"
+          value={stats.activeJobs}
+          icon={PlayCircle}
+          href="/admin/orders?status=in_progress"
+          color="bg-emerald-500/10 text-emerald-500 dark:bg-emerald-900/30 dark:text-emerald-400"
         />
         <StatCard
           label="Revenue (30d)"
           value={formatCents(stats.revenue30d)}
           icon={DollarSign}
-          color="bg-red-500/10 text-red-500 dark:bg-red-900/30 dark:text-red-400"
+          color="bg-green-500/10 text-green-500 dark:bg-green-900/30 dark:text-green-400"
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Upcoming bookings */}
         <div>
           <div className="flex items-center justify-between mb-3">
@@ -152,7 +192,7 @@ export default function AdminDashboard() {
               View all
             </Link>
           </div>
-          {upcomingBookings.length === 0 ? (
+          {upcomingOrders.length === 0 ? (
             <Card className="gap-0 p-6 text-center">
               <CardContent className="p-0">
                 <p className="text-xs text-muted-foreground">
@@ -163,17 +203,30 @@ export default function AdminDashboard() {
           ) : (
             <Card className="gap-0 p-0">
               <CardContent className="p-0 divide-y divide-border">
-                {upcomingBookings.map((b) => (
-                  <div key={b.id} className="px-4 py-3">
-                    <p className="text-sm text-foreground font-medium truncate">
-                      {b.serviceType}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDate(b.scheduledAt)} &middot;{" "}
-                      {b.customerName ?? "Unknown"}
-                    </p>
-                  </div>
-                ))}
+                {upcomingOrders.map((o) => {
+                  const vehicle = o.vehicleInfo;
+                  const vehicleStr = vehicle
+                    ? [vehicle.year, vehicle.make, vehicle.model]
+                        .filter(Boolean)
+                        .join(" ")
+                    : null;
+                  return (
+                    <Link
+                      key={o.id}
+                      href={`/admin/orders/${o.id}`}
+                      className="block px-4 py-3 hover:bg-muted transition-colors"
+                    >
+                      <p className="text-sm text-foreground font-medium truncate">
+                        #{o.id}
+                        {vehicleStr ? ` · ${vehicleStr}` : ""}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {o.scheduledAt ? formatDate(o.scheduledAt) : ""}{" "}
+                        &middot; {o.contactName ?? "Unknown"}
+                      </p>
+                    </Link>
+                  );
+                })}
               </CardContent>
             </Card>
           )}
@@ -216,53 +269,6 @@ export default function AdminDashboard() {
                       {c.email ?? c.phone ?? "No contact info"}
                     </p>
                   </Link>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Pending quotes */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-foreground">
-              Pending Quotes
-            </h2>
-            <Link
-              href="/admin/orders?status=sent"
-              className="text-xs text-primary hover:text-primary/80 font-medium"
-            >
-              View all
-            </Link>
-          </div>
-          {pendingQuotes.length === 0 ? (
-            <Card className="gap-0 p-6 text-center">
-              <CardContent className="p-0">
-                <p className="text-xs text-muted-foreground">
-                  No pending quotes.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="gap-0 p-0">
-              <CardContent className="p-0 divide-y divide-border">
-                {pendingQuotes.map((q) => (
-                  <div key={q.id} className="px-4 py-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-foreground font-medium">
-                        {formatCents(q.totalAmount)}
-                      </p>
-                      <Badge
-                        variant="outline"
-                        className="capitalize bg-red-500/10 text-red-600 border-transparent dark:bg-red-900/30 dark:text-red-400"
-                      >
-                        {q.status}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {formatDate(q.createdAt)}
-                    </p>
-                  </div>
                 ))}
               </CardContent>
             </Card>

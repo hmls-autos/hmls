@@ -1,4 +1,3 @@
-import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   boolean,
   customType,
@@ -85,78 +84,13 @@ export const providerScheduleOverrides = pgTable("provider_schedule_overrides", 
   reason: text("reason"),
 });
 
-export const quotes = pgTable("quotes", {
-  id: serial("id").primaryKey(),
-  customerId: integer("customer_id").references(() => customers.id),
-  bookingId: integer("booking_id").references((): AnyPgColumn => bookings.id),
-  stripeQuoteId: varchar("stripe_quote_id", { length: 100 }),
-  stripeInvoiceId: varchar("stripe_invoice_id", { length: 100 }), // linked invoice after quote accepted
-  items: jsonb("items").notNull(), // [{ service, description, amount }]
-  totalAmount: integer("total_amount").notNull(), // in cents
-  status: varchar("status", { length: 50 }).notNull().default("draft"), // draft, sent, accepted, invoiced, paid
-  expiresAt: timestamp("expires_at"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
 export const pricingConfig = pgTable("pricing_config", {
   key: varchar("key", { length: 50 }).primaryKey(),
   value: integer("value").notNull(),
   description: text("description"),
 });
 
-export const estimates = pgTable("estimates", {
-  id: serial("id").primaryKey(),
-  customerId: integer("customer_id").references(() => customers.id).notNull(),
-  items: jsonb("items").notNull(), // LineItem[]
-  subtotal: integer("subtotal").notNull(), // in cents
-  priceRangeLow: integer("price_range_low").notNull(), // in cents
-  priceRangeHigh: integer("price_range_high").notNull(), // in cents
-  vehicleInfo: jsonb("vehicle_info"), // {year, make, model}
-  notes: text("notes"),
-  shareToken: varchar("share_token", { length: 64 }).notNull(),
-  validDays: integer("valid_days").notNull().default(14),
-  expiresAt: timestamp("expires_at").notNull(),
-  convertedToQuoteId: integer("converted_to_quote_id").references(() => quotes.id),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-// NOTE: `scheduledAt` maps to `scheduled_at` — this IS the appointment start time.
-// Column was not renamed to preserve backwards compatibility with existing data.
-export const bookings = pgTable("bookings", {
-  id: serial("id").primaryKey(),
-  shopId: uuid("shop_id").references(() => shops.id),
-  customerId: integer("customer_id").references(() => customers.id),
-  providerId: integer("provider_id").references(() => providers.id),
-  serviceType: varchar("service_type", { length: 100 }).notNull(),
-  serviceItems: jsonb("service_items").notNull().default([]),
-  symptomDescription: text("symptom_description"),
-  vehicleYear: integer("vehicle_year"),
-  vehicleMake: varchar("vehicle_make", { length: 50 }),
-  vehicleModel: varchar("vehicle_model", { length: 50 }),
-  vehicleMileage: integer("vehicle_mileage"),
-  estimateId: integer("estimate_id").references(() => estimates.id, { onDelete: "cascade" }),
-  scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
-  appointmentEnd: timestamp("appointment_end", { withTimezone: true }),
-  durationMinutes: integer("duration_minutes").notNull().default(60),
-  blockedRange: tstzrange("blocked_range"),
-  location: text("location"),
-  locationLat: numeric("location_lat", { precision: 10, scale: 7 }),
-  locationLng: numeric("location_lng", { precision: 10, scale: 7 }),
-  accessInstructions: text("access_instructions"),
-  customerName: varchar("customer_name", { length: 255 }),
-  customerEmail: varchar("customer_email", { length: 255 }),
-  customerPhone: varchar("customer_phone", { length: 20 }),
-  photoUrls: jsonb("photo_urls"),
-  customerNotes: text("customer_notes"),
-  internalNotes: text("internal_notes"),
-  staffNotes: text("staff_notes"),
-  preferredMechanicId: integer("preferred_mechanic_id").references(() => providers.id),
-  status: varchar("status", { length: 50 }).notNull().default("requested"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
-
-// --- OrderItem type (unified item model across estimate/invoice/PDF) ---
+// --- OrderItem type (unified item model) ---
 
 export interface OrderItem {
   id: string;
@@ -177,12 +111,8 @@ export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   shopId: uuid("shop_id").references(() => shops.id),
   customerId: integer("customer_id").references(() => customers.id),
-  estimateId: integer("estimate_id").references(() => estimates.id, { onDelete: "set null" }),
-  quoteId: integer("quote_id").references(() => quotes.id),
-  bookingId: integer("booking_id").references(() => bookings.id),
   status: varchar("status", { length: 30 }).notNull().default("draft"),
   statusHistory: jsonb("status_history").notNull().default([]),
-  // Unified items — replaces estimate.items and quote.items
   items: jsonb("items").notNull().default([]),
   notes: text("notes"),
   subtotalCents: integer("subtotal_cents").notNull().default(0),
@@ -193,11 +123,11 @@ export const orders = pgTable("orders", {
   expiresAt: timestamp("expires_at", { withTimezone: true }),
   shareToken: varchar("share_token", { length: 64 }),
   revisionNumber: integer("revision_number").notNull().default(1),
-  stripeQuoteId: varchar("stripe_quote_id", { length: 255 }),
-  stripeInvoiceId: varchar("stripe_invoice_id", { length: 255 }),
-  stripePaymentIntentId: varchar("stripe_payment_intent_id", { length: 255 }),
-  preauthAmountCents: integer("preauth_amount_cents"),
   capturedAmountCents: integer("captured_amount_cents"),
+  // Payment tracking (manual). Set when admin records payment on a completed job.
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  paymentMethod: varchar("payment_method", { length: 30 }),
+  paymentReference: varchar("payment_reference", { length: 255 }),
   adminNotes: text("admin_notes"),
   cancellationReason: text("cancellation_reason"),
   // Per-order contact snapshot — edit these instead of mutating the customers record
@@ -205,13 +135,27 @@ export const orders = pgTable("orders", {
   contactEmail: varchar("contact_email", { length: 255 }),
   contactPhone: varchar("contact_phone", { length: 20 }),
   contactAddress: text("contact_address"),
+  // Scheduling (absorbed from bookings — Layer 3)
+  scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+  appointmentEnd: timestamp("appointment_end", { withTimezone: true }),
+  durationMinutes: integer("duration_minutes"),
+  providerId: integer("provider_id").references(() => providers.id),
+  location: text("location"),
+  locationLat: numeric("location_lat", { precision: 10, scale: 7 }),
+  locationLng: numeric("location_lng", { precision: 10, scale: 7 }),
+  accessInstructions: text("access_instructions"),
+  symptomDescription: text("symptom_description"),
+  photoUrls: jsonb("photo_urls"),
+  customerNotes: text("customer_notes"),
+  blockedRange: tstzrange("blocked_range"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
-  estimateIdx: index("orders_estimate_id_idx").on(table.estimateId),
   shareTokenIdx: index("orders_share_token_idx").on(table.shareToken),
   statusIdx: index("orders_status_idx").on(table.status),
   customerIdx: index("orders_customer_id_idx").on(table.customerId),
+  scheduledAtIdx: index("orders_scheduled_at_idx").on(table.scheduledAt),
+  providerIdx: index("orders_provider_id_idx").on(table.providerId),
 }));
 
 // --- Order Events (audit log) ---

@@ -42,8 +42,6 @@ const ADMIN_STYLES: VariantStyles = {
     declined: "Customer declined — revise or cancel",
     revised: "Revised estimate ready to re-send",
     cancelled: "Order was cancelled",
-    void: "Invoice was voided",
-    archived: "Order archived after completion",
   },
   renderBadge: (status) => {
     const entry = ORDER_STATUS[status] ?? {

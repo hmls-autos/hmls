@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ClipboardList, CreditCard, X as XIcon } from "lucide-react";
+import { Check, ClipboardList, X as XIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -9,22 +9,19 @@ import { Spinner } from "@/components/ui/Spinner";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { type PortalOrder, usePortalOrders } from "@/hooks/usePortal";
 import { authFetch } from "@/lib/fetcher";
-import { formatCents, formatDateTime } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { PORTAL_ORDER_STATUS } from "@/lib/status";
 
 function OrderCard({
   order,
   onAction,
-  onPreauth,
   loading,
 }: {
   order: PortalOrder;
   onAction: (orderId: number, action: "approve" | "decline") => void;
-  onPreauth: (orderId: number) => void;
   loading: number | null;
 }) {
   const canApproveDecline = order.status === "estimated";
-  const canPreauth = order.status === "approved";
 
   return (
     <div className="bg-surface border border-border rounded-xl p-5 hover:border-border-hover transition-colors">
@@ -49,34 +46,6 @@ function OrderCard({
         >
           View →
         </Link>
-      </div>
-
-      {/* Linked entities */}
-      <div className="flex flex-wrap gap-2 mb-3">
-        {order.estimateId && (
-          <Link
-            href="/portal/estimates"
-            className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 hover:underline"
-          >
-            Estimate #{order.estimateId}
-          </Link>
-        )}
-        {order.quoteId && (
-          <Link
-            href="/portal/quotes"
-            className="text-xs px-2 py-0.5 rounded bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400 hover:underline"
-          >
-            Quote #{order.quoteId}
-          </Link>
-        )}
-        {order.bookingId && (
-          <Link
-            href="/portal/bookings"
-            className="text-xs px-2 py-0.5 rounded bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400 hover:underline"
-          >
-            Booking #{order.bookingId}
-          </Link>
-        )}
       </div>
 
       {order.cancellationReason && (
@@ -138,47 +107,6 @@ function OrderCard({
           </button>
         </div>
       )}
-
-      {/* Pre-auth payment section */}
-      {canPreauth && (
-        <div className="pt-3 border-t border-border space-y-2">
-          <div className="flex items-center gap-2">
-            <CreditCard className="w-4 h-4 text-purple-500" />
-            <span className="text-sm font-medium text-text">
-              Authorize Payment
-            </span>
-          </div>
-          <p className="text-xs text-text-secondary">
-            A hold of{" "}
-            <span className="font-semibold text-text">
-              {formatCents(Math.ceil(order.subtotalCents * 1.15))}
-            </span>{" "}
-            will be placed on your card (estimate + 15% buffer). You will only
-            be charged the final amount after service is complete.
-          </p>
-          <button
-            type="button"
-            onClick={() => onPreauth(order.id)}
-            disabled={loading === order.id}
-            className="flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-colors disabled:opacity-50"
-          >
-            <CreditCard className="w-3.5 h-3.5" />
-            {loading === order.id ? "Processing..." : "Authorize Card"}
-          </button>
-        </div>
-      )}
-
-      {/* Preauth confirmed message */}
-      {order.status === "preauth" && (
-        <div className="pt-3 border-t border-border">
-          <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
-            <Check className="w-4 h-4" />
-            <span className="text-xs font-medium">
-              Card authorized — waiting for appointment scheduling
-            </span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -186,20 +114,6 @@ function OrderCard({
 export default function PortalOrdersPage() {
   const { orders, isLoading, mutate } = usePortalOrders();
   const [loading, setLoading] = useState<number | null>(null);
-
-  async function handlePreauth(orderId: number) {
-    setLoading(orderId);
-    try {
-      await authFetch(`/api/portal/me/orders/${orderId}/preauth`, {
-        method: "POST",
-      });
-      mutate();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "Failed to authorize card");
-    } finally {
-      setLoading(null);
-    }
-  }
 
   async function handleAction(orderId: number, action: "approve" | "decline") {
     if (action === "decline") {
@@ -257,7 +171,6 @@ export default function PortalOrdersPage() {
               key={order.id}
               order={order}
               onAction={handleAction}
-              onPreauth={handlePreauth}
               loading={loading}
             />
           ))}

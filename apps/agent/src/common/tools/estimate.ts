@@ -61,11 +61,14 @@ export const createEstimateTool = {
     "If the user is a known customer, also pass customerId to save the estimate to their account. " +
     "The system automatically applies disposal fees, time surcharges, travel fees, and discounts.",
   schema: z.object({
+    // Customer agent: leave blank — auth context supplies the customer.
+    // Staff agent: pass explicit customerId (e.g. after find_customer) to
+    // create an estimate on behalf of a walk-in customer.
     customerId: z
       .number()
       .optional()
       .describe(
-        "Customer ID from database (if known). Omit for anonymous users.",
+        "Customer ID. Customer agents should omit (auth context wins). Staff agents: pass the target customer's ID.",
       ),
     vehicle: z
       .object({
@@ -185,15 +188,16 @@ export const createEstimateTool = {
       travelMiles?: number;
       discountType?: DiscountType;
     },
-    _ctx: unknown,
+    ctx: { customerId?: number } | undefined,
   ) => {
-    // 1. Resolve customer if provided
+    // 1. Resolve customer — auth context takes precedence over AI-supplied param.
+    const customerId = ctx?.customerId ?? params.customerId;
     let customer;
-    if (params.customerId) {
+    if (customerId) {
       const [found] = await db
         .select()
         .from(schema.customers)
-        .where(eq(schema.customers.id, params.customerId))
+        .where(eq(schema.customers.id, customerId))
         .limit(1);
       customer = found;
     }
@@ -283,15 +287,14 @@ export const createEstimateTool = {
 
     // 9. Save to DB if we have a customer, otherwise return pricing only
     if (customer) {
-      // Create order directly — no separate estimates row
+      // Create as draft — shop admin reviews before sending to customer.
       const [order] = await db
         .insert(schema.orders)
         .values({
           customerId: customer.id,
-          status: "estimated",
+          status: "draft",
           statusHistory: [
-            { status: "draft", timestamp: new Date().toISOString(), actor: "system" },
-            { status: "estimated", timestamp: new Date().toISOString(), actor: "agent" },
+            { status: "draft", timestamp: new Date().toISOString(), actor: "agent" },
           ],
           items: orderItems,
           notes: params.notes ?? null,
@@ -313,12 +316,11 @@ export const createEstimateTool = {
         })
         .returning();
 
-      // Record creation event in audit log
       await db.insert(schema.orderEvents).values({
         orderId: order.id,
         eventType: "status_change",
         fromStatus: null,
-        toStatus: "estimated",
+        toStatus: "draft",
         actor: "agent",
         metadata: {
           vehicleInfo: params.vehicle,
@@ -326,14 +328,12 @@ export const createEstimateTool = {
         },
       });
 
-      const baseUrl = "/api/orders";
-
       return toolResult({
         success: true,
         orderId: order.id,
+        status: "draft",
+        pendingReview: true,
         vehicle: `${params.vehicle.year} ${params.vehicle.make} ${params.vehicle.model}`,
-        downloadUrl: `${baseUrl}/${order.id}/pdf`,
-        shareUrl: `${baseUrl}/${order.id}/pdf?token=${shareToken}`,
         items: orderItems.map((i) => ({
           name: i.name,
           description: i.description,
@@ -345,6 +345,8 @@ export const createEstimateTool = {
         subtotal: subtotal / 100,
         priceRange: `$${(rangeLow / 100).toFixed(2)} - $${(rangeHigh / 100).toFixed(2)}`,
         expiresAt,
+        note:
+          "Draft estimate saved for shop team review. Customer will receive the finalized estimate after review.",
       });
     }
 

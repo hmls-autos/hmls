@@ -10,69 +10,6 @@ export interface ServiceItem {
   partsNote?: string;
 }
 
-export interface Booking {
-  id: number;
-  customerId: number;
-  providerId?: number | null;
-  serviceType: string;
-  serviceItems?: ServiceItem[];
-  symptomDescription?: string | null;
-  vehicleYear: number | string | null;
-  vehicleMake: string | null;
-  vehicleModel: string | null;
-  vehicleMileage?: number | null;
-  estimateId?: number | null;
-  scheduledAt: string;
-  appointmentEnd?: string | null;
-  durationMinutes: number;
-  location: string | null;
-  customerName?: string | null;
-  customerNotes?: string | null;
-  internalNotes?: string | null;
-  staffNotes?: string | null;
-  status: string;
-  createdAt: string;
-  updatedAt?: string;
-}
-
-export interface Estimate {
-  id: number;
-  customerId: number;
-  items: LineItem[];
-  subtotal: number;
-  priceRangeLow: number;
-  priceRangeHigh: number;
-  vehicleInfo: { year?: number; make?: string; model?: string } | null;
-  notes: string | null;
-  shareToken: string;
-  validDays: number;
-  expiresAt: string;
-  convertedToQuoteId: number | null;
-  createdAt: string;
-  orderId?: number | null;
-  orderStatus?: string | null;
-}
-
-export interface Quote {
-  id: number;
-  customerId: number;
-  bookingId?: number | null;
-  stripeQuoteId?: string | null;
-  stripeInvoiceId?: string | null;
-  items: {
-    service?: string;
-    name?: string;
-    description: string;
-    amount?: number;
-    price?: number;
-  }[];
-  totalAmount: number;
-  status: string;
-  stripePaymentUrl?: string | null;
-  expiresAt?: string | null;
-  createdAt: string;
-}
-
 export interface OrderItem {
   id: string;
   category: "labor" | "parts" | "fee" | "discount";
@@ -89,9 +26,6 @@ export interface OrderItem {
 export interface Order {
   id: number;
   customerId: number | null;
-  estimateId: number | null;
-  quoteId: number | null;
-  bookingId: number | null;
   status: string;
   statusHistory: { status: string; timestamp: string; actor: string }[];
   adminNotes: string | null;
@@ -106,16 +40,28 @@ export interface Order {
   expiresAt: string | null;
   shareToken: string | null;
   revisionNumber: number;
-  stripeQuoteId: string | null;
-  stripeInvoiceId: string | null;
-  stripePaymentIntentId: string | null;
-  preauthAmountCents: number | null;
   capturedAmountCents: number | null;
+  // Payment tracking (manual)
+  paidAt: string | null;
+  paymentMethod: string | null;
+  paymentReference: string | null;
   // Per-order contact snapshot (prefer these over customer record for display)
   contactName: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
   contactAddress: string | null;
+  // Scheduling (absorbed from bookings in Layer 3)
+  scheduledAt: string | null;
+  appointmentEnd: string | null;
+  durationMinutes: number | null;
+  providerId: number | null;
+  location: string | null;
+  locationLat: string | null;
+  locationLng: string | null;
+  accessInstructions: string | null;
+  symptomDescription: string | null;
+  photoUrls: string[] | null;
+  customerNotes: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -134,7 +80,6 @@ export interface OrderEvent {
 export interface OrderDetail {
   order: Order;
   customer: Customer | null;
-  booking: Booking | null;
   events: OrderEvent[];
 }
 

@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAdminOrders } from "@/hooks/useAdmin";
+import { useAdminDashboard, useAdminOrders } from "@/hooks/useAdmin";
 import { formatCents, formatDateTime } from "@/lib/format";
 import { ORDER_STATUS, type StatusConfig } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -35,23 +35,18 @@ function OrderStatusBadge({
 
 const FILTER_GROUPS = [
   { value: "", label: "All" },
-  { value: "estimated", label: "Estimated" },
+  { value: "draft", label: "Pending Review" },
+  { value: "estimated", label: "Sent" },
   { value: "approved", label: "Approved" },
+  { value: "scheduled", label: "Scheduled" },
   { value: "in_progress", label: "In Progress" },
   { value: "completed", label: "Completed" },
-  { value: "cancelled", label: "Cancelled" },
 ];
 
 const MORE_FILTERS = [
-  { value: "draft", label: "Draft" },
-  { value: "estimated", label: "Estimated" },
   { value: "declined", label: "Declined" },
   { value: "revised", label: "Revised" },
-  { value: "invoiced", label: "Invoiced" },
-  { value: "paid", label: "Paid" },
-  { value: "scheduled", label: "Scheduled" },
-  { value: "void", label: "Void" },
-  { value: "archived", label: "Archived" },
+  { value: "cancelled", label: "Cancelled" },
 ];
 
 /* ── Skeleton loading state ───────────────────────────────────────────── */
@@ -72,6 +67,8 @@ export default function OrdersPage() {
   const [filter, setFilter] = useState("");
   const [showMore, setShowMore] = useState(false);
   const { orders, isLoading } = useAdminOrders(filter || undefined);
+  const { data: dashboard } = useAdminDashboard();
+  const pendingReviewCount = dashboard?.stats.pendingReview ?? 0;
 
   const isMoreActive = MORE_FILTERS.some((f) => f.value === filter);
 
@@ -83,21 +80,36 @@ export default function OrdersPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
-        {FILTER_GROUPS.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => setFilter(opt.value)}
-            className={cn(
-              "text-xs font-medium px-3 py-1.5 rounded-full transition-colors",
-              filter === opt.value
-                ? "bg-primary text-white"
-                : "bg-card border border-border text-muted-foreground hover:text-foreground hover:border-primary",
-            )}
-          >
-            {opt.label}
-          </button>
-        ))}
+        {FILTER_GROUPS.map((opt) => {
+          const showCount = opt.value === "draft" && pendingReviewCount > 0;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setFilter(opt.value)}
+              className={cn(
+                "text-xs font-medium px-3 py-1.5 rounded-full transition-colors inline-flex items-center gap-1.5",
+                filter === opt.value
+                  ? "bg-primary text-white"
+                  : "bg-card border border-border text-muted-foreground hover:text-foreground hover:border-primary",
+              )}
+            >
+              {opt.label}
+              {showCount && (
+                <span
+                  className={cn(
+                    "rounded-full text-[10px] leading-none px-1.5 py-0.5 font-semibold",
+                    filter === opt.value
+                      ? "bg-white text-primary"
+                      : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+                  )}
+                >
+                  {pendingReviewCount}
+                </span>
+              )}
+            </button>
+          );
+        })}
         <div className="relative">
           <button
             type="button"

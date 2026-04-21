@@ -1,110 +1,102 @@
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, schema } from "../../db/client.ts";
 import { toolResult } from "@hmls/shared/tool-result";
 import type { ToolContext } from "../../common/convert-tools.ts";
 
-// Only "requested" bookings can be cancelled by customers
-const CUSTOMER_CANCELLABLE_BOOKING_STATUSES = ["requested"];
+// After Layer 3 there is no separate bookings entity — scheduling lives on the
+// order. Customers can cancel / reschedule while the order is in `scheduled`
+// (before the shop has started work).
+const CUSTOMER_CANCELLABLE_STATUSES = ["scheduled"];
 
 // ---------------------------------------------------------------------------
-// Tool 1: cancel_booking
+// Tool 1: cancel_booking — cancel a scheduled order
 // ---------------------------------------------------------------------------
 
 const cancelBookingTool = {
   name: "cancel_booking",
   description:
-    "Customer cancels a booking/appointment. Only allowed when the booking is in 'requested' status. " +
-    "Confirmed bookings cannot be cancelled by the customer — they need to contact staff.",
+    "Customer cancels their scheduled appointment. Only allowed while the order is in 'scheduled' " +
+    "status. Once the shop has started work, cancellations must go through staff.",
   schema: z.object({
-    bookingId: z.string().describe("The booking ID to cancel"),
+    orderId: z.string().describe("The order ID to cancel the appointment on"),
     reason: z.string().optional().describe("Optional reason for cancellation"),
   }),
-  execute: async (params: { bookingId: string; reason?: string }, ctx: ToolContext | undefined) => {
-    const id = Number(params.bookingId);
+  execute: async (
+    params: { orderId: string; reason?: string },
+    ctx: ToolContext | undefined,
+  ) => {
+    const id = Number(params.orderId);
     if (!Number.isInteger(id) || id <= 0) {
-      return toolResult({ success: false, error: "Invalid booking ID" });
+      return toolResult({ success: false, error: "Invalid order ID" });
     }
 
     if (!ctx?.customerId) {
       return toolResult({ success: false, error: "Authentication required" });
     }
 
-    const [booking] = await db
+    const [order] = await db
       .select()
-      .from(schema.bookings)
-      .where(eq(schema.bookings.id, id))
+      .from(schema.orders)
+      .where(eq(schema.orders.id, id))
       .limit(1);
 
-    if (!booking || booking.customerId !== ctx.customerId) {
-      return toolResult({ success: false, error: `Booking #${id} not found` });
+    if (!order || order.customerId !== ctx.customerId) {
+      return toolResult({ success: false, error: `Order #${id} not found` });
     }
 
-    if (!CUSTOMER_CANCELLABLE_BOOKING_STATUSES.includes(booking.status)) {
+    if (!CUSTOMER_CANCELLABLE_STATUSES.includes(order.status)) {
       return toolResult({
         success: false,
-        error: `Booking #${id} cannot be cancelled — current status is '${booking.status}'. ` +
-          "Only 'requested' bookings can be cancelled by the customer. " +
-          "For confirmed bookings, please contact the shop directly.",
+        error: `Order #${id} cannot be cancelled — current status is '${order.status}'. ` +
+          "Only 'scheduled' orders can be cancelled by the customer. " +
+          "For in-progress work, please contact the shop directly.",
       });
     }
 
+    const history = Array.isArray(order.statusHistory) ? order.statusHistory : [];
     await db
-      .update(schema.bookings)
+      .update(schema.orders)
       .set({
         status: "cancelled",
-        customerNotes: params.reason
-          ? `${
-            booking.customerNotes ? booking.customerNotes + "\n" : ""
-          }Cancellation reason: ${params.reason}`
-          : booking.customerNotes,
+        cancellationReason: params.reason ?? null,
+        statusHistory: [
+          ...history,
+          { status: "cancelled", timestamp: new Date().toISOString(), actor: "customer" },
+        ],
         updatedAt: new Date(),
       })
-      .where(eq(schema.bookings.id, id));
+      .where(and(eq(schema.orders.id, id), eq(schema.orders.status, "scheduled")));
 
-    // Log an order event if the booking is linked to an order
-    if (booking.estimateId) {
-      const [order] = await db
-        .select({ id: schema.orders.id })
-        .from(schema.orders)
-        .where(eq(schema.orders.estimateId, booking.estimateId))
-        .limit(1);
-
-      if (order) {
-        await db.insert(schema.orderEvents).values({
-          orderId: order.id,
-          eventType: "note_added",
-          actor: "customer",
-          metadata: {
-            note: `Booking #${id} cancelled by customer${
-              params.reason ? `: ${params.reason}` : ""
-            }`,
-          },
-        });
-      }
-    }
+    await db.insert(schema.orderEvents).values({
+      orderId: id,
+      eventType: "status_change",
+      fromStatus: "scheduled",
+      toStatus: "cancelled",
+      actor: "customer",
+      metadata: params.reason ? { reason: params.reason } : {},
+    });
 
     return toolResult({
       success: true,
-      bookingId: id,
+      orderId: id,
       newStatus: "cancelled",
-      message: `Booking #${id} has been cancelled.`,
+      message: `Your appointment for order #${id} has been cancelled.`,
     });
   },
 };
 
 // ---------------------------------------------------------------------------
-// Tool 2: request_reschedule
+// Tool 2: request_booking_reschedule — flag for staff review
 // ---------------------------------------------------------------------------
 
 const requestRescheduleTool = {
   name: "request_booking_reschedule",
-  description: "Customer requests to reschedule a booking/appointment. " +
-    "This does NOT directly change a confirmed booking — it flags it for staff review. " +
-    "For 'requested' bookings, the request is noted. For 'confirmed' bookings, " +
-    "a reschedule request is submitted for the shop to review.",
+  description:
+    "Customer requests to reschedule their appointment. Does NOT directly change the appointment — " +
+    "it records a note on the order for staff to review and follow up.",
   schema: z.object({
-    bookingId: z.string().describe("The booking ID to reschedule"),
+    orderId: z.string().describe("The order ID to reschedule"),
     preferredTime: z
       .string()
       .optional()
@@ -112,75 +104,62 @@ const requestRescheduleTool = {
     reason: z.string().optional().describe("Reason for rescheduling"),
   }),
   execute: async (
-    params: { bookingId: string; preferredTime?: string; reason?: string },
+    params: { orderId: string; preferredTime?: string; reason?: string },
     ctx: ToolContext | undefined,
   ) => {
-    const id = Number(params.bookingId);
+    const id = Number(params.orderId);
     if (!Number.isInteger(id) || id <= 0) {
-      return toolResult({ success: false, error: "Invalid booking ID" });
+      return toolResult({ success: false, error: "Invalid order ID" });
     }
 
     if (!ctx?.customerId) {
       return toolResult({ success: false, error: "Authentication required" });
     }
 
-    const [booking] = await db
+    const [order] = await db
       .select()
-      .from(schema.bookings)
-      .where(eq(schema.bookings.id, id))
+      .from(schema.orders)
+      .where(eq(schema.orders.id, id))
       .limit(1);
 
-    if (!booking || booking.customerId !== ctx.customerId) {
-      return toolResult({ success: false, error: `Booking #${id} not found` });
+    if (!order || order.customerId !== ctx.customerId) {
+      return toolResult({ success: false, error: `Order #${id} not found` });
     }
 
-    const terminalStatuses = ["completed", "cancelled"];
-    if (terminalStatuses.includes(booking.status)) {
+    const terminalStatuses = ["completed", "cancelled", "declined"];
+    if (terminalStatuses.includes(order.status)) {
       return toolResult({
         success: false,
-        error: `Booking #${id} is '${booking.status}' and cannot be rescheduled.`,
+        error: `Order #${id} is '${order.status}' and cannot be rescheduled.`,
       });
     }
 
-    // Build the reschedule note
     const noteLines = ["[Reschedule request]"];
     if (params.preferredTime) noteLines.push(`Preferred time: ${params.preferredTime}`);
     if (params.reason) noteLines.push(`Reason: ${params.reason}`);
     const note = noteLines.join("\n");
 
-    // Append to customer notes on the booking
     await db
-      .update(schema.bookings)
+      .update(schema.orders)
       .set({
-        customerNotes: booking.customerNotes ? `${booking.customerNotes}\n${note}` : note,
+        customerNotes: order.customerNotes ? `${order.customerNotes}\n${note}` : note,
         updatedAt: new Date(),
       })
-      .where(eq(schema.bookings.id, id));
+      .where(eq(schema.orders.id, id));
 
-    // Log an order event if linked
-    if (booking.estimateId) {
-      const [order] = await db
-        .select({ id: schema.orders.id })
-        .from(schema.orders)
-        .where(eq(schema.orders.estimateId, booking.estimateId))
-        .limit(1);
-
-      if (order) {
-        await db.insert(schema.orderEvents).values({
-          orderId: order.id,
-          eventType: "note_added",
-          actor: "customer",
-          metadata: { note },
-        });
-      }
-    }
+    await db.insert(schema.orderEvents).values({
+      orderId: id,
+      eventType: "note_added",
+      actor: "customer",
+      metadata: { note },
+    });
 
     return toolResult({
       success: true,
-      bookingId: id,
-      message: booking.status === "confirmed"
+      orderId: id,
+      message: order.status === "scheduled"
         ? "Reschedule request submitted. The shop will contact you to confirm a new time."
-        : "Reschedule request noted. The shop will review when confirming your booking.",
+        : "Reschedule request noted. The shop will review.",
     });
   },
 };

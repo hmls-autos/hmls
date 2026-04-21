@@ -3,7 +3,6 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { getLogger } from "@logtape/logtape";
 import { SYSTEM_PROMPT } from "./system-prompt.ts";
 import { schedulingTools } from "./tools/scheduling.ts";
-import { createStripeTools } from "./tools/stripe.ts";
 import { orderOpsTools } from "./tools/order-ops.ts";
 import { customerOrderActionTools } from "./tools/customer-order-actions.ts";
 import { customerBookingActionTools } from "./tools/customer-booking-actions.ts";
@@ -20,7 +19,6 @@ const DEFAULT_MODEL = "gemini-3-flash-preview";
 
 export interface AgentConfig {
   googleApiKey: string;
-  stripeSecretKey: string;
   agentModel?: string;
 }
 
@@ -52,7 +50,6 @@ export function runHmlsAgent(options: RunAgentOptions) {
   const allTools: LegacyTool[] = [
     ...askUserQuestionTools,
     ...estimateTools,
-    ...(config.stripeSecretKey ? createStripeTools(config.stripeSecretKey) : []),
     ...schedulingTools,
     ...laborLookupTools,
     ...partsLookupTools,

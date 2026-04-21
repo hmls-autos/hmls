@@ -2,8 +2,6 @@ export const toolDisplayNames: Record<string, string> = {
   get_availability: "Checking availability",
   create_booking: "Creating work order",
   create_estimate: "Preparing estimate",
-  create_quote: "Creating quote",
-  get_quote_status: "Checking quote status",
   ask_user_question: "Asking a question",
   lookup_labor_time: "Looking up labor times",
   lookup_parts_price: "Looking up parts prices",

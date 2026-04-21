@@ -22,7 +22,6 @@ export function createHmlsApp(options: HmlsAppOptions) {
   // Initialize chat agent configs (customer + staff)
   const agentConfig = {
     googleApiKey,
-    stripeSecretKey: Deno.env.get("STRIPE_SECRET_KEY") ?? "",
     agentModel: Deno.env.get("AGENT_MODEL"),
   };
   initChat(agentConfig);

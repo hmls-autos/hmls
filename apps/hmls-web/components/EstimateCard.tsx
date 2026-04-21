@@ -5,7 +5,10 @@ import { AGENT_URL } from "@/lib/config";
 
 export interface EstimateCardData {
   success: boolean;
+  orderId?: number;
   estimateId?: number;
+  status?: string;
+  pendingReview?: boolean;
   vehicle: string;
   items: Array<{ name: string; description?: string; price: number }>;
   subtotal: number;
@@ -25,6 +28,12 @@ export function EstimateCard({ data }: EstimateCardProps) {
   const downloadLink = data.downloadUrl
     ? `${AGENT_URL}${data.downloadUrl}`
     : pdfUrl;
+  const orderRef = data.orderId ?? data.estimateId;
+  const badge = data.pendingReview
+    ? { label: "Pending review", color: "text-amber-500 bg-amber-500/10" }
+    : data.note && !orderRef
+      ? { label: "Not saved", color: "text-amber-500 bg-amber-500/10" }
+      : null;
 
   return (
     <div className="rounded-xl border border-border bg-surface overflow-hidden">
@@ -34,12 +43,14 @@ export function EstimateCard({ data }: EstimateCardProps) {
           <FileText className="w-3.5 h-3.5" />
         </div>
         <span className="font-semibold text-text text-sm">
-          Estimate {data.estimateId ? `#${data.estimateId}` : ""}
+          Estimate {orderRef ? `#${orderRef}` : ""}
         </span>
         <span className="text-xs text-text-secondary ml-1">{data.vehicle}</span>
-        {data.note && (
-          <span className="ml-auto text-xs text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">
-            Not saved
+        {badge && (
+          <span
+            className={`ml-auto text-xs px-2 py-0.5 rounded-full ${badge.color}`}
+          >
+            {badge.label}
           </span>
         )}
       </div>
@@ -87,8 +98,16 @@ export function EstimateCard({ data }: EstimateCardProps) {
         )}
       </div>
 
+      {/* Footer note for pending review */}
+      {data.pendingReview && (
+        <div className="px-4 py-2.5 border-t border-border text-xs text-text-secondary">
+          Our shop team will review the draft and send the finalized estimate to
+          your account shortly.
+        </div>
+      )}
+
       {/* Actions */}
-      {pdfUrl && (
+      {!data.pendingReview && pdfUrl && (
         <div className="px-4 py-2.5 border-t border-border flex items-center gap-3">
           <a
             href={pdfUrl}

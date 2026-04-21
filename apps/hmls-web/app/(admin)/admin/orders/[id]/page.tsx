@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  AlertTriangle,
   ArrowLeft,
   Calendar,
+  CheckCircle,
   ClipboardEdit,
   ExternalLink,
   FileText,
@@ -10,8 +12,11 @@ import {
   MessageSquare,
   Pencil,
   Printer,
+  Send,
   Tag,
   User,
+  UserPlus,
+  XCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -38,6 +43,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAdminOrder } from "@/hooks/useAdmin";
+import { useAdminMechanics } from "@/hooks/useAdminMechanics";
 import {
   type OrderContactPatch,
   useOrderMutations,
@@ -60,32 +66,17 @@ const TRANSITION_LABELS: Record<string, string> = {
   approved: "Approve",
   declined: "Decline",
   revised: "Revise",
-  preauth: "Pre-Auth",
-  invoiced: "Invoice",
-  paid: "Mark Paid",
-  void: "Void",
   scheduled: "Schedule",
   in_progress: "Start",
   completed: "Complete",
-  archived: "Archive",
   cancelled: "Cancel",
 };
 
-const DANGER_ACTIONS = new Set(["cancelled", "void", "declined"]);
+const DANGER_ACTIONS = new Set(["cancelled", "declined"]);
 
 const ESTIMATE_STATUSES = new Set(["draft", "revised"]);
-const QUOTE_STATUSES = new Set([
-  "estimated",
-  "approved",
-  "preauth",
-  "invoiced",
-]);
-const BOOKING_STATUSES = new Set([
-  "paid",
-  "scheduled",
-  "in_progress",
-  "completed",
-]);
+const QUOTE_STATUSES = new Set(["estimated", "approved"]);
+const BOOKING_STATUSES = new Set(["scheduled", "in_progress", "completed"]);
 
 /* ── Status Badge (using shadcn Badge) ─────────────────────────────── */
 
@@ -249,9 +240,6 @@ function QuotePanel({
     id: number;
     shareToken: string | null;
     subtotalCents: number;
-    stripeQuoteId: string | null;
-    stripeInvoiceId: string | null;
-    quoteId: number | null;
   };
 }) {
   const [showPdf, setShowPdf] = useState(false);
@@ -292,23 +280,6 @@ function QuotePanel({
               {formatCents(order.subtotalCents ?? 0)}
             </span>
           </p>
-          {order.stripeQuoteId && (
-            <p className="text-xs text-muted-foreground">
-              Stripe Quote:{" "}
-              <span className="font-mono">{order.stripeQuoteId}</span>
-            </p>
-          )}
-          {order.stripeInvoiceId && (
-            <p className="text-xs text-muted-foreground">
-              Invoice:{" "}
-              <span className="font-mono">{order.stripeInvoiceId}</span>
-            </p>
-          )}
-          {order.quoteId && (
-            <p className="text-xs text-muted-foreground">
-              Quote ID: #{order.quoteId}
-            </p>
-          )}
         </CardContent>
       </Card>
 
@@ -328,19 +299,35 @@ function QuotePanel({
 
 function BookingPanel({
   order,
+  providerName,
+  onAssign,
+  onConfirm,
+  onReject,
+  actionBusy,
 }: {
   order: {
+    status: string;
     vehicleInfo: { year?: number; make?: string; model?: string } | null;
-    bookingId: number | null;
+    scheduledAt: string | Date | null;
+    providerId?: number | null;
+    location?: string | null;
     adminNotes: string | null;
   };
+  providerName: string | null;
+  onAssign: () => void;
+  onConfirm: () => void;
+  onReject: () => void;
+  actionBusy: boolean;
 }) {
   const vehicle = order.vehicleInfo;
+  const isUnassigned = order.providerId == null;
+  // "approved" = customer accepted but not yet confirmed/scheduled by shop
+  const needsDispatch = order.status === "approved";
   return (
     <Card className="gap-0 py-0">
       <CardHeader className="px-3 py-3">
         <CardTitle className="text-xs font-semibold uppercase tracking-wide">
-          Booking
+          Appointment
         </CardTitle>
       </CardHeader>
       <CardContent className="px-3 pb-3 space-y-1.5">
@@ -352,10 +339,35 @@ function BookingPanel({
               .join(" ")}
           </p>
         )}
-        {order.bookingId && (
+        {order.scheduledAt && (
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Calendar className="w-3 h-3" />
-            Booking #{order.bookingId}
+            {new Date(order.scheduledAt).toLocaleString("en-US", {
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            })}
+          </p>
+        )}
+        <p className="flex items-center gap-1.5 text-xs">
+          <User className="w-3 h-3 text-muted-foreground" />
+          {isUnassigned ? (
+            <span className="text-amber-600 dark:text-amber-400 font-medium">
+              Unassigned
+            </span>
+          ) : (
+            <span className="text-muted-foreground">
+              {providerName ?? `Mechanic #${order.providerId}`}
+            </span>
+          )}
+        </p>
+        {order.location && (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <MapPin className="w-3 h-3" />
+            {order.location}
           </p>
         )}
         {order.adminNotes && (
@@ -365,6 +377,47 @@ function BookingPanel({
               <span className="font-medium text-foreground">Admin notes:</span>{" "}
               {order.adminNotes}
             </p>
+          </>
+        )}
+
+        {needsDispatch && (
+          <>
+            <Separator />
+            <div className="flex flex-col gap-1.5 pt-1">
+              {isUnassigned && (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={onAssign}
+                  disabled={actionBusy}
+                  className="justify-center text-blue-700 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40"
+                >
+                  <UserPlus className="size-3" />
+                  Assign mechanic
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={onConfirm}
+                disabled={actionBusy || isUnassigned}
+                title={isUnassigned ? "Assign a mechanic first" : undefined}
+                className="justify-center text-green-700 bg-green-100 hover:bg-green-200 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40 disabled:opacity-40"
+              >
+                <CheckCircle className="size-3" />
+                Confirm booking
+              </Button>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={onReject}
+                disabled={actionBusy}
+                className="justify-center text-red-700 bg-red-100 hover:bg-red-200 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+              >
+                <XCircle className="size-3" />
+                Reject booking
+              </Button>
+            </div>
           </>
         )}
       </CardContent>
@@ -502,6 +555,8 @@ export default function OrderDetailPage() {
 
   const [editMode, setEditMode] = useState<null | "items" | "customer">(null);
   const [reassignOpen, setReassignOpen] = useState(false);
+  const [bookingBusy, setBookingBusy] = useState(false);
+  const { mechanics } = useAdminMechanics();
   const {
     transitionStatus,
     saveItems,
@@ -563,7 +618,40 @@ export default function OrderDetailPage() {
 
   const showEstimatePanel = ESTIMATE_STATUSES.has(order.status);
   const showQuotePanel = QUOTE_STATUSES.has(order.status);
-  const showBookingPanel = BOOKING_STATUSES.has(order.status);
+  const showBookingPanel =
+    BOOKING_STATUSES.has(order.status) ||
+    order.scheduledAt != null ||
+    order.status === "approved";
+  const bookingProviderName =
+    order.providerId != null
+      ? (mechanics.find((m) => m.id === order.providerId)?.name ?? null)
+      : null;
+
+  async function handleBookingConfirm() {
+    setBookingBusy(true);
+    try {
+      await transitionStatus("scheduled");
+      await mutate();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to confirm booking");
+    } finally {
+      setBookingBusy(false);
+    }
+  }
+
+  async function handleBookingReject() {
+    const reason = prompt("Reason (optional):");
+    if (reason === null) return;
+    setBookingBusy(true);
+    try {
+      await transitionStatus("cancelled", reason || undefined);
+      await mutate();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to reject booking");
+    } finally {
+      setBookingBusy(false);
+    }
+  }
 
   async function handleTransition(newStatus: string) {
     let reason: string | undefined;
@@ -631,6 +719,35 @@ export default function OrderDetailPage() {
           Created {formatDateTime(order.createdAt)}
         </span>
       </div>
+
+      {/* AI draft review banner */}
+      {order.status === "draft" && (
+        <Card className="border-amber-500/40 bg-amber-50 dark:bg-amber-950/20 gap-0 py-0">
+          <CardContent className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex items-start gap-2 flex-1 min-w-0">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <p className="font-semibold text-amber-900 dark:text-amber-200">
+                  Pending shop review
+                </p>
+                <p className="text-amber-800 dark:text-amber-300/90 mt-0.5">
+                  AI drafted this estimate from the customer chat. Review line
+                  items and pricing, then send it to the customer.
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => handleTransition("estimated")}
+              disabled={transitioning}
+              className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              <Send className="w-3.5 h-3.5" />
+              Send to customer
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Progress bar */}
       <Card className="py-4 gap-0">
@@ -825,7 +942,16 @@ export default function OrderDetailPage() {
           {/* Status-contextual panels */}
           {showEstimatePanel && <EstimatePanel order={order} />}
           {showQuotePanel && <QuotePanel order={order} />}
-          {showBookingPanel && <BookingPanel order={order} />}
+          {showBookingPanel && (
+            <BookingPanel
+              order={order}
+              providerName={bookingProviderName}
+              onAssign={() => setReassignOpen(true)}
+              onConfirm={handleBookingConfirm}
+              onReject={handleBookingReject}
+              actionBusy={bookingBusy}
+            />
+          )}
 
           {/* Actions */}
           {allowed.length > 0 && (
@@ -870,38 +996,20 @@ export default function OrderDetailPage() {
                   <span className="text-muted-foreground">Order ID</span>
                   <span className="text-foreground font-mono">#{order.id}</span>
                 </div>
-                {order.estimateId && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Estimate</span>
-                    <span className="text-foreground font-mono">
-                      #{order.estimateId}
-                    </span>
-                  </div>
-                )}
-                {order.quoteId && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Quote</span>
-                    <span className="text-foreground font-mono">
-                      #{order.quoteId}
-                    </span>
-                  </div>
-                )}
-                {order.bookingId && (
+                {order.providerId != null && (
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">Booking</span>
+                    <span className="text-muted-foreground">Mechanic</span>
                     <span className="flex items-center gap-2">
-                      <span className="text-foreground font-mono">
-                        #{order.bookingId}
+                      <span className="text-foreground">
+                        {bookingProviderName ?? `#${order.providerId}`}
                       </span>
-                      {data.booking && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setReassignOpen(true)}
-                        >
-                          Reassign
-                        </Button>
-                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setReassignOpen(true)}
+                      >
+                        Reassign
+                      </Button>
                     </span>
                   </div>
                 )}
@@ -927,14 +1035,12 @@ export default function OrderDetailPage() {
         </CardContent>
       </Card>
 
-      {data.booking && (
-        <ReassignBookingDialog
-          booking={data.booking}
-          open={reassignOpen}
-          onOpenChange={setReassignOpen}
-          onReassigned={() => mutate()}
-        />
-      )}
+      <ReassignBookingDialog
+        order={order}
+        open={reassignOpen}
+        onOpenChange={setReassignOpen}
+        onAssigned={() => mutate()}
+      />
     </div>
   );
 }

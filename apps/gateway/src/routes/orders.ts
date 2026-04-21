@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import Stripe from "stripe";
 import { renderToStream } from "@react-pdf/renderer";
 import { db, schema } from "@hmls/agent/db";
 import { and, desc, eq } from "drizzle-orm";
@@ -7,23 +6,20 @@ import { type AdminEnv, requireAdmin } from "../middleware/admin.ts";
 import { EstimatePdf, notifyOrderStatusChange } from "@hmls/agent";
 import type { OrderItem } from "@hmls/agent/db";
 
-// New status machine
+// Simplified status machine — one source of truth for job lifecycle.
+// Payment is a property of a completed order (paid_at + payment_method),
+// not a lifecycle state.
 const TRANSITIONS: Record<string, string[]> = {
   draft: ["estimated", "cancelled"],
   estimated: ["approved", "declined", "cancelled"],
   declined: ["revised"],
   revised: ["estimated", "cancelled"],
-  approved: ["preauth", "cancelled"],
-  preauth: ["scheduled", "cancelled"],
+  approved: ["scheduled", "cancelled"],
   scheduled: ["in_progress", "cancelled"],
-  in_progress: ["invoiced", "cancelled"],
-  invoiced: ["paid", "void"],
-  paid: ["completed"],
-  completed: ["archived"],
+  in_progress: ["completed", "cancelled"],
   // terminal
-  archived: [],
+  completed: [],
   cancelled: [],
-  void: [],
 };
 
 // Editable statuses
@@ -181,20 +177,16 @@ orders.get("/:id", async (c) => {
     order.shareToken = token;
   }
 
-  const [customer, booking, events] = await Promise.all([
+  const [customer, events] = await Promise.all([
     order.customerId
       ? db.select().from(schema.customers).where(eq(schema.customers.id, order.customerId)).limit(1)
-        .then((r) => r[0])
-      : null,
-    order.bookingId
-      ? db.select().from(schema.bookings).where(eq(schema.bookings.id, order.bookingId)).limit(1)
         .then((r) => r[0])
       : null,
     db.select().from(schema.orderEvents).where(eq(schema.orderEvents.orderId, id))
       .orderBy(desc(schema.orderEvents.createdAt)),
   ]);
 
-  return c.json({ order, customer, booking, events });
+  return c.json({ order, customer, events });
 });
 
 // PATCH /orders/:id — edit order items/notes (only in editable statuses) or contact snapshot (any status)
@@ -556,22 +548,30 @@ orders.post("/:id/events", async (c) => {
   return c.json(event, 201);
 });
 
-// POST /orders/:id/capture — capture pre-authorized payment (admin only)
-orders.post("/:id/capture", async (c) => {
+// POST /orders/:id/payment — mark a completed/in-progress order as paid.
+// Payment is a property, not a lifecycle state — this only stamps the order.
+orders.post("/:id/payment", async (c) => {
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id) || id <= 0) {
     return c.json({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
   }
 
-  const body = await c.req.json<{ finalAmountCents: number }>();
-  if (!body.finalAmountCents || body.finalAmountCents <= 0) {
+  const body = await c.req.json<{
+    amountCents: number;
+    method: string;
+    reference?: string;
+    paidAt?: string;
+  }>();
+
+  if (!Number.isFinite(body.amountCents) || body.amountCents <= 0) {
     return c.json(
-      {
-        error: {
-          code: "BAD_REQUEST",
-          message: "finalAmountCents is required and must be positive",
-        },
-      },
+      { error: { code: "BAD_REQUEST", message: "amountCents must be a positive number" } },
+      400,
+    );
+  }
+  if (!body.method) {
+    return c.json(
+      { error: { code: "BAD_REQUEST", message: "method is required" } },
       400,
     );
   }
@@ -586,90 +586,30 @@ orders.post("/:id/capture", async (c) => {
     return c.json({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
   }
 
-  if (order.status !== "invoiced") {
-    return c.json(
-      { error: { code: "BAD_REQUEST", message: `Order is '${order.status}', not 'invoiced'` } },
-      400,
-    );
-  }
-
-  if (!order.stripePaymentIntentId) {
-    return c.json(
-      { error: { code: "BAD_REQUEST", message: "No payment intent on this order" } },
-      400,
-    );
-  }
-
-  const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
-  if (!stripeSecretKey) {
-    return c.json({ error: { code: "INTERNAL_ERROR", message: "Stripe not configured" } }, 500);
-  }
-
-  const stripe = new Stripe(stripeSecretKey, { apiVersion: "2026-02-25.clover" });
   const authUser = c.get("authUser");
   const actor = authUser.email ?? "admin";
 
-  const capturedAmount = body.finalAmountCents;
-
-  try {
-    if (body.finalAmountCents <= (order.preauthAmountCents ?? 0)) {
-      // Capture within pre-auth amount
-      await stripe.paymentIntents.capture(order.stripePaymentIntentId, {
-        amount_to_capture: body.finalAmountCents,
-      });
-    } else {
-      // Final amount exceeds pre-auth — cancel original and create new charge
-      const originalPi = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId);
-      await stripe.paymentIntents.cancel(order.stripePaymentIntentId);
-
-      await stripe.paymentIntents.create({
-        amount: body.finalAmountCents,
-        currency: "usd",
-        confirm: true,
-        customer: originalPi.customer as string,
-        payment_method: originalPi.payment_method as string,
-        metadata: { orderId: String(order.id) },
-        off_session: true,
-      });
-    }
-  } catch (err) {
-    console.error(`[capture] Error capturing payment for order ${id}:`, err);
-    return c.json(
-      { error: { code: "PAYMENT_FAILED", message: "Failed to capture payment" } },
-      402,
-    );
-  }
-
-  const history = Array.isArray(order.statusHistory) ? order.statusHistory : [];
   const [updated] = await db
     .update(schema.orders)
     .set({
-      status: "paid",
-      capturedAmountCents: capturedAmount,
-      statusHistory: [
-        ...history,
-        { status: "paid", timestamp: new Date().toISOString(), actor },
-      ],
+      paidAt: body.paidAt ? new Date(body.paidAt) : new Date(),
+      paymentMethod: body.method,
+      paymentReference: body.reference ?? null,
+      capturedAmountCents: body.amountCents,
       updatedAt: new Date(),
     })
-    .where(and(eq(schema.orders.id, id), eq(schema.orders.status, "invoiced")))
+    .where(eq(schema.orders.id, id))
     .returning();
 
-  if (!updated) {
-    return c.json(
-      { error: { code: "CONFLICT", message: "Order status changed concurrently" } },
-      409,
-    );
-  }
-
-  await logOrderEvent(id, "status_change", actor, {
-    fromStatus: "invoiced",
-    toStatus: "paid",
-    metadata: { capturedAmountCents: capturedAmount, requestedAmountCents: body.finalAmountCents },
+  await logOrderEvent(id, "payment_recorded", actor, {
+    metadata: {
+      amountCents: body.amountCents,
+      method: body.method,
+      reference: body.reference ?? null,
+    },
   });
 
-  notifyOrderStatusChange(id, "paid");
-  return c.json({ success: true, capturedAmountCents: capturedAmount });
+  return c.json(updated);
 });
 
 // PATCH /orders/:id/notes — update admin notes

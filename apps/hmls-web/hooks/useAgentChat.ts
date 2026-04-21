@@ -254,7 +254,7 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
   );
 
   const selectSlot = useCallback(
-    (providerId: number, time: string) => {
+    (time: string) => {
       setPendingSlotPicker(null);
       const timeLabel = new Date(time).toLocaleTimeString("en-US", {
         hour: "numeric",
@@ -266,9 +266,7 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
         month: "long",
         day: "numeric",
       });
-      sendMessage(
-        `I'd like the ${timeLabel} slot on ${dateLabel} with provider ${providerId}.`,
-      );
+      sendMessage(`I'd like the ${timeLabel} slot on ${dateLabel}.`);
     },
     [sendMessage, setPendingSlotPicker],
   );

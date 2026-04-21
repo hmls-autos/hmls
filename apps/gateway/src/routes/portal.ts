@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import Stripe from "stripe";
 import { db, schema } from "@hmls/agent/db";
 import { and, desc, eq } from "drizzle-orm";
 import { Errors } from "@hmls/shared/errors";
@@ -76,16 +75,22 @@ portal.put("/me", async (c) => {
   return c.json(updated);
 });
 
-// GET /me/bookings — customer's bookings
+// GET /me/bookings — orders with scheduling (unified after Layer 3)
 portal.get("/me/bookings", async (c) => {
   const customerId = c.get("customerId");
   const rows = await db
     .select()
-    .from(schema.bookings)
-    .where(eq(schema.bookings.customerId, customerId))
-    .orderBy(desc(schema.bookings.scheduledAt));
+    .from(schema.orders)
+    .where(
+      and(
+        eq(schema.orders.customerId, customerId),
+        // Only orders that have been scheduled (scheduled_at set)
+      ),
+    )
+    .orderBy(desc(schema.orders.scheduledAt));
 
-  return c.json(rows);
+  // Filter in JS so we still include orders without scheduled_at if none match
+  return c.json(rows.filter((r) => r.scheduledAt != null));
 });
 
 // GET /me/orders — customer's orders (unified — replaces estimates + quotes)
@@ -271,8 +276,10 @@ portal.post("/me/orders/:id/decline", async (c) => {
   return c.json(updated);
 });
 
-// POST /me/orders/:id/preauth — customer authorizes payment (approved → preauth)
-portal.post("/me/orders/:id/preauth", async (c) => {
+// POST /me/orders/:id/cancel-booking — customer cancels a scheduled order
+// before the shop has confirmed. Only valid while the order is still in the
+// scheduled state.
+portal.post("/me/orders/:id/cancel-booking", async (c) => {
   const customerId = c.get("customerId");
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id) || id <= 0) {
@@ -289,66 +296,34 @@ portal.post("/me/orders/:id/preauth", async (c) => {
     return c.json({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
   }
 
-  if (order.status !== "approved") {
+  if (order.status !== "scheduled") {
     return c.json(
-      { error: { code: "BAD_REQUEST", message: `Order is '${order.status}', not 'approved'` } },
+      {
+        error: {
+          code: "BAD_REQUEST",
+          message:
+            `Order is '${order.status}', only 'scheduled' orders can be cancelled by customer`,
+        },
+      },
       400,
     );
   }
 
-  const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
-  if (!stripeSecretKey) {
-    return c.json({ error: { code: "INTERNAL_ERROR", message: "Stripe not configured" } }, 500);
-  }
-
-  const stripe = new Stripe(stripeSecretKey, { apiVersion: "2026-02-25.clover" });
-
-  // Ensure customer has a Stripe customer ID
-  const [customer] = await db
-    .select()
-    .from(schema.customers)
-    .where(eq(schema.customers.id, customerId))
-    .limit(1);
-
-  let stripeCustomerId = customer?.stripeCustomerId;
-  if (!stripeCustomerId) {
-    const stripeCustomer = await stripe.customers.create({
-      email: customer?.email ?? undefined,
-      name: customer?.name ?? undefined,
-      phone: customer?.phone ?? undefined,
-      metadata: { customerId: String(customerId) },
-    });
-    stripeCustomerId = stripeCustomer.id;
-    await db
-      .update(schema.customers)
-      .set({ stripeCustomerId: stripeCustomer.id })
-      .where(eq(schema.customers.id, customerId));
-  }
-
-  const preauthAmountCents = Math.ceil(order.subtotalCents * 1.15);
-
-  const pi = await stripe.paymentIntents.create({
-    amount: preauthAmountCents,
-    currency: "usd",
-    capture_method: "manual",
-    customer: stripeCustomerId,
-    metadata: { orderId: String(order.id) },
-  });
-
+  const body = await c.req.json<{ reason?: string }>().catch(() => ({ reason: undefined }));
   const history = Array.isArray(order.statusHistory) ? order.statusHistory : [];
+
   const [updated] = await db
     .update(schema.orders)
     .set({
-      stripePaymentIntentId: pi.id,
-      preauthAmountCents,
-      status: "preauth",
+      status: "cancelled",
+      cancellationReason: body.reason ?? null,
       statusHistory: [
         ...history,
-        { status: "preauth", timestamp: new Date().toISOString(), actor: "customer" },
+        { status: "cancelled", timestamp: new Date().toISOString(), actor: "customer" },
       ],
       updatedAt: new Date(),
     })
-    .where(and(eq(schema.orders.id, id), eq(schema.orders.status, "approved")))
+    .where(and(eq(schema.orders.id, id), eq(schema.orders.status, "scheduled")))
     .returning();
 
   if (!updated) {
@@ -358,121 +333,7 @@ portal.post("/me/orders/:id/preauth", async (c) => {
     );
   }
 
-  await db.insert(schema.orderEvents).values({
-    orderId: id,
-    eventType: "status_change",
-    fromStatus: "approved",
-    toStatus: "preauth",
-    actor: "customer",
-    metadata: {},
-  });
-
-  notifyOrderStatusChange(id, "preauth");
-  return c.json({ clientSecret: pi.client_secret, preauthAmountCents });
-});
-
-// POST /me/orders/:id/confirm-preauth — verify card was confirmed on frontend
-portal.post("/me/orders/:id/confirm-preauth", async (c) => {
-  const customerId = c.get("customerId");
-  const id = Number(c.req.param("id"));
-  if (!Number.isInteger(id) || id <= 0) {
-    return c.json({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
-  }
-
-  const [order] = await db
-    .select()
-    .from(schema.orders)
-    .where(eq(schema.orders.id, id))
-    .limit(1);
-
-  if (!order || order.customerId !== customerId) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
-  }
-
-  if (!order.stripePaymentIntentId) {
-    return c.json(
-      { error: { code: "BAD_REQUEST", message: "No payment intent on this order" } },
-      400,
-    );
-  }
-
-  const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
-  if (!stripeSecretKey) {
-    return c.json({ error: { code: "INTERNAL_ERROR", message: "Stripe not configured" } }, 500);
-  }
-
-  const stripe = new Stripe(stripeSecretKey, { apiVersion: "2026-02-25.clover" });
-  const pi = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId);
-
-  if (pi.status !== "requires_capture") {
-    return c.json(
-      {
-        error: {
-          code: "BAD_REQUEST",
-          message: `PaymentIntent status is '${pi.status}', expected 'requires_capture'`,
-        },
-      },
-      400,
-    );
-  }
-
-  return c.json({ success: true, status: "preauth" });
-});
-
-// POST /me/bookings/:id/cancel — customer cancels a requested booking
-portal.post("/me/bookings/:id/cancel", async (c) => {
-  const customerId = c.get("customerId");
-  const id = Number(c.req.param("id"));
-  if (!Number.isInteger(id) || id <= 0) {
-    return c.json({ error: { code: "BAD_REQUEST", message: "Invalid booking ID" } }, 400);
-  }
-
-  const [booking] = await db
-    .select()
-    .from(schema.bookings)
-    .where(eq(schema.bookings.id, id))
-    .limit(1);
-
-  if (!booking || booking.customerId !== customerId) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Booking not found" } }, 404);
-  }
-
-  if (booking.status !== "requested") {
-    return c.json(
-      {
-        error: {
-          code: "BAD_REQUEST",
-          message:
-            `Booking is '${booking.status}', only 'requested' bookings can be cancelled by customer`,
-        },
-      },
-      400,
-    );
-  }
-
-  const body = await c.req.json<{ reason?: string }>().catch(() => ({ reason: undefined }));
-
-  const [updated] = await db
-    .update(schema.bookings)
-    .set({
-      status: "cancelled",
-      customerNotes: body.reason
-        ? `${
-          booking.customerNotes ? booking.customerNotes + "\n" : ""
-        }Cancellation reason: ${body.reason}`
-        : booking.customerNotes,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(schema.bookings.id, id), eq(schema.bookings.status, "requested")))
-    .returning();
-
-  if (!updated) {
-    return c.json(
-      { error: { code: "CONFLICT", message: "Booking status changed concurrently" } },
-      409,
-    );
-  }
-
+  notifyOrderStatusChange(id, "cancelled");
   return c.json(updated);
 });
 

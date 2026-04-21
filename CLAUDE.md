@@ -32,8 +32,51 @@ deno task --cwd apps/agent db:studio    # Drizzle Studio GUI
 ```bash
 cd apps/hmls-web && bun install       # Install web dependencies
 git config core.hooksPath .githooks  # Enable pre-commit hook
-# Set DATABASE_URL in .env.local to your Supabase connection string
+
+# Secrets — this repo uses Infisical (not .env.local). Config: .infisical.json at root.
+# Run dev servers via infisical so secrets are injected:
+infisical run --env=dev -- deno task dev:api
+cd apps/hmls-web && GATEWAY_URL=http://localhost:8080 infisical run --env=dev -- bun run dev
+# Note: GATEWAY_URL override is required for local web — the /api/chat Next.js route
+# defaults to https://api.hmls.autos (prod) and must be pointed at the local API.
 ```
+
+## Product Direction (as of 2026-04-20)
+
+**Positioning**: AI-powered auto repair estimates for mechanic shops (SaaS). HMLS is the software
+vendor; individual shops are the customers. One of those shops is HMLS's own self-operated mobile
+mechanic business (dogfood).
+
+**Core wedge**: AI Service Advisor. A customer chats with the shop's AI, gets a real (OLP-priced)
+estimate, shop team reviews and sends, customer approves, mechanic assigned, job scheduled,
+completed. No payment automation by default — shops record payments manually. Stripe plumbing kept
+dormant for shops that want opt-in auto-capture later.
+
+**Single source of truth**: `orders` is THE entity. All work-lifecycle data (including scheduling,
+provider assignment, location, symptoms, photos) lives on the order. Legacy tables (`estimates`,
+`quotes`, `bookings`) are **dropped** (Layer 3 complete).
+
+## Order lifecycle (simplified status machine)
+
+```
+draft → estimated → approved → scheduled → in_progress → completed
+           ↓           ↓                        ↓
+         declined  cancelled                 cancelled
+           ↓
+         revised → estimated
+```
+
+- `draft` — AI-generated, awaiting shop review
+- `estimated` — shop sent the estimate to customer
+- `approved` — customer accepted; shop needs to assign mechanic + confirm booking
+- `scheduled` — mechanic assigned + booking confirmed
+- `in_progress` — mechanic working
+- `completed` — done (payment tracked via `paid_at` / `payment_method` / `payment_reference`
+  columns, not a status)
+- Branches: `declined` (customer declined) / `revised` (shop re-sends) / `cancelled` (terminal)
+
+**Removed states** (migrated in `0008_simplify_status_machine.sql`): `preauth → approved`,
+`invoiced → in_progress`, `paid → completed + paid_at`, `archived → completed`, `void → cancelled`.
 
 ## Architecture
 
@@ -79,11 +122,20 @@ domains.
 
 **Gateway Routes** (`apps/gateway/src/routes/`): Hono sub-routers mounted by `hmls-app.ts`
 
-- `estimates.ts` - GET estimate, GET estimate PDF
-- `chat.ts` - AG-UI streaming endpoint
-- `orders.ts`, `admin.ts`, `portal.ts` - CRUD routes
-- `webhook.ts` - Stripe webhook handler
-- `fixo/` - Fixo sub-app routes (sessions, input, chat, billing, reports, vehicles)
+- `chat.ts` / `staff-chat.ts` - AG-UI streaming endpoints (customer + admin)
+- `orders.ts` - admin order CRUD + status transitions + `POST /:id/payment` (manual mark-paid)
+- `portal.ts` - customer-facing order/booking endpoints
+- `admin.ts` - dashboard, customers, bookings CRUD
+- `admin-mechanics.ts` - mechanic management + booking reassignment
+- `mechanic.ts` - mechanic self-service (availability, time-off)
+- `estimates.ts` - public PDF route (reads orders now; legacy `estimates` table unused)
+- `webhook.ts` - Stripe webhook (invoice.paid / payment_intent.succeeded only — quote handlers
+  removed)
+- `fixo/` - Fixo sub-app routes
+
+**Deleted recently** (2026-04-20): legacy `/admin/estimates`, `/admin/quotes` CRUD routes;
+customer-side `/preauth`, `/confirm-preauth`; admin-side `/capture`; Stripe `quote.accepted`
+webhook. `apps/agent/src/hmls/tools/stripe.ts` (dead `create_quote` tool) deleted.
 
 **Gateway Middleware** (`apps/gateway/src/middleware/`): Auth + admin middleware
 
@@ -96,12 +148,33 @@ domains.
 - `@hmls/agent` → Agent factories, types, fixo lib, notifications, PDF components
 - `@hmls/agent/db` → Drizzle DB client + schema
 
-**HMLS Agent** (`apps/agent/src/hmls/`): Zypher + Gemini 2.5 Flash
+**HMLS Agent** (`apps/agent/src/hmls/`): Gemini 3 Flash Preview
 
-- `agent.ts` - createHmlsAgent() factory
-- `tools/` - stripe, scheduling, labor-lookup, parts-lookup, ask-user-question
-- `skills/estimate/` - Pricing, PDF generation
-- `pdf/EstimatePdf.tsx` - React-PDF estimate template
+- `agent.ts` - runHmlsAgent() — customer-facing (no stripe tools, scoped customer-order actions)
+- `staff-agent.ts` - runStaffAgent() — admin-facing (includes adminOrderTools: create_order,
+  find_customer, list_orders)
+- `tools/` - scheduling, labor-lookup, parts-lookup, ask-user-question, admin-order-tools,
+  customer-order-actions, customer-booking-actions, order-ops
+- `skills/estimate/` - Pricing engine (OLP labor + parts + fees + discount), PDF template
+- `common/tools/estimate.ts` - `create_estimate` tool — writes directly to `orders` table at
+  status=`draft`
+  - Customer agent: `customerId` resolved from auth context (ctx.customerId), not AI-supplied
+  - Staff agent: AI passes `customerId` explicitly for walk-in order creation
+
+### Agent flow (customer chat)
+
+1. Customer enters `/chat` (login required)
+2. AI collects vehicle, symptoms; calls `lookup_labor_time` + `create_estimate`
+3. Estimate lands as `orders` row with status=`draft`, `pendingReview: true` returned in tool result
+4. Customer sees EstimateCard with "Pending review" badge (not "Not saved")
+5. Admin reviews in `/admin/orders?status=draft` and clicks "Send to customer" → status=`estimated`
+6. Customer approves in `/portal/orders/:id` → status=`approved`
+7. Admin assigns mechanic + confirms booking in order detail page → status=`scheduled`
+
+### Agent flow (admin walk-in)
+
+Admin opens `/admin/chat` → tells staff agent ("create order for John, 2020 Civic, oil change") →
+staff agent calls `find_customer` / `create_order` / `create_estimate` with explicit customerId.
 
 **Fixo Agent** (`apps/agent/src/fixo/`): Zypher + Gemini 2.5 Flash
 
@@ -112,10 +185,36 @@ domains.
 
 **Database Schema** (`apps/agent/src/db/schema.ts`): Drizzle ORM
 
-- customers, conversations, messages, bookings, quotes, estimates
-- `pricingConfig` / `vehiclePricing` tables for dynamic pricing
-- `olpVehicles` / `olpLaborTimes` tables for OLP labor data
-- `userProfiles` / `vehicles` / `fixoSessions` / `fixoMedia` / `obdCodes` for fixo
+- `orders` — **single source of truth** for the work lifecycle
+  - Lifecycle: `status`, `statusHistory`, `revisionNumber`, `cancellationReason`
+  - Content: `items` (jsonb), `notes`, `adminNotes`, `subtotalCents`, `priceRangeLow/HighCents`
+  - Vehicle + symptoms: `vehicleInfo`, `symptomDescription`, `photoUrls`, `customerNotes`
+  - Contact snapshot: `contactName/Email/Phone/Address`
+  - Scheduling: `scheduledAt`, `appointmentEnd`, `durationMinutes`, `providerId`, `location`,
+    `locationLat/Lng`, `accessInstructions`, `blockedRange` (tstzrange, auto-computed by trigger)
+  - Sharing: `shareToken`, `validDays`, `expiresAt`
+  - Payment: `paidAt`, `paymentMethod`, `paymentReference`, `capturedAmountCents`
+- `order_events` — audit log (fromStatus, toStatus, actor, metadata)
+- `customers`, `shops` (multi-tenant foundation, not yet enforced), `providers` (mechanics),
+  `providerAvailability`, `providerScheduleOverrides`
+- `pricingConfig` for dynamic pricing config
+- `olpVehicles` / `olpLaborTimes` for OLP labor reference data
+- `userProfiles` / `vehicles` / `fixoSessions` / `fixoMedia` / `obdCodes` / `fixoEstimates` for fixo
+- **Dropped (Layer 3)**: `estimates`, `quotes`, `bookings` tables all removed. Booking data is now
+  part of the order row.
+
+### Migrations
+
+- `0001-0006` - Orders lifecycle, contact snapshot, RBAC hook, etc.
+- `0007` - Fix `compute_blocked_range` trigger (was referencing non-existent
+  `buffer_before/after_minutes` cols)
+- `0008` - Simplify status machine (13→9 states): drop preauth/invoiced/paid/archived/void; add
+  paid_at/payment_method/payment_reference
+- `0009` - Layer 3 PR A: orders absorbs booking scheduling fields; move `compute_blocked_range`
+  trigger from bookings to orders; backfill linked bookings
+- `0010` - Layer 3 PR C: drop `bookings`, `estimates`, `quotes` tables; drop orders legacy FK
+  columns (estimate_id, quote_id, booking_id, stripe_quote_id, stripe_invoice_id,
+  stripe_payment_intent_id, preauth_amount_cents)
 
 ## Pre-Push CI
 
@@ -214,3 +313,25 @@ vercel env add NEXT_PUBLIC_SUPABASE_URL --scope spinsirrs-projects
 vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY --scope spinsirrs-projects
 vercel env add NEXT_PUBLIC_AGENT_URL --scope spinsirrs-projects  # https://api.fixo.hmls.autos
 ```
+
+## Recent session summary (2026-04-20)
+
+- **Layer 1 done**: status machine simplified from 13→9 states. Migration `0008` remaps legacy data.
+  New `paid_at` / `payment_method` / `payment_reference` columns added. `/capture`, `/preauth`,
+  `/confirm-preauth` routes deleted.
+- **Layer 2 done**: admin UI consolidated. Dashboard shows order-based stats. `/admin/schedule`
+  deleted — Assign/Confirm/Reject actions migrated into order detail page BookingPanel.
+  `/admin/estimates` and `/admin/quotes` admin routes deleted.
+- **Layer 3 done**: orders absorbed bookings. Migrations `0009` (add scheduling columns + trigger +
+  backfill) and `0010` (drop bookings/estimates/quotes + legacy FK columns) applied. All code paths
+  read/write `orders` directly. `notifyBookingStatusChange` removed; mechanic's confirm/reject
+  booking flow removed (admin does it via order status transitions). Customer cancel-booking is now
+  an order-level action (`scheduled → cancelled`). Stripe webhook is now a no-op (dormant).
+- **Agent UX hardened**: EstimateCard shows "Pending review" badge when order is draft.
+  `create_estimate` pulls customerId from auth context for customer chat; staff agent still passes
+  it explicitly for walk-ins. SlotPicker is date + time dropdowns, orders created unassigned (admin
+  dispatches).
+- **Known deferred**: Multi-shop tenancy — `shops` table exists but no code path scopes by `shop_id`
+  yet. BAR § 3353 compliance flow — design in the air, not implemented. Stripe auto- capture is
+  dormant — needs re-implementation if a shop opts in (add payment columns back selectively, wire
+  webhook handlers).

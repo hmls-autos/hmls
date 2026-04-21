@@ -90,20 +90,18 @@ export default function Navbar() {
           })()}
           {isUserLoggedIn && (
             <>
-              {!isAdmin && (
-                <Link
-                  href={portalLink.href}
-                  className={`text-sm transition-colors rounded focus-visible:ring-2 focus-visible:ring-red-primary ${
-                    pathname.startsWith(portalLink.href)
-                      ? "text-red-400"
-                      : isTransparent
-                        ? "text-white/70 hover:text-white"
-                        : "text-text-secondary hover:text-text"
-                  }`}
-                >
-                  {portalLink.label}
-                </Link>
-              )}
+              <Link
+                href={portalLink.href}
+                className={`text-sm transition-colors rounded focus-visible:ring-2 focus-visible:ring-red-primary ${
+                  pathname.startsWith(portalLink.href)
+                    ? "text-red-400"
+                    : isTransparent
+                      ? "text-white/70 hover:text-white"
+                      : "text-text-secondary hover:text-text"
+                }`}
+              >
+                {isAdmin ? "View as Customer" : portalLink.label}
+              </Link>
               {isAdmin && (
                 <Link
                   href={adminLink.href}

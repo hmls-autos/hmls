@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  CalendarDays,
   ClipboardList,
   LayoutDashboard,
   MessageSquare,
@@ -15,7 +14,6 @@ import Navbar from "@/components/Navbar";
 const navItems: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/orders", label: "Orders", icon: ClipboardList },
-  { href: "/admin/schedule", label: "Schedule", icon: CalendarDays },
   { href: "/admin/mechanics", label: "Mechanics", icon: Wrench },
   { href: "/admin/customers", label: "Customers", icon: Users },
   { href: "/admin/chat", label: "Chat", icon: MessageSquare },

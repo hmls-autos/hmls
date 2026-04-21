@@ -4,11 +4,12 @@ import { motion } from "framer-motion";
 
 export interface BookingConfirmationData {
   success: boolean;
-  bookingId: number;
-  status: string;
-  providerName: string;
+  orderId?: number;
+  bookingId?: number; // legacy — kept for backwards compat
+  status?: string;
+  providerName?: string;
   appointmentStart: string;
-  appointmentEnd: string;
+  appointmentEnd?: string;
   vehicle: string;
   serviceType: string;
   location: string;
@@ -98,7 +99,7 @@ export function BookingConfirmation({ data }: BookingConfirmationProps) {
       </div>
 
       <div className="mt-3 text-xs text-green-600">
-        Booking #{data.bookingId}
+        Order #{data.orderId ?? data.bookingId ?? "—"}
       </div>
     </motion.div>
   );

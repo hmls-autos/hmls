@@ -1,61 +1,37 @@
 import useSWR from "swr";
-import { authFetch, fetcher } from "@/lib/fetcher";
-import type {
-  Booking,
-  Customer,
-  Estimate,
-  Order,
-  OrderDetail,
-  Quote,
-} from "@/lib/types";
+import { fetcher } from "@/lib/fetcher";
+import type { Customer, Order, OrderDetail } from "@/lib/types";
 
 export type { Customer };
 
 interface DashboardStats {
   customers: number;
-  bookings: number;
-  estimates: number;
-  quotes: number;
+  orders: number;
+  pendingReview: number;
+  pendingApprovals: number;
+  activeJobs: number;
   revenue30d: number;
+}
+
+interface UpcomingOrderRow {
+  id: number;
+  scheduledAt: string | null;
+  contactName: string | null;
+  vehicleInfo: { make?: string; model?: string; year?: string } | null;
+  status: string;
 }
 
 interface DashboardData {
   stats: DashboardStats;
-  upcomingBookings: Booking[];
+  upcomingOrders: UpcomingOrderRow[];
   recentCustomers: Customer[];
-  pendingQuotes: (Quote & {
-    customer?: { name: string | null; email: string | null };
-  })[];
 }
-
-export type AdminBooking = Booking & {
-  customer: { name: string | null; email: string | null; phone: string | null };
-  staffNotes?: string | null;
-};
-
-export type AdminEstimate = Estimate & {
-  customer: {
-    name: string | null;
-    email: string | null;
-    phone: string | null;
-    address: string | null;
-    vehicleInfo: { make?: string; model?: string; year?: string } | null;
-  };
-  orderId: number | null;
-  orderStatus: string | null;
-};
-
-export type AdminQuote = Quote & {
-  customer: { name: string | null; email: string | null };
-};
 
 export type AdminOrder = Order;
 
 interface CustomerDetail {
   customer: Customer;
-  bookings: Booking[];
-  estimates: Estimate[];
-  quotes: Quote[];
+  orders: Order[];
 }
 
 export function useAdminDashboard() {
@@ -83,52 +59,6 @@ export function useAdminCustomer(id: number | null) {
   return { data, isLoading, isError: !!error, mutate };
 }
 
-export function useAdminBookings(
-  status?: string,
-  dateFrom?: string,
-  dateTo?: string,
-) {
-  const p = new URLSearchParams();
-  if (status) p.set("status", status);
-  if (dateFrom) p.set("dateFrom", dateFrom);
-  if (dateTo) p.set("dateTo", dateTo);
-  const qs = p.toString() ? `?${p.toString()}` : "";
-  const { data, error, isLoading, mutate } = useSWR<AdminBooking[]>(
-    `/api/admin/bookings${qs}`,
-    fetcher,
-  );
-
-  async function confirmBooking(id: number) {
-    await authFetch(`/api/admin/bookings/${id}/confirm`, { method: "POST" });
-    await mutate();
-  }
-
-  async function rejectBooking(id: number, staffNotes?: string) {
-    await authFetch(`/api/admin/bookings/${id}/reject`, {
-      method: "POST",
-      body: JSON.stringify({ staffNotes }),
-    });
-    await mutate();
-  }
-
-  return {
-    bookings: data ?? [],
-    isLoading,
-    isError: !!error,
-    mutate,
-    confirmBooking,
-    rejectBooking,
-  };
-}
-
-export function useAdminEstimates() {
-  const { data, error, isLoading, mutate } = useSWR<AdminEstimate[]>(
-    "/api/admin/estimates",
-    fetcher,
-  );
-  return { estimates: data ?? [], isLoading, isError: !!error, mutate };
-}
-
 export function useAdminOrder(id: number | string | null) {
   const { data, error, isLoading, mutate } = useSWR<OrderDetail>(
     id ? `/api/admin/orders/${id}` : null,
@@ -144,13 +74,4 @@ export function useAdminOrders(status?: string) {
     fetcher,
   );
   return { orders: data ?? [], isLoading, isError: !!error, mutate };
-}
-
-export function useAdminQuotes(status?: string) {
-  const params = status ? `?status=${encodeURIComponent(status)}` : "";
-  const { data, error, isLoading, mutate } = useSWR<AdminQuote[]>(
-    `/api/admin/quotes${params}`,
-    fetcher,
-  );
-  return { quotes: data ?? [], isLoading, isError: !!error, mutate };
 }

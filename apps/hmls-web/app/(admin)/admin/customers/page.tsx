@@ -303,7 +303,7 @@ function CustomerDetail({
     return <CustomerDetailSkeleton />;
   }
 
-  const { customer, bookings, estimates, quotes } = data;
+  const { customer, orders } = data;
 
   // ---------- Edit mode ----------
   if (editing) {
@@ -425,66 +425,32 @@ function CustomerDetail({
           </p>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center border-t border-border pt-4 mt-4">
-          <div>
-            <p className="text-xl font-display font-bold text-foreground">
-              {bookings.length}
-            </p>
-            <p className="text-xs text-muted-foreground">Bookings</p>
-          </div>
-          <div>
-            <p className="text-xl font-display font-bold text-foreground">
-              {estimates.length}
-            </p>
-            <p className="text-xs text-muted-foreground">Estimates</p>
-          </div>
-          <div>
-            <p className="text-xl font-display font-bold text-foreground">
-              {quotes.length}
-            </p>
-            <p className="text-xs text-muted-foreground">Quotes</p>
-          </div>
+        <div className="text-center border-t border-border pt-4 mt-4">
+          <p className="text-xl font-display font-bold text-foreground">
+            {orders.length}
+          </p>
+          <p className="text-xs text-muted-foreground">Orders</p>
         </div>
 
-        {bookings.length > 0 && (
+        {orders.length > 0 && (
           <div className="mt-4 border-t border-border pt-4">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-              Bookings
+              Orders
             </h4>
             <div className="space-y-2">
-              {bookings.slice(0, 5).map((b) => (
+              {orders.slice(0, 5).map((o) => (
                 <div
-                  key={b.id}
+                  key={o.id}
                   className="flex items-center justify-between text-sm"
                 >
                   <span className="text-foreground truncate">
-                    {b.serviceType}
+                    #{o.id} &middot;{" "}
+                    <span className="text-muted-foreground capitalize">
+                      {o.status.replace(/_/g, " ")}
+                    </span>
                   </span>
                   <span className="text-xs text-muted-foreground shrink-0 ml-2">
-                    {formatDate(b.scheduledAt)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {quotes.length > 0 && (
-          <div className="mt-4 border-t border-border pt-4">
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-              Quotes
-            </h4>
-            <div className="space-y-2">
-              {quotes.slice(0, 5).map((q) => (
-                <div
-                  key={q.id}
-                  className="flex items-center justify-between text-sm"
-                >
-                  <span className="text-foreground">
-                    {formatCents(q.totalAmount)}
-                  </span>
-                  <span className="text-xs text-muted-foreground capitalize">
-                    {q.status}
+                    {formatCents(o.subtotalCents ?? 0)}
                   </span>
                 </div>
               ))}

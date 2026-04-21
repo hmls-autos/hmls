@@ -30,7 +30,7 @@ export {
 } from "./fixo/lib/storage.ts";
 
 // Notifications
-export { notifyBookingStatusChange, notifyOrderStatusChange } from "./lib/notifications.ts";
+export { notifyOrderStatusChange } from "./lib/notifications.ts";
 
 // PDF components (for gateway rendering)
 export { EstimatePdf } from "./hmls/pdf/EstimatePdf.tsx";

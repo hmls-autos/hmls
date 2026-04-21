@@ -2,13 +2,13 @@
 
 import { useMemo } from "react";
 import type { ScheduleOverride, WeeklyRow } from "@/hooks/useAdminMechanics";
-import type { Booking } from "@/lib/types";
+import type { Order } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
   weekly: WeeklyRow[];
   overrides: ScheduleOverride[];
-  bookings: Booking[];
+  bookings: Order[];
   /** Inclusive — first day of strip. Defaults to today. */
   startDate?: Date;
 }
@@ -30,14 +30,16 @@ function minutesToHM(total: number) {
 
 function bookingColor(status: string): string {
   switch (status) {
-    case "confirmed":
+    case "scheduled":
       return "bg-blue-500";
-    case "requested":
+    case "approved":
       return "bg-amber-500";
+    case "in_progress":
+      return "bg-orange-500";
     case "completed":
       return "bg-green-500";
-    case "rejected":
     case "cancelled":
+    case "declined":
       return "bg-neutral-400";
     default:
       return "bg-purple-500";
@@ -104,6 +106,7 @@ export function ScheduleStrip({
         const dayEnd = DAY_END_HOUR * 60;
 
         const dayBookings = bookings.filter((b) => {
+          if (!b.scheduledAt) return false;
           const d = new Date(b.scheduledAt);
           return d.toISOString().slice(0, 10) === dateKey;
         });
@@ -139,9 +142,10 @@ export function ScheduleStrip({
               })}
 
               {dayBookings.map((b) => {
+                if (!b.scheduledAt) return null;
                 const d = new Date(b.scheduledAt);
                 const startMin = d.getHours() * 60 + d.getMinutes();
-                const endMin = startMin + b.durationMinutes;
+                const endMin = startMin + (b.durationMinutes ?? 60);
                 const top =
                   ((Math.max(startMin, dayStart) - dayStart) / TOTAL_MINUTES) *
                   100;
@@ -150,6 +154,7 @@ export function ScheduleStrip({
                     TOTAL_MINUTES) *
                   100;
                 if (height <= 0) return null;
+                const firstItem = b.items?.[0]?.name ?? `Order #${b.id}`;
                 return (
                   <div
                     key={b.id}
@@ -158,9 +163,9 @@ export function ScheduleStrip({
                       bookingColor(b.status),
                     )}
                     style={{ top: `${top}%`, height: `${height}%` }}
-                    title={`${minutesToHM(startMin)} ${b.serviceType}`}
+                    title={`${minutesToHM(startMin)} ${firstItem}`}
                   >
-                    {minutesToHM(startMin)} {b.serviceType}
+                    {minutesToHM(startMin)} {firstItem}
                   </div>
                 );
               })}

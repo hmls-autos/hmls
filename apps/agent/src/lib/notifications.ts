@@ -373,43 +373,6 @@ const STATUS_EMAILS: Record<string, EmailTemplate> = {
   },
 };
 
-// --- Booking email templates ---
-
-const BOOKING_EMAILS: Record<string, EmailTemplate> = {
-  confirmed: {
-    subject: "Your HMLS Appointment is Confirmed",
-    text: (ctx) =>
-      `Hi ${ctx.customerName},\n\nYour appointment has been confirmed.\n\nView your bookings:\n${ctx.portalUrl}/bookings\n\nSee you soon!\n\nThanks,\nHMLS Team`,
-    html: (ctx) =>
-      htmlWrapper(`
-      <div style="padding:32px 24px;text-align:center;">
-        <div style="width:56px;height:56px;background:#dcfce7;border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;">
-          <span style="font-size:24px;">&#10003;</span>
-        </div>
-        <h1 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#18181b;">Appointment Confirmed</h1>
-        <p style="margin:0 0 20px;color:#71717a;font-size:14px;line-height:1.6;">
-          Hi ${ctx.customerName}, your service appointment has been confirmed. We&apos;ll see you soon!
-        </p>
-        <a href="${ctx.portalUrl}/bookings" style="display:inline-block;background:#18181b;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 36px;border-radius:8px;">View Booking</a>
-      </div>`),
-  },
-
-  rejected: {
-    subject: "Your HMLS Appointment Request Update",
-    text: (ctx) =>
-      `Hi ${ctx.customerName},\n\nUnfortunately, we're unable to accommodate your booking request at this time.\n\nPlease reach out to reschedule or discuss alternatives.\n\nThanks,\nHMLS Team`,
-    html: (ctx) =>
-      htmlWrapper(`
-      <div style="padding:32px 24px;text-align:center;">
-        <h1 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#18181b;">Appointment Request Update</h1>
-        <p style="margin:0 0 20px;color:#71717a;font-size:14px;line-height:1.6;">
-          Hi ${ctx.customerName}, unfortunately we&apos;re unable to accommodate your booking request at this time. Please reach out and we&apos;ll help find a time that works.
-        </p>
-        <a href="${ctx.portalUrl}/bookings" style="display:inline-block;background:#18181b;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 36px;border-radius:8px;">View Bookings</a>
-      </div>`),
-  },
-};
-
 // --- Admin notification statuses ---
 
 const ADMIN_NOTIFY_STATUSES = new Set(["approved", "declined", "revised"]);
@@ -557,73 +520,5 @@ export async function notifyOrderStatusChange(
     }
   } catch (err) {
     console.error(`[notify] Error for order ${orderId}:`, err);
-  }
-}
-
-// --- Booking notification function ---
-
-export async function notifyBookingStatusChange(
-  bookingId: number,
-  newStatus: string,
-): Promise<void> {
-  try {
-    const [booking] = await db
-      .select()
-      .from(schema.bookings)
-      .where(eq(schema.bookings.id, bookingId))
-      .limit(1);
-
-    if (!booking) {
-      console.warn(`[notify] Booking ${bookingId} not found`);
-      return;
-    }
-
-    // Find customer email — from booking snapshot or customer record
-    let toEmail = booking.customerEmail ?? null;
-    let customerName = booking.customerName || "there";
-
-    if (!toEmail && booking.customerId) {
-      const [customer] = await db
-        .select()
-        .from(schema.customers)
-        .where(eq(schema.customers.id, booking.customerId))
-        .limit(1);
-
-      if (!customer?.email) {
-        console.warn(`[notify] No email for booking ${bookingId} / customer ${booking.customerId}`);
-        return;
-      }
-      toEmail = customer.email;
-      customerName = customer.name || booking.customerName || "there";
-    }
-
-    if (!toEmail) {
-      console.warn(`[notify] No email for booking ${bookingId}`);
-      return;
-    }
-
-    const ctx: NotificationContext = {
-      customerName,
-      orderId: bookingId,
-      baseUrl: BASE_URL,
-      portalUrl: PORTAL_URL,
-    };
-
-    const template = BOOKING_EMAILS[newStatus];
-    if (template) {
-      const html = template.html ? template.html(ctx) : undefined;
-      await sendEmail(toEmail, template.subject, template.text(ctx), html);
-    }
-
-    // Notify admin
-    const adminEmail = Deno.env.get("ADMIN_NOTIFY_EMAIL");
-    if (adminEmail) {
-      const adminSubject = `[HMLS Admin] Booking #${bookingId} → ${newStatus}`;
-      const adminBody =
-        `Booking #${bookingId} (${customerName} / ${toEmail}) changed to: ${newStatus}\n\nService: ${booking.serviceType}\nScheduled: ${booking.scheduledAt}`;
-      await sendEmail(adminEmail, adminSubject, adminBody);
-    }
-  } catch (err) {
-    console.error(`[notify] Error for booking ${bookingId}:`, err);
   }
 }

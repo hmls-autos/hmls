@@ -1,6 +1,6 @@
 import useSWR from "swr";
 import { authFetch, fetcher } from "@/lib/fetcher";
-import type { Booking } from "@/lib/types";
+import type { Order } from "@/lib/types";
 
 export interface ProviderSelf {
   id: number;
@@ -103,39 +103,22 @@ export function useMechanicOverrides(from?: string, to?: string) {
   };
 }
 
-export type MechanicBooking = Booking & {
-  staffNotes?: string | null;
-};
+export type MechanicOrder = Order;
 
-export function useMechanicBookings(from?: string, to?: string) {
+export function useMechanicOrders(from?: string, to?: string) {
   const p = new URLSearchParams();
   if (from) p.set("from", from);
   if (to) p.set("to", to);
   const qs = p.toString() ? `?${p.toString()}` : "";
-  const { data, error, isLoading, mutate } = useSWR<MechanicBooking[]>(
-    `/api/mechanic/bookings${qs}`,
+  const { data, error, isLoading, mutate } = useSWR<MechanicOrder[]>(
+    `/api/mechanic/orders${qs}`,
     fetcher,
   );
 
-  async function confirmBooking(id: number) {
-    await authFetch(`/api/mechanic/bookings/${id}/confirm`, { method: "POST" });
-    await mutate();
-  }
-
-  async function rejectBooking(id: number, staffNotes?: string) {
-    await authFetch(`/api/mechanic/bookings/${id}/reject`, {
-      method: "POST",
-      body: JSON.stringify({ staffNotes }),
-    });
-    await mutate();
-  }
-
   return {
-    bookings: data ?? [],
+    orders: data ?? [],
     isLoading,
     isError: !!error,
     mutate,
-    confirmBooking,
-    rejectBooking,
   };
 }

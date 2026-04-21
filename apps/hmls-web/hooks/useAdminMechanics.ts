@@ -1,6 +1,6 @@
 import useSWR from "swr";
 import { authFetch, fetcher } from "@/lib/fetcher";
-import type { Booking } from "@/lib/types";
+import type { Order } from "@/lib/types";
 
 export interface Mechanic {
   id: number;
@@ -43,8 +43,7 @@ export interface ScheduleOverride {
   reason: string | null;
 }
 
-export type MechanicBookingRow = Booking & {
-  orderId: number | null;
+export type MechanicOrderRow = Order & {
   customer: {
     name: string | null;
     email: string | null;
@@ -189,7 +188,7 @@ export function useAdminMechanicOverrides(
   };
 }
 
-export function useAdminMechanicBookings(
+export function useAdminMechanicOrders(
   id: number | null,
   from?: string,
   to?: string,
@@ -198,29 +197,26 @@ export function useAdminMechanicBookings(
   if (from) p.set("from", from);
   if (to) p.set("to", to);
   const qs = p.toString() ? `?${p.toString()}` : "";
-  const { data, error, isLoading, mutate } = useSWR<MechanicBookingRow[]>(
-    id ? `/api/admin/mechanics/${id}/bookings${qs}` : null,
+  const { data, error, isLoading, mutate } = useSWR<MechanicOrderRow[]>(
+    id ? `/api/admin/mechanics/${id}/orders${qs}` : null,
     fetcher,
   );
 
   return {
-    bookings: data ?? [],
+    orders: data ?? [],
     isLoading,
     isError: !!error,
     mutate,
   };
 }
 
-export async function reassignBooking(
-  bookingId: number,
+export async function assignMechanic(
+  orderId: number,
   providerId: number,
   force = false,
 ) {
-  return await authFetch(
-    `/api/admin/mechanics/bookings/${bookingId}/reassign`,
-    {
-      method: "POST",
-      body: JSON.stringify({ providerId, force }),
-    },
-  );
+  return await authFetch(`/api/admin/mechanics/orders/${orderId}/assign`, {
+    method: "POST",
+    body: JSON.stringify({ providerId, force }),
+  });
 }

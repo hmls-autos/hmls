@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db, schema } from "../../db/client.ts";
 import { toolResult } from "@hmls/shared/tool-result";
 
@@ -214,11 +214,7 @@ const getAvailabilityTool = {
     const weeklyAvail = await db
       .select()
       .from(schema.providerAvailability)
-      .where(
-        sql`${schema.providerAvailability.providerId} = ANY(ARRAY[${
-          sql.join(providerIds.map((id) => sql`${id}`), sql`, `)
-        }])`,
-      );
+      .where(inArray(schema.providerAvailability.providerId, providerIds));
 
     // Group by providerId -> dayOfWeek
     const weeklyByProvider = new Map<
@@ -241,9 +237,7 @@ const getAvailabilityTool = {
       .from(schema.providerScheduleOverrides)
       .where(
         and(
-          sql`${schema.providerScheduleOverrides.providerId} = ANY(ARRAY[${
-            sql.join(providerIds.map((id) => sql`${id}`), sql`, `)
-          }])`,
+          inArray(schema.providerScheduleOverrides.providerId, providerIds),
           sql`${schema.providerScheduleOverrides.overrideDate} >= ${startDate}`,
           sql`${schema.providerScheduleOverrides.overrideDate} <= ${endDate}`,
         ),
@@ -270,15 +264,17 @@ const getAvailabilityTool = {
 
     const bookingsResult = await db.execute(
       sql`SELECT provider_id, lower(blocked_range) as range_start, upper(blocked_range) as range_end
-          FROM bookings
-          WHERE provider_id = ANY(ARRAY[${sql.join(providerIds.map((id) => sql`${id}`), sql`, `)}])
-          AND status NOT IN ('cancelled', 'no_show')
+          FROM orders
+          WHERE provider_id = ANY(ARRAY[${
+        sql.join(providerIds.map((id) => sql`${id}`), sql`, `)
+      }]::int[])
+          AND status NOT IN ('cancelled', 'completed', 'declined')
           AND blocked_range IS NOT NULL
           AND blocked_range && tstzrange(${rangeStartTs.toISOString()}::timestamptz, ${rangeEndTs.toISOString()}::timestamptz, '[)')
           ORDER BY provider_id`,
     );
 
-    // Group bookings by provider
+    // Group blocked ranges by provider
     const bookingsByProvider = new Map<
       number,
       Array<{ start: number; end: number }>
@@ -296,7 +292,7 @@ const getAvailabilityTool = {
 
     // 5. For each provider, compute available slots
     const dates = dateRange(startDate, endDate);
-    const SLOT_INCREMENT = 30; // 30-min snap points
+    const SLOT_INCREMENT = 60; // 1-hour snap points (less UI noise than 30-min)
 
     const providerSlots: Array<{
       providerId: number;
@@ -403,10 +399,9 @@ const createBookingTool = {
       partsNote: z.string().optional().describe("Parts preference, e.g. 'OEM preferred'"),
     })).describe("Specific service line items"),
     symptomDescription: z.string().optional().describe("Customer's symptom description"),
-    // Estimate reference
-    estimateId: z.number().optional().describe("ID of a previously generated estimate"),
     // Scheduling
-    providerId: z.number().describe("Provider ID from get_availability results"),
+    // Bookings are created UNASSIGNED. Shop admin assigns a mechanic from the
+    // scheduler UI after the booking arrives. Do NOT pass providerId.
     appointmentStart: z.string().describe("Appointment start time in ISO 8601 format"),
     durationMinutes: z.number().describe("Service duration in minutes"),
     // Location
@@ -438,8 +433,6 @@ const createBookingTool = {
       serviceType: string;
       serviceItems: Array<{ name: string; partsNeeded: boolean; partsNote?: string }>;
       symptomDescription?: string;
-      estimateId?: number;
-      providerId: number;
       appointmentStart: string;
       durationMinutes: number;
       address: string;
@@ -479,103 +472,121 @@ const createBookingTool = {
       }
     }
 
+    const scheduledAt = new Date(params.appointmentStart);
+    const vehicleInfo = {
+      year: String(params.vehicleYear),
+      make: params.vehicleMake,
+      model: params.vehicleModel,
+    };
+
     try {
-      const [booking] = await db
-        .insert(schema.bookings)
-        .values({
-          customerId: resolvedCustomerId,
-          providerId: params.providerId,
-          serviceType: params.serviceType,
-          serviceItems: params.serviceItems,
-          symptomDescription: params.symptomDescription ?? null,
-          vehicleYear: params.vehicleYear,
-          vehicleMake: params.vehicleMake,
-          vehicleModel: params.vehicleModel,
-          vehicleMileage: params.vehicleMileage ?? null,
-          estimateId: params.estimateId ?? null,
-          scheduledAt: new Date(params.appointmentStart),
-          durationMinutes: params.durationMinutes,
-          location: params.address,
-          locationLat: params.locationLat?.toString() ?? null,
-          locationLng: params.locationLng?.toString() ?? null,
-          accessInstructions: params.accessInstructions ?? null,
-          customerName: params.customerName ?? null,
-          customerEmail: params.customerEmail ?? null,
-          customerPhone: params.customerPhone ?? null,
-          photoUrls: params.photoUrls ?? null,
-          customerNotes: params.customerNotes ?? null,
-          internalNotes: params.internalNotes ?? null,
-          status: "requested",
-        })
-        .returning();
-
-      // Look up provider name for the response
-      const [provider] = await db
-        .select({ name: schema.providers.name })
-        .from(schema.providers)
-        .where(eq(schema.providers.id, params.providerId))
-        .limit(1);
-
-      console.log(
-        `[scheduling] Booking created: #${booking.id} for provider ${params.providerId}`,
-      );
-
-      // Link booking to existing order (paid or draft) for this customer
+      // Try to attach to an existing customer order (most recent draft /
+      // estimated / approved). Otherwise create a new order.
+      let existingOrder = null;
       if (resolvedCustomerId) {
-        const [existingOrder] = await db
+        const [row] = await db
           .select()
           .from(schema.orders)
           .where(
             and(
               eq(schema.orders.customerId, resolvedCustomerId),
-              sql`${schema.orders.status} IN ('preauth', 'approved')`,
-              isNull(schema.orders.bookingId),
+              sql`${schema.orders.status} IN ('draft', 'estimated', 'approved')`,
+              isNull(schema.orders.scheduledAt),
             ),
           )
-          .orderBy(schema.orders.createdAt)
+          .orderBy(desc(schema.orders.createdAt))
           .limit(1);
-
-        if (existingOrder) {
-          const history = Array.isArray(existingOrder.statusHistory)
-            ? existingOrder.statusHistory
-            : [];
-          await db
-            .update(schema.orders)
-            .set({
-              bookingId: booking.id,
-              status: "scheduled",
-              statusHistory: [
-                ...history,
-                { status: "scheduled", timestamp: new Date().toISOString(), actor: "system" },
-              ],
-              updatedAt: new Date(),
-            })
-            .where(eq(schema.orders.id, existingOrder.id));
-        }
+        existingOrder = row ?? null;
       }
+
+      const schedulingPatch = {
+        scheduledAt,
+        durationMinutes: params.durationMinutes,
+        providerId: null as number | null,
+        location: params.address,
+        locationLat: params.locationLat?.toString() ?? null,
+        locationLng: params.locationLng?.toString() ?? null,
+        accessInstructions: params.accessInstructions ?? null,
+        symptomDescription: params.symptomDescription ?? null,
+        photoUrls: params.photoUrls ?? null,
+        customerNotes: params.customerNotes ?? null,
+      };
+
+      let order: typeof schema.orders.$inferSelect;
+      if (existingOrder) {
+        // Attach scheduling to existing order. Transition approved → scheduled;
+        // keep draft/estimated where it is so the customer approval step still
+        // happens.
+        const nextStatus = existingOrder.status === "approved" ? "scheduled" : existingOrder.status;
+        const history = Array.isArray(existingOrder.statusHistory)
+          ? existingOrder.statusHistory
+          : [];
+        const nextHistory = nextStatus !== existingOrder.status
+          ? [
+            ...history,
+            { status: nextStatus, timestamp: new Date().toISOString(), actor: "customer" },
+          ]
+          : history;
+        const [row] = await db
+          .update(schema.orders)
+          .set({
+            ...schedulingPatch,
+            status: nextStatus,
+            statusHistory: nextHistory,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.orders.id, existingOrder.id))
+          .returning();
+        order = row;
+      } else {
+        // Walk-in / ad-hoc path — no prior estimate. Create a new scheduled
+        // order directly.
+        const [row] = await db
+          .insert(schema.orders)
+          .values({
+            customerId: resolvedCustomerId,
+            status: "scheduled",
+            statusHistory: [{
+              status: "scheduled",
+              timestamp: new Date().toISOString(),
+              actor: "system",
+            }],
+            items: [],
+            vehicleInfo,
+            notes: params.internalNotes ?? null,
+            contactName: params.customerName ?? null,
+            contactEmail: params.customerEmail ?? null,
+            contactPhone: params.customerPhone ?? null,
+            contactAddress: params.address,
+            ...schedulingPatch,
+          })
+          .returning();
+        order = row;
+      }
+
+      console.log(
+        `[scheduling] Order #${order.id} scheduled (unassigned — awaiting shop dispatch)`,
+      );
 
       return toolResult({
         success: true,
-        bookingId: booking.id,
-        status: "requested",
-        providerName: provider?.name ?? "Your mechanic",
-        appointmentStart: booking.scheduledAt?.toISOString(),
-        appointmentEnd: booking.appointmentEnd?.toISOString(),
+        orderId: order.id,
+        status: order.status,
+        appointmentStart: order.scheduledAt?.toISOString(),
+        appointmentEnd: order.appointmentEnd?.toISOString(),
         vehicle: `${params.vehicleYear} ${params.vehicleMake} ${params.vehicleModel}`,
         serviceType: params.serviceType,
         location: params.address,
-        message: `Booking requested! ${
-          provider?.name ?? "Your mechanic"
-        } will confirm your appointment shortly.`,
+        message:
+          "Booking requested! Our team will assign a mechanic and confirm your appointment shortly.",
       });
     } catch (error: unknown) {
       const code = error instanceof Error && "code" in error
         ? (error as { code: string }).code
         : undefined;
 
-      // Exclusion constraint violation (overlap)
       if (code === "23P01") {
-        console.log(`[scheduling] Overlap detected for provider ${params.providerId}`);
+        console.log(`[scheduling] Overlap detected on unassigned booking attempt`);
         return toolResult({
           success: false,
           error: "time_conflict",
@@ -584,19 +595,6 @@ const createBookingTool = {
         });
       }
 
-      // FK violation — usually an invalid providerId from the LLM
-      if (code === "23503") {
-        console.error(`[scheduling] FK violation creating booking`, error);
-        return toolResult({
-          success: false,
-          error: "invalid_reference",
-          message:
-            "The selected mechanic is no longer available. Please call get_availability again " +
-            "to get current slots before retrying.",
-        });
-      }
-
-      // Anything else — log and degrade gracefully instead of crashing the stream
       console.error(`[scheduling] Unexpected error creating booking`, error);
       return toolResult({
         success: false,

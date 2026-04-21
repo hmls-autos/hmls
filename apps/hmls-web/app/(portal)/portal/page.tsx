@@ -93,17 +93,13 @@ export default function PortalDashboard() {
     );
   }
 
-  const pendingAction = orders.filter(
-    (o) => o.status === "estimated" || o.status === "approved",
-  ).length;
+  const pendingAction = orders.filter((o) => o.status === "estimated").length;
 
   const activeOrders = orders.filter((o) =>
-    ["preauth", "scheduled", "in_progress"].includes(o.status),
+    ["approved", "scheduled", "in_progress"].includes(o.status),
   ).length;
 
-  const completed = orders.filter((o) =>
-    ["paid", "completed"].includes(o.status),
-  ).length;
+  const completed = orders.filter((o) => o.status === "completed").length;
 
   const recentOrders = [...orders]
     .sort(

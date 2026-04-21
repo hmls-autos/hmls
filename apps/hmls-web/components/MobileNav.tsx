@@ -159,19 +159,17 @@ export default function MobileNav({
             })()}
             {user && (
               <>
-                {!isAdmin && (
-                  <Link
-                    href={portalLink.href}
-                    onClick={close}
-                    className={`text-sm transition-colors ${
-                      pathname.startsWith(portalLink.href)
-                        ? "text-red-400 font-medium"
-                        : "text-text-secondary hover:text-text"
-                    }`}
-                  >
-                    {portalLink.label}
-                  </Link>
-                )}
+                <Link
+                  href={portalLink.href}
+                  onClick={close}
+                  className={`text-sm transition-colors ${
+                    pathname.startsWith(portalLink.href)
+                      ? "text-red-400 font-medium"
+                      : "text-text-secondary hover:text-text"
+                  }`}
+                >
+                  {isAdmin ? "View as Customer" : portalLink.label}
+                </Link>
                 {isAdmin && (
                   <Link
                     href={adminLink.href}

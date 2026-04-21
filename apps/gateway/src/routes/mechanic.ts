@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { and, asc, between, eq, gte, lte } from "drizzle-orm";
 import { db, schema } from "@hmls/agent/db";
-import { notifyBookingStatusChange } from "@hmls/agent";
 import { type MechanicEnv, requireMechanic } from "../middleware/mechanic.ts";
 
 const mechanic = new Hono<MechanicEnv>();
@@ -208,91 +207,29 @@ mechanic.delete("/overrides/:id", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// My bookings
+// My orders (mechanic's assigned work)
 // ---------------------------------------------------------------------------
 
-mechanic.get("/bookings", async (c) => {
+mechanic.get("/orders", async (c) => {
   const providerId = c.get("providerId");
   const from = c.req.query("from");
   const to = c.req.query("to");
 
-  const conditions = [eq(schema.bookings.providerId, providerId)];
+  const conditions = [eq(schema.orders.providerId, providerId)];
   if (from && to) {
-    conditions.push(between(schema.bookings.scheduledAt, new Date(from), new Date(to)));
+    conditions.push(between(schema.orders.scheduledAt, new Date(from), new Date(to)));
   } else if (from) {
-    conditions.push(gte(schema.bookings.scheduledAt, new Date(from)));
+    conditions.push(gte(schema.orders.scheduledAt, new Date(from)));
   } else if (to) {
-    conditions.push(lte(schema.bookings.scheduledAt, new Date(to)));
+    conditions.push(lte(schema.orders.scheduledAt, new Date(to)));
   }
 
   const rows = await db
     .select()
-    .from(schema.bookings)
+    .from(schema.orders)
     .where(and(...conditions))
-    .orderBy(asc(schema.bookings.scheduledAt));
+    .orderBy(asc(schema.orders.scheduledAt));
   return c.json(rows);
-});
-
-mechanic.post("/bookings/:id/confirm", async (c) => {
-  const providerId = c.get("providerId");
-  const id = Number(c.req.param("id"));
-  if (!Number.isInteger(id) || id <= 0) {
-    return c.json({ error: { code: "BAD_REQUEST", message: "Invalid booking ID" } }, 400);
-  }
-
-  const [existing] = await db
-    .select()
-    .from(schema.bookings)
-    .where(eq(schema.bookings.id, id))
-    .limit(1);
-
-  if (!existing || existing.providerId !== providerId) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Booking not found" } }, 404);
-  }
-
-  const [updated] = await db
-    .update(schema.bookings)
-    .set({ status: "confirmed", updatedAt: new Date() })
-    .where(eq(schema.bookings.id, id))
-    .returning();
-
-  notifyBookingStatusChange(id, "confirmed");
-  return c.json(updated);
-});
-
-mechanic.post("/bookings/:id/reject", async (c) => {
-  const providerId = c.get("providerId");
-  const id = Number(c.req.param("id"));
-  if (!Number.isInteger(id) || id <= 0) {
-    return c.json({ error: { code: "BAD_REQUEST", message: "Invalid booking ID" } }, 400);
-  }
-
-  const body: { staffNotes?: string } = await c.req.json<{ staffNotes?: string }>().catch(
-    () => ({}),
-  );
-
-  const [existing] = await db
-    .select()
-    .from(schema.bookings)
-    .where(eq(schema.bookings.id, id))
-    .limit(1);
-
-  if (!existing || existing.providerId !== providerId) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Booking not found" } }, 404);
-  }
-
-  const [updated] = await db
-    .update(schema.bookings)
-    .set({
-      status: "rejected",
-      staffNotes: body.staffNotes ?? null,
-      updatedAt: new Date(),
-    })
-    .where(eq(schema.bookings.id, id))
-    .returning();
-
-  notifyBookingStatusChange(id, "rejected");
-  return c.json(updated);
 });
 
 export { mechanic };
