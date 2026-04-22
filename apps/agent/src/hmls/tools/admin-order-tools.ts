@@ -3,6 +3,7 @@ import { desc, eq, ilike, or, sql } from "drizzle-orm";
 import { db, schema } from "../../db/client.ts";
 import type { OrderItem } from "../../db/schema.ts";
 import { toolResult } from "@hmls/shared/tool-result";
+import type { LaborTimeResult, OlpVehicle } from "./olp-client.ts";
 
 // ---------------------------------------------------------------------------
 // Tool 1: list_orders
@@ -167,13 +168,19 @@ const createOrderTool = {
     items: z
       .array(
         z.object({
-          description: z.string().describe("Line item description"),
-          labor_hours: z.number().optional().describe("Labor hours for this item"),
-          parts_cost: z.number().optional().describe("Parts cost in dollars"),
+          description: z.string().describe(
+            "Line item description (e.g., 'Front brake pad replacement')",
+          ),
+          labor_hours: z.number().optional().describe(
+            "Labor hours for this item (optional — will auto-lookup if omitted)",
+          ),
+          parts_cost: z.number().optional().describe(
+            "Parts cost in dollars (optional — defaults to $0)",
+          ),
         }),
       )
-      .optional()
-      .describe("Line items to add to the order"),
+      .min(1, "At least one item is required to create an order")
+      .describe("Line items to add to the order (required)"),
   }),
   execute: async (
     params: {
@@ -258,11 +265,74 @@ const createOrderTool = {
       }
       : null;
 
-    // Build OrderItem[] from simple items input
-    const orderItems: OrderItem[] = (params.items ?? []).map((item) => {
-      const laborCents = Math.round((item.labor_hours ?? 0) * 140 * 100); // $140/hr default (matches pricing engine)
+    // Auto-lookup labor hours if not provided and vehicle info available
+    const itemsForOrder: Array<{
+      description: string;
+      labor_hours: number;
+      parts_cost?: number;
+      sourceMeta?: LaborTimeResult["sourceMeta"];
+    }> = [];
+
+    for (const item of params.items ?? []) {
+      let laborHours = item.labor_hours;
+      let sourceMeta: LaborTimeResult["sourceMeta"] | undefined;
+
+      // Auto-lookup labor time if not provided and we have vehicle info
+      if (
+        laborHours === undefined && vehicleInfo?.year && vehicleInfo?.make && vehicleInfo?.model
+      ) {
+        try {
+          const { searchLaborTimes, findVehicles } = await import("../olp-client.ts");
+          const vehicles = await findVehicles(
+            vehicleInfo.make,
+            vehicleInfo.model,
+            Number(vehicleInfo.year),
+          );
+
+          if (vehicles.length > 0) {
+            const serviceWords = item.description
+              .split(/\s+/)
+              .filter((w) => w.length > 1);
+
+            const laborTimes = await searchLaborTimes(
+              vehicles.map((v: OlpVehicle) => v.id),
+              serviceWords,
+              undefined, // category
+            );
+
+            if (laborTimes.length > 0) {
+              laborHours = Number(laborTimes[0].labor_hours);
+              sourceMeta = laborTimes[0].sourceMeta;
+            }
+          }
+        } catch (_e) {
+          // Fallback: leave labor_hours as 0
+          laborHours = 0;
+        }
+      }
+
+      itemsForOrder.push({
+        description: item.description,
+        labor_hours: laborHours ?? 0,
+        parts_cost: item.parts_cost,
+        ...(sourceMeta ? { sourceMeta } : {}),
+      });
+    }
+
+    if (itemsForOrder.length === 0) {
+      return toolResult({
+        success: false,
+        error:
+          "At least one line item is required. Describe the service (e.g., 'Front brake pad replacement') and include vehicle year/make/model for auto labor lookup.",
+      });
+    }
+
+    const orderItems: OrderItem[] = itemsForOrder.map((item) => {
+      const laborCents = Math.round(item.labor_hours * 140 * 100); // $140/hr
       const partsCents = Math.round((item.parts_cost ?? 0) * 100);
       const totalCents = laborCents + partsCents;
+      const meta: Record<string, unknown> = {};
+      if (item.sourceMeta) meta.sourceMeta = item.sourceMeta;
       return {
         id: crypto.randomUUID(),
         category: "labor" as const,
@@ -271,7 +341,8 @@ const createOrderTool = {
         unitPriceCents: totalCents,
         totalCents,
         taxable: true,
-        ...(item.labor_hours ? { laborHours: item.labor_hours } : {}),
+        ...(item.labor_hours > 0 ? { laborHours: item.labor_hours } : {}),
+        ...(Object.keys(meta).length > 0 ? { metadata: meta } : {}),
       };
     });
 
@@ -324,42 +395,107 @@ const createOrderTool = {
     });
   },
 };
-
 // ---------------------------------------------------------------------------
-// Tool 4: update_order_items
+// Tool 4: update_order_items -- PATCH mode with stable item IDs
 // ---------------------------------------------------------------------------
 
 const EDITABLE_STATUSES = new Set(["draft", "revised", "estimated"]);
 
+// In-memory idempotency set (production: use Redis or DB)
+const executedKeys = new Set<string>();
+
 const updateOrderItemsTool = {
   name: "update_order_items",
-  description: "Update line items and/or notes on a draft, revised, or estimated order. " +
+  description: "Update line items on a draft, revised, or estimated order using PATCH semantics. " +
     "Only works on orders in 'draft', 'revised', or 'estimated' status. " +
-    "Replaces the existing items array — include all items you want on the order. " +
-    "Automatically recalculates total_amount (subtotal) from item unit_price * quantity.",
+    "Operations: add new items, update existing by itemId, or remove by itemId. " +
+    "Use idempotencyKey to prevent duplicate operations on retry. " +
+    "ExpectedVersion ensures no concurrent-overwrite conflicts.",
   schema: z.object({
     order_id: z
       .string()
       .describe("The order ID to update (numeric string or number)"),
-    items: z
+    // PATCH operations
+    addItems: z
       .array(
         z.object({
-          description: z.string().describe("Line item description"),
-          labor_hours: z.number().optional().describe("Labor hours for this item"),
-          parts_cost: z.number().optional().describe("Parts cost in dollars"),
+          itemId: z
+            .string()
+            .optional()
+            .describe("Optional stable item ID. Auto-generated if omitted."),
+          description: z
+            .string()
+            .describe("Line item description (e.g., 'Front brake pad replacement')"),
+          labor_hours: z
+            .number()
+            .optional()
+            .describe("Labor hours (optional — auto-lookup if omitted and vehicle known)"),
+          parts_cost: z
+            .number()
+            .optional()
+            .describe("Parts cost in dollars (optional — defaults to $0)"),
+          intent: z
+            .enum(["replace", "inspect", "optional", "note"])
+            .default("replace")
+            .describe("Service intent: replace=正式施工, inspect=检查, optional=可选项, note=备注"),
         }),
       )
       .optional()
-      .describe("Replacement items list. Omit to leave items unchanged."),
+      .describe("Items to add to the order"),
+    updateItems: z
+      .array(
+        z.object({
+          itemId: z.string().describe("Existing item ID to update"),
+          description: z.string().optional().describe("New description"),
+          labor_hours: z.number().optional().describe("New labor hours"),
+          parts_cost: z.number().optional().describe("New parts cost"),
+          intent: z
+            .enum(["replace", "inspect", "optional", "note"])
+            .optional()
+            .describe("New service intent"),
+        }),
+      )
+      .optional()
+      .describe("Items to update by itemId"),
+    removeItemIds: z
+      .array(z.string())
+      .optional()
+      .describe("Item IDs to remove from the order"),
+    // Safety
+    expectedVersion: z
+      .number()
+      .int()
+      .optional()
+      .describe("Expected revisionNumber for optimistic concurrency (optional)"),
+    idempotencyKey: z
+      .string()
+      .optional()
+      .describe("Unique key to prevent duplicate execution (e.g., 'req-123')"),
     notes: z
       .string()
       .optional()
-      .describe("Updated notes for the order. Omit to leave notes unchanged."),
+      .describe("Updated notes for the order"),
   }),
   execute: async (
     params: {
       order_id: string;
-      items?: Array<{ description: string; labor_hours?: number; parts_cost?: number }>;
+      addItems?: Array<{
+        itemId?: string;
+        description: string;
+        labor_hours?: number;
+        parts_cost?: number;
+        intent?: "replace" | "inspect" | "optional" | "note";
+      }>;
+      updateItems?: Array<{
+        itemId: string;
+        description?: string;
+        labor_hours?: number;
+        parts_cost?: number;
+        intent?: "replace" | "inspect" | "optional" | "note";
+      }>;
+      removeItemIds?: string[];
+      expectedVersion?: number;
+      idempotencyKey?: string;
       notes?: string;
     },
     _ctx: unknown,
@@ -367,6 +503,18 @@ const updateOrderItemsTool = {
     const id = Number(params.order_id);
     if (!Number.isInteger(id) || id <= 0) {
       return toolResult({ success: false, error: "Invalid order_id" });
+    }
+
+    // Idempotency check
+    if (params.idempotencyKey) {
+      if (executedKeys.has(params.idempotencyKey)) {
+        return toolResult({
+          success: true,
+          orderId: id,
+          message: "Already processed (idempotency hit)",
+          deduplicated: true,
+        });
+      }
     }
 
     const [order] = await db
@@ -387,41 +535,166 @@ const updateOrderItemsTool = {
       });
     }
 
-    if (params.items === undefined && params.notes === undefined) {
-      return toolResult({ success: false, error: "Provide at least one of: items, notes" });
-    }
-
-    const updates: Record<string, unknown> = { updatedAt: new Date() };
-
-    if (params.items !== undefined) {
-      const orderItems: OrderItem[] = params.items.map((item) => {
-        const laborCents = Math.round((item.labor_hours ?? 0) * 140 * 100); // $140/hr default (matches pricing engine)
-        const partsCents = Math.round((item.parts_cost ?? 0) * 100);
-        const totalCents = laborCents + partsCents;
-        return {
-          id: crypto.randomUUID(),
-          category: "labor" as const,
-          name: item.description,
-          quantity: 1,
-          unitPriceCents: totalCents,
-          totalCents,
-          taxable: true,
-          ...(item.labor_hours ? { laborHours: item.labor_hours } : {}),
-        };
+    // Optimistic concurrency check
+    const currentVersion = (order as unknown as { revisionNumber?: number }).revisionNumber ?? 0;
+    if (params.expectedVersion !== undefined && params.expectedVersion !== currentVersion) {
+      return toolResult({
+        success: false,
+        error:
+          `Version mismatch: expected ${params.expectedVersion}, got ${currentVersion}. Refresh and retry.`,
+        currentVersion,
       });
-
-      const subtotalCents = orderItems.reduce((sum, i) => sum + i.totalCents, 0);
-      updates.items = orderItems;
-      updates.subtotalCents = subtotalCents;
-      updates.priceRangeLowCents = Math.round(subtotalCents * 0.9);
-      updates.priceRangeHighCents = Math.round(subtotalCents * 1.1);
     }
+
+    if (
+      params.addItems === undefined &&
+      params.updateItems === undefined &&
+      params.removeItemIds === undefined &&
+      params.notes === undefined
+    ) {
+      return toolResult({
+        success: false,
+        error: "Provide at least one of: addItems, updateItems, removeItemIds, notes",
+      });
+    }
+
+    // Build working items map by itemId
+    const existingItems: OrderItem[] = Array.isArray(order.items)
+      ? (order.items as OrderItem[])
+      : [];
+    const itemsMap = new Map<string, OrderItem>(
+      existingItems.map((i) => [i.id, i]),
+    );
+
+    const vehicleInfo =
+      (order as unknown as { vehicleInfo?: { year?: string; make?: string; model?: string } })
+        .vehicleInfo;
+
+    // Helper: build OrderItem from input
+    async function buildItem(
+      desc: string,
+      laborHours?: number,
+      partsCost?: number,
+      intent: "replace" | "inspect" | "optional" | "note" = "replace",
+      stableId?: string,
+      sourceMeta?: LaborTimeResult["sourceMeta"],
+    ): Promise<OrderItem> {
+      let finalLabor = laborHours ?? 0;
+      let resolvedSourceMeta = sourceMeta;
+
+      // Auto-lookup labor time if not provided and vehicle info available
+      if (finalLabor === 0 && vehicleInfo?.year && vehicleInfo?.make && vehicleInfo?.model) {
+        try {
+          const { searchLaborTimes, findVehicles } = await import("../olp-client.ts");
+          const vehicles = await findVehicles(
+            vehicleInfo.make,
+            vehicleInfo.model,
+            Number(vehicleInfo.year),
+          );
+          if (vehicles.length > 0) {
+            const serviceWords = desc
+              .split(/\s+/)
+              .filter((w) => w.length > 1);
+            const laborTimes = await searchLaborTimes(
+              vehicles.map((v: OlpVehicle) => v.id),
+              serviceWords,
+              undefined,
+            );
+            if (laborTimes.length > 0) {
+              finalLabor = Number(laborTimes[0].labor_hours);
+              resolvedSourceMeta = laborTimes[0].sourceMeta;
+            }
+          }
+        } catch (_e) {
+          // Keep defaults
+        }
+      }
+
+      const laborCents = Math.round(finalLabor * 140 * 100); // $140/hr
+      const partsCents = Math.round((partsCost ?? 0) * 100);
+      const totalCents = laborCents + partsCents;
+
+      const metadata: Record<string, unknown> = {};
+      if (intent) metadata.intent = intent;
+      if (resolvedSourceMeta) metadata.sourceMeta = resolvedSourceMeta;
+
+      return {
+        id: stableId ?? crypto.randomUUID(),
+        category: intent === "note" ? "fee" : "labor",
+        name: desc,
+        quantity: 1,
+        unitPriceCents: totalCents,
+        totalCents,
+        taxable: intent !== "note",
+        ...(finalLabor > 0 ? { laborHours: finalLabor } : {}),
+        ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+      };
+    }
+
+    // 1. Apply removals
+    if (params.removeItemIds && params.removeItemIds.length > 0) {
+      for (const rid of params.removeItemIds) {
+        itemsMap.delete(rid);
+      }
+    }
+
+    // 2. Apply updates
+    if (params.updateItems && params.updateItems.length > 0) {
+      for (const upd of params.updateItems) {
+        const existing = itemsMap.get(upd.itemId);
+        if (!existing) {
+          return toolResult({ success: false, error: `Item ${upd.itemId} not found` });
+        }
+        // Rebuild with new values, keeping stable ID
+        const rebuilt = await buildItem(
+          upd.description ?? existing.name,
+          upd.labor_hours ?? (existing as unknown as { laborHours?: number }).laborHours,
+          upd.parts_cost ?? 0,
+          upd.intent ??
+            (existing as unknown as { metadata?: { intent?: string } }).metadata?.intent as
+              | "replace"
+              | "inspect"
+              | "optional"
+              | "note" ??
+            "replace",
+          upd.itemId, // keep same ID
+        );
+        itemsMap.set(upd.itemId, rebuilt);
+      }
+    }
+
+    // 3. Apply additions
+    if (params.addItems && params.addItems.length > 0) {
+      for (const add of params.addItems) {
+        const newItem = await buildItem(
+          add.description,
+          add.labor_hours,
+          add.parts_cost,
+          add.intent ?? "replace",
+          add.itemId, // use provided or generate below
+        );
+        itemsMap.set(newItem.id, newItem);
+      }
+    }
+
+    // Build final arrays
+    const finalItems = Array.from(itemsMap.values());
+    const subtotalCents = finalItems.reduce((sum, i) => sum + i.totalCents, 0);
+
+    const updates: Record<string, unknown> = {
+      items: finalItems,
+      subtotalCents,
+      priceRangeLowCents: Math.round(subtotalCents * 0.9),
+      priceRangeHighCents: Math.round(subtotalCents * 1.1),
+      revisionNumber: currentVersion + 1,
+      updatedAt: new Date(),
+    };
 
     if (params.notes !== undefined) {
       updates.notes = params.notes;
     }
 
-    // Use optimistic concurrency — only update if status hasn't changed
+    // Optimistic concurrency update
     const [updated] = await db
       .update(schema.orders)
       .set(updates)
@@ -437,12 +710,20 @@ const updateOrderItemsTool = {
       });
     }
 
+    // Record idempotency
+    if (params.idempotencyKey) {
+      executedKeys.add(params.idempotencyKey);
+    }
+
     await db.insert(schema.orderEvents).values({
       orderId: id,
       eventType: "items_edited",
       actor: "agent",
       metadata: {
-        itemCount: Array.isArray(updated.items) ? (updated.items as unknown[]).length : 0,
+        added: params.addItems?.map((i) => i.description) ?? [],
+        updated: params.updateItems?.map((i) => i.itemId) ?? [],
+        removed: params.removeItemIds ?? [],
+        newVersion: currentVersion + 1,
       },
     });
 
@@ -450,9 +731,188 @@ const updateOrderItemsTool = {
       success: true,
       orderId: updated.id,
       status: updated.status,
+      version: currentVersion + 1,
       subtotalFormatted: `$${((updated.subtotalCents ?? 0) / 100).toFixed(2)}`,
-      itemCount: Array.isArray(updated.items) ? (updated.items as unknown[]).length : 0,
+      itemCount: finalItems.length,
       notes: updated.notes,
+      message: `Order #${id} updated`,
+    });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Tool 5: update_order -- generic order metadata update
+// ---------------------------------------------------------------------------
+
+const updateOrderTool = {
+  name: "update_order",
+  description: "Update order metadata: customer info, vehicle info, notes, tags. " +
+    "Use this when customer provides their name/phone/email/vin AFTER order was created. " +
+    "Supports partial updates — only include fields you want to change. " +
+    "Does NOT change items or pricing.",
+  schema: z.object({
+    order_id: z.string().describe("The order ID to update"),
+    customerInfo: z
+      .object({
+        name: z.string().optional().describe("Customer full name"),
+        phone: z.string().optional().describe("Phone number"),
+        email: z.string().email().optional().describe("Email address"),
+        address: z.string().optional().describe("Street address"),
+      })
+      .optional()
+      .describe("Customer contact information to update"),
+    vehicleInfo: z
+      .object({
+        year: z
+          .number()
+          .int()
+          .min(1900)
+          .max(2030)
+          .optional()
+          .describe("Vehicle year (e.g., 2019)"),
+        make: z.string().optional().describe("Vehicle make (e.g., 'Ford')"),
+        model: z.string().optional().describe("Vehicle model (e.g., 'F-150')"),
+        engine: z.string().optional().describe("Engine description (e.g., '5.0L V8')"),
+        vin: z
+          .string()
+          .length(17)
+          .regex(/^[A-HJ-NPR-Z0-9]{17}$/)
+          .optional()
+          .describe("VIN (17 chars, no I/O/Q)"),
+        licensePlate: z.string().optional().describe("License plate number"),
+        mileage: z.number().int().optional().describe("Current odometer reading"),
+      })
+      .optional()
+      .describe("Vehicle information to update"),
+    notes: z.string().optional().describe("Order notes"),
+    tags: z.array(z.string()).optional().describe("Tags to replace existing tags"),
+    expectedVersion: z.number().int().optional().describe(
+      "Expected revisionNumber for optimistic concurrency",
+    ),
+    idempotencyKey: z.string().optional().describe("Idempotency key"),
+  }),
+  execute: async (
+    params: {
+      order_id: string;
+      customerInfo?: { name?: string; phone?: string; email?: string; address?: string };
+      vehicleInfo?: {
+        year?: number;
+        make?: string;
+        model?: string;
+        engine?: string;
+        vin?: string;
+        licensePlate?: string;
+        mileage?: number;
+      };
+      notes?: string;
+      tags?: string[];
+      expectedVersion?: number;
+      idempotencyKey?: string;
+    },
+    _ctx: unknown,
+  ) => {
+    const id = Number(params.order_id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return toolResult({ success: false, error: "Invalid order_id" });
+    }
+
+    if (
+      params.customerInfo === undefined &&
+      params.vehicleInfo === undefined &&
+      params.notes === undefined &&
+      params.tags === undefined
+    ) {
+      return toolResult({
+        success: false,
+        error: "Provide at least one of: customerInfo, vehicleInfo, notes, tags",
+      });
+    }
+
+    const [order] = await db
+      .select()
+      .from(schema.orders)
+      .where(eq(schema.orders.id, id))
+      .limit(1);
+
+    if (!order) {
+      return toolResult({ success: false, error: `Order #${id} not found` });
+    }
+
+    const currentVersion = (order as unknown as { revisionNumber?: number }).revisionNumber ?? 0;
+    if (params.expectedVersion !== undefined && params.expectedVersion !== currentVersion) {
+      return toolResult({
+        success: false,
+        error: `Version mismatch: expected ${params.expectedVersion}, got ${currentVersion}`,
+        currentVersion,
+      });
+    }
+
+    const updates: Record<string, unknown> = {
+      updatedAt: new Date(),
+      revisionNumber: currentVersion + 1,
+    };
+
+    if (params.customerInfo !== undefined) {
+      if (params.customerInfo.name !== undefined) updates.contactName = params.customerInfo.name;
+      if (params.customerInfo.phone !== undefined) updates.contactPhone = params.customerInfo.phone;
+      if (params.customerInfo.email !== undefined) updates.contactEmail = params.customerInfo.email;
+      if (params.customerInfo.address !== undefined) {
+        updates.contactAddress = params.customerInfo.address;
+      }
+    }
+
+    if (params.vehicleInfo !== undefined) {
+      const existingVehicle =
+        (order as unknown as { vehicleInfo?: Record<string, unknown> }).vehicleInfo ?? {};
+      updates.vehicleInfo = {
+        ...existingVehicle,
+        ...params.vehicleInfo,
+        year: params.vehicleInfo.year
+          ? String(params.vehicleInfo.year)
+          : (existingVehicle.year as string | undefined),
+        vin: params.vehicleInfo.vin?.toUpperCase() ?? (existingVehicle.vin as string | undefined),
+      };
+    }
+
+    if (params.notes !== undefined) {
+      updates.notes = params.notes;
+    }
+
+    if (params.tags !== undefined) {
+      updates.tags = params.tags;
+    }
+
+    const [updated] = await db
+      .update(schema.orders)
+      .set(updates)
+      .where(eq(schema.orders.id, id))
+      .returning();
+
+    await db.insert(schema.orderEvents).values({
+      orderId: id,
+      eventType: "order_updated",
+      actor: "agent",
+      metadata: {
+        updatedFields: Object.keys(updates).filter(
+          (k) => !["updatedAt", "revisionNumber"].includes(k),
+        ),
+        newVersion: currentVersion + 1,
+      },
+    });
+
+    const vehicle =
+      (updated as unknown as { vehicleInfo?: { year?: string; make?: string; model?: string } })
+        .vehicleInfo;
+    return toolResult({
+      success: true,
+      orderId: updated.id,
+      version: currentVersion + 1,
+      contactName: updated.contactName,
+      contactPhone: updated.contactPhone,
+      contactEmail: updated.contactEmail,
+      vehicle: vehicle
+        ? [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ")
+        : null,
       message: `Order #${id} updated`,
     });
   },
@@ -467,4 +927,5 @@ export const adminOrderTools = [
   searchCustomersTool,
   createOrderTool,
   updateOrderItemsTool,
+  updateOrderTool,
 ];

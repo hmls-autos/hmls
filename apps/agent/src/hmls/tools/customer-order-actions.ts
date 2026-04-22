@@ -367,23 +367,62 @@ const modifyOrderItemsTool = {
       items = items.filter((item) => !removeSet.has(item.id));
     }
 
-    // Add new service request items (price = 0, shop will fill in)
+    // Add new service request items with auto-lookup pricing if vehicle info available
     if (params.addItems && params.addItems.length > 0) {
+      const vehicleInfo = order.vehicleInfo as
+        | { year?: string; make?: string; model?: string }
+        | null;
+
       for (const req of params.addItems) {
+        let laborHours = 0;
+
+        // Auto-lookup labor time if we have vehicle info
+        if (vehicleInfo?.year && vehicleInfo?.make && vehicleInfo?.model) {
+          try {
+            const { searchLaborTimes, findVehicles } = await import("../olp-client.ts");
+            const vehicles = await findVehicles(
+              vehicleInfo.make,
+              vehicleInfo.model,
+              Number(vehicleInfo.year),
+            );
+
+            if (vehicles.length > 0) {
+              const serviceWords = req.name
+                .split(/\s+/)
+                .filter((w) => w.length > 1);
+
+              const laborTimes = await searchLaborTimes(
+                vehicles.map((v: { id: number }) => v.id),
+                serviceWords,
+                undefined, // category
+              );
+
+              if (laborTimes.length > 0) {
+                laborHours = Number(laborTimes[0].labor_hours);
+              }
+            }
+          } catch (_e) {
+            // Fallback: laborHours stays 0
+          }
+        }
+
+        const laborCents = Math.round(laborHours * 140 * 100); // $140/hr
+
         items.push({
           id: randomUUID(),
           category: "labor",
           name: req.name,
           description: req.description,
           quantity: 1,
-          unitPriceCents: 0,
-          totalCents: 0,
+          unitPriceCents: laborCents,
+          totalCents: laborCents,
           taxable: true,
+          ...(laborHours > 0 ? { laborHours } : {}),
         });
       }
     }
 
-    const subtotalCents = items.reduce((sum, item) => sum + item.totalCents, 0);
+    const subtotalCents = items.reduce((sum, item) => sum + (item.totalCents ?? 0), 0);
 
     await db
       .update(schema.orders)

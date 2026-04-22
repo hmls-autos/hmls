@@ -107,6 +107,7 @@ export const lookupLaborTimeTool = {
         laborHours: Number(lt.labor_hours),
         engine: vehicle?.engine ?? "unknown",
         fuelType: vehicle?.fuel_type ?? null,
+        sourceMeta: lt.sourceMeta,
       };
     });
 

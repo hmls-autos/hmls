@@ -46,6 +46,36 @@ export interface OlpLaborTime {
   vehicle_id: number;
 }
 
+/** Labor time result with provenance metadata for debugging */
+export interface LaborTimeResult {
+  name: string;
+  category: string;
+  labor_hours: number;
+  vehicle_id: number;
+  /** How this result was matched / where it came from */
+  sourceMeta: {
+    /** Always "OLP" for now */
+    source: "OLP";
+    /** The OLP service name that was matched */
+    matchedService: string;
+    /** The OLP category field */
+    matchedCategory: string;
+    /** 0.0–1.0 match quality score */
+    confidence: number;
+    /** What we queried with */
+    query: {
+      vehicleIds: number[];
+      serviceWords: string[];
+      category?: string;
+      matchAny: boolean;
+    };
+    /** Assumptions made during resolution */
+    assumptions: string[];
+    /** When this was resolved */
+    retrievedAt: string;
+  };
+}
+
 export interface OlpCategory {
   category: string;
   count: number;
@@ -74,21 +104,48 @@ export async function searchLaborTimes(
   serviceWords: string[],
   category: string | undefined,
   matchAny = false,
-): Promise<OlpLaborTime[]> {
+): Promise<LaborTimeResult[]> {
   if (vehicleIds.length === 0 || serviceWords.length === 0) return [];
-  logger.debug("searchLaborTimes", {
-    vehicleIds: vehicleIds.length,
-    serviceWords,
-    category,
-    matchAny,
-  });
-  const data = await olpPost<{ laborTimes: OlpLaborTime[] }>("/labor-times", {
+
+  const raw: OlpLaborTime[] = await olpPost("/labor-times", {
     vehicleIds,
     serviceWords,
     category,
     matchAny,
   });
-  return data.laborTimes;
+
+  // Compute confidence based on string overlap between query and result
+  function computeConfidence(result: OlpLaborTime): number {
+    const resultText = `${result.name} ${result.category}`.toLowerCase();
+    const words = serviceWords.map((w) => w.toLowerCase());
+    const matched = words.filter((w) => resultText.includes(w));
+    if (words.length === 0) return 0;
+    // Also penalize if category doesn't match
+    const categoryOk = category
+      ? result.category.toLowerCase().includes(category.toLowerCase())
+      : true;
+    const wordScore = matched.length / words.length;
+    return categoryOk ? Math.round(wordScore * 100) / 100 : Math.round(wordScore * 0.7 * 100) / 100;
+  }
+
+  const assumptions: string[] = [];
+  if (!category) assumptions.push("category filter not provided");
+  if (vehicleIds.length > 1) assumptions.push(`multiple vehicles matched (${vehicleIds.length})`);
+
+  const retrievedAt = new Date().toISOString();
+
+  return raw.map((r) => ({
+    ...r,
+    sourceMeta: {
+      source: "OLP" as const,
+      matchedService: r.name,
+      matchedCategory: r.category,
+      confidence: computeConfidence(r),
+      query: { vehicleIds, serviceWords, category, matchAny },
+      assumptions,
+      retrievedAt,
+    },
+  }));
 }
 
 export async function getCategoryBreakdown(
