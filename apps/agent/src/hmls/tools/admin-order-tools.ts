@@ -282,7 +282,7 @@ const createOrderTool = {
         laborHours === undefined && vehicleInfo?.year && vehicleInfo?.make && vehicleInfo?.model
       ) {
         try {
-          const { searchLaborTimes, findVehicles } = await import("../olp-client.ts");
+          const { searchLaborTimes, findVehicles } = await import("./olp-client.ts");
           const vehicles = await findVehicles(
             vehicleInfo.make,
             vehicleInfo.model,
@@ -585,7 +585,7 @@ const updateOrderItemsTool = {
       // Auto-lookup labor time if not provided and vehicle info available
       if (finalLabor === 0 && vehicleInfo?.year && vehicleInfo?.make && vehicleInfo?.model) {
         try {
-          const { searchLaborTimes, findVehicles } = await import("../olp-client.ts");
+          const { searchLaborTimes, findVehicles } = await import("./olp-client.ts");
           const vehicles = await findVehicles(
             vehicleInfo.make,
             vehicleInfo.model,
@@ -645,11 +645,17 @@ const updateOrderItemsTool = {
         if (!existing) {
           return toolResult({ success: false, error: `Item ${upd.itemId} not found` });
         }
+        // Derive existing parts cost from the already-stored total so we don't
+        // zero it out on a description/intent-only patch.
+        const existingLaborHours = (existing as unknown as { laborHours?: number }).laborHours ?? 0;
+        const existingLaborCents = Math.round(existingLaborHours * 140 * 100);
+        const existingPartsCents = Math.max(0, existing.totalCents - existingLaborCents);
+        const existingPartsCost = existingPartsCents / 100;
         // Rebuild with new values, keeping stable ID
         const rebuilt = await buildItem(
           upd.description ?? existing.name,
-          upd.labor_hours ?? (existing as unknown as { laborHours?: number }).laborHours,
-          upd.parts_cost ?? 0,
+          upd.labor_hours ?? existingLaborHours,
+          upd.parts_cost ?? existingPartsCost,
           upd.intent ??
             (existing as unknown as { metadata?: { intent?: string } }).metadata?.intent as
               | "replace"
@@ -694,19 +700,23 @@ const updateOrderItemsTool = {
       updates.notes = params.notes;
     }
 
-    // Optimistic concurrency update
+    // Optimistic concurrency update — require row's revisionNumber to match the
+    // value we read, so concurrent writers collide instead of silently overwriting.
     const [updated] = await db
       .update(schema.orders)
       .set(updates)
       .where(
-        sql`${schema.orders.id} = ${id} AND ${schema.orders.status} = ${order.status}`,
+        sql`${schema.orders.id} = ${id}
+          AND ${schema.orders.status} = ${order.status}
+          AND COALESCE(${schema.orders.revisionNumber}, 0) = ${currentVersion}`,
       )
       .returning();
 
     if (!updated) {
       return toolResult({
         success: false,
-        error: "Order status changed concurrently — refresh and retry",
+        error:
+          "Order was modified concurrently (status or revisionNumber changed) — refresh and retry",
       });
     }
 
@@ -746,7 +756,7 @@ const updateOrderItemsTool = {
 
 const updateOrderTool = {
   name: "update_order",
-  description: "Update order metadata: customer info, vehicle info, notes, tags. " +
+  description: "Update order metadata: customer info, vehicle info, notes. " +
     "Use this when customer provides their name/phone/email/vin AFTER order was created. " +
     "Supports partial updates — only include fields you want to change. " +
     "Does NOT change items or pricing.",
@@ -785,7 +795,6 @@ const updateOrderTool = {
       .optional()
       .describe("Vehicle information to update"),
     notes: z.string().optional().describe("Order notes"),
-    tags: z.array(z.string()).optional().describe("Tags to replace existing tags"),
     expectedVersion: z.number().int().optional().describe(
       "Expected revisionNumber for optimistic concurrency",
     ),
@@ -805,7 +814,6 @@ const updateOrderTool = {
         mileage?: number;
       };
       notes?: string;
-      tags?: string[];
       expectedVersion?: number;
       idempotencyKey?: string;
     },
@@ -819,12 +827,11 @@ const updateOrderTool = {
     if (
       params.customerInfo === undefined &&
       params.vehicleInfo === undefined &&
-      params.notes === undefined &&
-      params.tags === undefined
+      params.notes === undefined
     ) {
       return toolResult({
         success: false,
-        error: "Provide at least one of: customerInfo, vehicleInfo, notes, tags",
+        error: "Provide at least one of: customerInfo, vehicleInfo, notes",
       });
     }
 
@@ -878,15 +885,23 @@ const updateOrderTool = {
       updates.notes = params.notes;
     }
 
-    if (params.tags !== undefined) {
-      updates.tags = params.tags;
-    }
-
+    // Enforce optimistic concurrency at the SQL layer: the row we read must
+    // still carry the same revisionNumber when we write.
     const [updated] = await db
       .update(schema.orders)
       .set(updates)
-      .where(eq(schema.orders.id, id))
+      .where(
+        sql`${schema.orders.id} = ${id}
+          AND COALESCE(${schema.orders.revisionNumber}, 0) = ${currentVersion}`,
+      )
       .returning();
+
+    if (!updated) {
+      return toolResult({
+        success: false,
+        error: "Order was modified concurrently (revisionNumber changed) — refresh and retry",
+      });
+    }
 
     await db.insert(schema.orderEvents).values({
       orderId: id,

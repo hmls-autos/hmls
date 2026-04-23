@@ -198,28 +198,10 @@ const STATUS_EMAILS: Record<string, EmailTemplate> = {
       </div>`),
   },
 
-  preauth: {
-    subject: "Card Authorized — Your Service Will Be Scheduled",
-    text: (ctx) =>
-      `Hi ${ctx.customerName},\n\nYour card has been authorized. We'll schedule your service appointment and notify you with the details.\n\nView your order:\n${ctx.portalUrl}/orders\n\nThanks,\nHMLS Team`,
-    html: (ctx) =>
-      htmlWrapper(`
-      <div style="padding:32px 24px;text-align:center;">
-        <div style="width:56px;height:56px;background:#f3e8ff;border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;">
-          <span style="font-size:24px;">&#128179;</span>
-        </div>
-        <h1 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#18181b;">Card Authorized</h1>
-        <p style="margin:0 0 20px;color:#71717a;font-size:14px;line-height:1.6;">
-          Hi ${ctx.customerName}, your card has been authorized. We&apos;ll schedule your service appointment and email you with the details.
-        </p>
-        <a href="${ctx.portalUrl}/orders" style="display:inline-block;background:#7c3aed;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 36px;border-radius:8px;">View Order</a>
-      </div>`),
-  },
-
   approved: {
-    subject: "Estimate Approved — We'll Prepare Your Invoice",
+    subject: "Estimate Approved — We'll Schedule Your Service",
     text: (ctx) =>
-      `Hi ${ctx.customerName},\n\nThanks for approving your estimate! We're now preparing your invoice with the final pricing.\n\nWe'll notify you as soon as it's ready.\n\nThanks,\nHMLS Team`,
+      `Hi ${ctx.customerName},\n\nThanks for approving your estimate! We'll assign a mechanic and confirm your appointment, then email you the details.\n\nThanks,\nHMLS Team`,
     html: (ctx) =>
       htmlWrapper(`
       <div style="padding:32px 24px;text-align:center;">
@@ -228,7 +210,7 @@ const STATUS_EMAILS: Record<string, EmailTemplate> = {
         </div>
         <h1 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#18181b;">Estimate Approved</h1>
         <p style="margin:0;color:#71717a;font-size:14px;line-height:1.6;">
-          Hi ${ctx.customerName}, thanks for approving! We&apos;re preparing your invoice with final pricing and will email you as soon as it&apos;s ready.
+          Hi ${ctx.customerName}, thanks for approving! We&apos;ll assign a mechanic and confirm your appointment, then email you the details.
         </p>
       </div>`),
   },
@@ -270,43 +252,6 @@ const STATUS_EMAILS: Record<string, EmailTemplate> = {
         <a href="${
         ctx.reviewUrl ?? ctx.portalUrl
       }" style="display:inline-block;background:#16a34a;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 36px;border-radius:8px;">Review Revised Estimate</a>
-      </div>`),
-  },
-
-  invoiced: {
-    subject: "Your HMLS Invoice is Ready",
-    text: (ctx) =>
-      `Hi ${ctx.customerName},\n\nYour invoice${
-        ctx.quoteTotal ? ` ($${ctx.quoteTotal})` : ""
-      } is ready. Pay securely:\n${ctx.portalUrl}/orders\n\nThanks,\nHMLS Team`,
-    html: (ctx) =>
-      htmlWrapper(`
-      <div style="padding:32px 24px;text-align:center;">
-        <h1 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#18181b;">Your Invoice is Ready</h1>
-        <p style="margin:0 0 20px;color:#71717a;font-size:14px;line-height:1.6;">
-          Hi ${ctx.customerName}, your invoice${
-        ctx.quoteTotal ? ` ($${ctx.quoteTotal})` : ""
-      } is ready. Pay securely through your portal.
-        </p>
-        <a href="${ctx.portalUrl}/orders" style="display:inline-block;background:#18181b;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 36px;border-radius:8px;">View Invoice &amp; Pay</a>
-      </div>`),
-  },
-
-  paid: {
-    subject: "Payment Received — Let's Schedule Your Service",
-    text: (ctx) =>
-      `Hi ${ctx.customerName},\n\nPayment received! Next step is scheduling your service.\n\n${ctx.portalUrl}/orders\n\nThanks,\nHMLS Team`,
-    html: (ctx) =>
-      htmlWrapper(`
-      <div style="padding:32px 24px;text-align:center;">
-        <div style="width:56px;height:56px;background:#dcfce7;border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;">
-          <span style="font-size:24px;">&#10003;</span>
-        </div>
-        <h1 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#18181b;">Payment Received</h1>
-        <p style="margin:0 0 20px;color:#71717a;font-size:14px;line-height:1.6;">
-          Hi ${ctx.customerName}, all paid! The next step is scheduling your service appointment.
-        </p>
-        <a href="${ctx.portalUrl}/orders" style="display:inline-block;background:#18181b;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 36px;border-radius:8px;">Schedule Appointment</a>
       </div>`),
   },
 

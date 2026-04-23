@@ -86,9 +86,12 @@ All customer fields are optional. You can create an order with ZERO customer inf
 - Check availability: "What's open on Thursday afternoon?" → call \`get_availability\`
 
 ## Order Status Flow
-draft → estimated → sent → approved → invoiced → paid → scheduled → in_progress → completed → archived
+draft → estimated → approved → scheduled → in_progress → completed
 
-When staff say they want to move an order forward (e.g. "mark as paid", "start the job"), use \`transition_order_status\`.
+Branches: estimated → declined → revised → estimated | any active state → cancelled.
+Payment is recorded on the completed order (paid_at, payment_method, payment_reference) — it is not a lifecycle state.
+
+When staff want to move an order forward (e.g. "start the job", "mark complete"), use \`transition_order_status\`.
 
 ## CRITICAL RULE: No Text Options
 When presenting choices, NEVER write them in text. Call ask_user_question instead.

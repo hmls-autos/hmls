@@ -3,40 +3,34 @@ import { desc, eq, sql } from "drizzle-orm";
 import { db, schema } from "../../db/client.ts";
 import { toolResult } from "@hmls/shared/tool-result";
 
-// Valid order statuses matching the gateway state machine
+// Valid order statuses matching the gateway state machine.
+// Keep this list in sync with TRANSITIONS in apps/gateway/src/routes/orders.ts.
 const ORDER_STATUSES = [
   "draft",
   "estimated",
   "revised",
   "approved",
   "declined",
-  "preauth",
   "scheduled",
   "in_progress",
-  "invoiced",
-  "paid",
   "completed",
   "cancelled",
-  "void",
-  "archived",
 ] as const;
 
-// Mirrors the state machine in gateway/src/routes/orders.ts
+// Mirrors the state machine in gateway/src/routes/orders.ts. Payment is
+// recorded on the row (paid_at / payment_method / payment_reference), not
+// as a lifecycle state.
 const TRANSITIONS: Record<string, string[]> = {
   draft: ["estimated", "cancelled"],
   estimated: ["approved", "declined", "cancelled"],
   declined: ["revised"],
   revised: ["estimated", "cancelled"],
-  approved: ["preauth", "cancelled"],
-  preauth: ["scheduled", "cancelled"],
+  approved: ["scheduled", "cancelled"],
   scheduled: ["in_progress", "cancelled"],
-  in_progress: ["invoiced", "cancelled"],
-  invoiced: ["paid", "void"],
-  paid: ["completed"],
-  completed: ["archived"],
-  archived: [],
+  in_progress: ["completed", "cancelled"],
+  // terminal
+  completed: [],
   cancelled: [],
-  void: [],
 };
 
 // ---------------------------------------------------------------------------
@@ -268,12 +262,12 @@ const getOrderStatusTool = {
         });
       }
 
-      // Get the most recent non-archived, non-cancelled order
+      // Get the most recent active (non-cancelled, non-completed) order
       const [row] = await db
         .select()
         .from(schema.orders)
         .where(
-          sql`${schema.orders.customerId} = ${customer.id} AND ${schema.orders.status} NOT IN ('archived', 'cancelled', 'void')`,
+          sql`${schema.orders.customerId} = ${customer.id} AND ${schema.orders.status} NOT IN ('cancelled', 'completed')`,
         )
         .orderBy(desc(schema.orders.createdAt))
         .limit(1);

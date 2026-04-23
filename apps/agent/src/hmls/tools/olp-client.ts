@@ -107,12 +107,13 @@ export async function searchLaborTimes(
 ): Promise<LaborTimeResult[]> {
   if (vehicleIds.length === 0 || serviceWords.length === 0) return [];
 
-  const raw: OlpLaborTime[] = await olpPost("/labor-times", {
+  const data = await olpPost<{ laborTimes: OlpLaborTime[] }>("/labor-times", {
     vehicleIds,
     serviceWords,
     category,
     matchAny,
   });
+  const raw = data.laborTimes ?? [];
 
   // Compute confidence based on string overlap between query and result
   function computeConfidence(result: OlpLaborTime): number {

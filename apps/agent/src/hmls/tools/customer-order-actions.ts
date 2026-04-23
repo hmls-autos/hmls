@@ -20,7 +20,7 @@ const approveOrderTool = {
   name: "approve_order",
   description:
     "Customer approves an estimate/quote. Only valid when the order is in 'estimated' status. " +
-    "This does not charge the customer — it signals acceptance so the shop can proceed to invoice.",
+    "This does not charge the customer — it signals acceptance so the shop can assign a mechanic and schedule the appointment.",
   schema: z.object({
     orderId: z.string().describe("The order ID to approve"),
   }),
@@ -76,7 +76,7 @@ const approveOrderTool = {
       success: true,
       orderId: id,
       newStatus: "approved",
-      message: `Order #${id} approved. The shop will proceed with invoicing.`,
+      message: `Order #${id} approved. The shop will schedule your appointment.`,
     });
   },
 };
@@ -161,10 +161,9 @@ const declineOrderTool = {
 
 const cancelOrderTool = {
   name: "cancel_order",
-  description:
-    "Customer cancels an order. Only allowed when the order has not yet been invoiced or paid " +
-    `(statuses: ${CUSTOMER_CANCELLABLE_STATUSES.join(", ")}). ` +
-    "Cannot cancel orders that are already invoiced, paid, in progress, or completed.",
+  description: "Customer cancels an order. Only allowed while the order is still in " +
+    `${CUSTOMER_CANCELLABLE_STATUSES.join(" or ")}. ` +
+    "Cannot cancel orders that are already scheduled, in progress, or completed.",
   schema: z.object({
     orderId: z.string().describe("The order ID to cancel"),
     reason: z.string().optional().describe("Optional reason for cancellation"),
@@ -367,57 +366,20 @@ const modifyOrderItemsTool = {
       items = items.filter((item) => !removeSet.has(item.id));
     }
 
-    // Add new service request items with auto-lookup pricing if vehicle info available
+    // Add new service-request items as unpriced rows. Customers cannot set
+    // prices — the shop prices them during review. Pricing here would change
+    // the quoted total before anyone on the shop side has approved the change.
     if (params.addItems && params.addItems.length > 0) {
-      const vehicleInfo = order.vehicleInfo as
-        | { year?: string; make?: string; model?: string }
-        | null;
-
       for (const req of params.addItems) {
-        let laborHours = 0;
-
-        // Auto-lookup labor time if we have vehicle info
-        if (vehicleInfo?.year && vehicleInfo?.make && vehicleInfo?.model) {
-          try {
-            const { searchLaborTimes, findVehicles } = await import("../olp-client.ts");
-            const vehicles = await findVehicles(
-              vehicleInfo.make,
-              vehicleInfo.model,
-              Number(vehicleInfo.year),
-            );
-
-            if (vehicles.length > 0) {
-              const serviceWords = req.name
-                .split(/\s+/)
-                .filter((w) => w.length > 1);
-
-              const laborTimes = await searchLaborTimes(
-                vehicles.map((v: { id: number }) => v.id),
-                serviceWords,
-                undefined, // category
-              );
-
-              if (laborTimes.length > 0) {
-                laborHours = Number(laborTimes[0].labor_hours);
-              }
-            }
-          } catch (_e) {
-            // Fallback: laborHours stays 0
-          }
-        }
-
-        const laborCents = Math.round(laborHours * 140 * 100); // $140/hr
-
         items.push({
           id: randomUUID(),
           category: "labor",
           name: req.name,
           description: req.description,
           quantity: 1,
-          unitPriceCents: laborCents,
-          totalCents: laborCents,
+          unitPriceCents: 0,
+          totalCents: 0,
           taxable: true,
-          ...(laborHours > 0 ? { laborHours } : {}),
         });
       }
     }
