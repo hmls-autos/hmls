@@ -29,11 +29,7 @@ olp-labor-times.db*
 .env.production
 .playwright-mcp/
 .claude/scheduled_tasks.lock
-<<<<<<< HEAD
 
 # Infisical local config (do not commit)
 .infisical.json
-=======
-.claude/worktrees/
->>>>>>> 0133696 (ignore .claude/worktrees/)
 .claude/worktrees/
