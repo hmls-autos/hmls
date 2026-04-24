@@ -12,24 +12,22 @@
     "jsr:@std/path@1": "1.1.4",
     "jsr:@std/path@1.0": "1.0.9",
     "jsr:@std/path@^1.1.4": "1.1.4",
-    "npm:@ai-sdk/google@^3.0.43": "3.0.43_zod@4.3.6",
+    "npm:@ai-sdk/google@^3.0.64": "3.0.64_zod@4.3.6",
     "npm:@react-pdf/renderer@^4.3.2": "4.3.2_react@19.2.4",
     "npm:@supabase/supabase-js@^2.99.1": "2.99.1",
-    "npm:ai@^6.0.116": "6.0.116_zod@4.3.6",
+    "npm:ai@^6.0.168": "6.0.168_zod@4.3.6",
     "npm:drizzle-kit@*": "0.31.9_esbuild@0.25.12",
     "npm:drizzle-kit@0.30.1": "0.30.1_esbuild@0.19.12",
     "npm:drizzle-kit@0.30.4": "0.30.4_esbuild@0.19.12",
     "npm:drizzle-kit@0.31.4": "0.31.4_esbuild@0.25.12",
     "npm:drizzle-kit@0.31.9": "0.31.9_esbuild@0.25.12",
     "npm:drizzle-kit@~0.31.9": "0.31.9_esbuild@0.25.12",
-    "npm:drizzle-orm@~0.45.1": "0.45.1_postgres@3.4.8",
-    "npm:hono@^4.12.8": "4.12.8",
+    "npm:drizzle-orm@~0.45.2": "0.45.2_postgres@3.4.9",
+    "npm:hono@^4.12.14": "4.12.14",
     "npm:json@*": "11.0.0",
     "npm:nanoid@^5.1.7": "5.1.7",
-    "npm:postgres@*": "3.4.8",
     "npm:postgres@3.4.4": "3.4.4",
-    "npm:postgres@3.4.8": "3.4.8",
-    "npm:postgres@^3.4.8": "3.4.8",
+    "npm:postgres@^3.4.9": "3.4.9",
     "npm:react@^19.2.4": "19.2.4",
     "npm:stripe@^20.4.1": "20.4.1",
     "npm:zod@^4.3.6": "4.3.6"
@@ -87,8 +85,8 @@
     }
   },
   "npm": {
-    "@ai-sdk/gateway@3.0.66_zod@4.3.6": {
-      "integrity": "sha512-SIQ0YY0iMuv+07HLsZ+bB990zUJ6S4ujORAh+Jv1V2KGNn73qQKnGO0JBk+w+Res8YqOFSycwDoWcFlQrVxS4A==",
+    "@ai-sdk/gateway@3.0.104_zod@4.3.6": {
+      "integrity": "sha512-ZKX5n74io8VIRlhIMSLWVlvT3sXC8Z7cZ9GHuWBWZDVi96+62AIsWuLGvMfcBA1STYuSoDrp6rIziZmvrTq0TA==",
       "dependencies": [
         "@ai-sdk/provider",
         "@ai-sdk/provider-utils",
@@ -96,16 +94,16 @@
         "zod"
       ]
     },
-    "@ai-sdk/google@3.0.43_zod@4.3.6": {
-      "integrity": "sha512-NGCgP5g8HBxrNdxvF8Dhww+UKfqAkZAmyYBvbu9YLoBkzAmGKDBGhVptN/oXPB5Vm0jggMdoLycZ8JReQM8Zqg==",
+    "@ai-sdk/google@3.0.64_zod@4.3.6": {
+      "integrity": "sha512-CbR82EgGPNrj/6q0HtclwuCqe0/pDShyv3nWDP/A9DroujzWXnLMlUJVrgPOsg4b40zQCwwVs2XSKCxvt/4QaA==",
       "dependencies": [
         "@ai-sdk/provider",
         "@ai-sdk/provider-utils",
         "zod"
       ]
     },
-    "@ai-sdk/provider-utils@4.0.19_zod@4.3.6": {
-      "integrity": "sha512-3eG55CrSWCu2SXlqq2QCsFjo3+E7+Gmg7i/oRVoSZzIodTuDSfLb3MRje67xE9RFea73Zao7Lm4mADIfUETKGg==",
+    "@ai-sdk/provider-utils@4.0.23_zod@4.3.6": {
+      "integrity": "sha512-z8GlDaCmRSDlqkMF2f4/RFgWxdarvIbyuk+m6WXT1LYgsnGiXRJGTD2Z1+SDl3LqtFuRtGX1aghYvQLoHL/9pg==",
       "dependencies": [
         "@ai-sdk/provider",
         "@standard-schema/spec",
@@ -692,14 +690,14 @@
         "@types/node"
       ]
     },
-    "@vercel/oidc@3.1.0": {
-      "integrity": "sha512-Fw28YZpRnA3cAHHDlkt7xQHiJ0fcL+NRcIqsocZQUSmbzeIKRpwttJjik5ZGanXP+vlA4SbTg+AbA3bP363l+w=="
+    "@vercel/oidc@3.2.0": {
+      "integrity": "sha512-UycprH3T6n3jH0k44NHMa7pnFHGu/N05MjojYr+Mc6I7obkoLIJujSWwin1pCvdy/eOxrI/l3uDLQsmcrOb4ug=="
     },
     "abs-svg-path@0.1.1": {
       "integrity": "sha512-d8XPSGjfyzlXC3Xx891DJRyZfqk5JU0BJrDQcsWomFIV1/BIzPW5HDH5iDdWpqWaav0YVIEzT1RHTwWr0FFshA=="
     },
-    "ai@6.0.116_zod@4.3.6": {
-      "integrity": "sha512-7yM+cTmyRLeNIXwt4Vj+mrrJgVQ9RMIW5WO0ydoLoYkewIvsMcvUmqS4j2RJTUXaF1HphwmSKUMQ/HypNRGOmA==",
+    "ai@6.0.168_zod@4.3.6": {
+      "integrity": "sha512-2HqCJuO+1V2aV7vfYs5LFEUfxbkGX+5oa54q/gCCTL7KLTdbxcCu5D7TdLA5kwsrs3Szgjah9q6D9tpjHM3hUQ==",
       "dependencies": [
         "@ai-sdk/gateway",
         "@ai-sdk/provider",
@@ -800,13 +798,13 @@
       ],
       "bin": true
     },
-    "drizzle-orm@0.45.1_postgres@3.4.8": {
-      "integrity": "sha512-Te0FOdKIistGNPMq2jscdqngBRfBpC8uMFVwqjf6gtTVJHIQ/dosgV/CLBU2N4ZJBsXL5savCba9b0YJskKdcA==",
+    "drizzle-orm@0.45.2_postgres@3.4.9": {
+      "integrity": "sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q==",
       "dependencies": [
-        "postgres@3.4.8"
+        "postgres@3.4.9"
       ],
       "optionalPeers": [
-        "postgres@3.4.8"
+        "postgres@3.4.9"
       ]
     },
     "emoji-regex-xs@1.0.0": {
@@ -921,8 +919,8 @@
     "events@3.3.0": {
       "integrity": "sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q=="
     },
-    "eventsource-parser@3.0.6": {
-      "integrity": "sha512-Vo1ab+QXPzZ4tCa8SwIHJFaSzy4R6SHf7BY79rFBDf0idraZWAkYrDjDj8uWaSm3S2TK+hJ7/t1CEmZ7jXw+pg=="
+    "eventsource-parser@3.0.8": {
+      "integrity": "sha512-70QWGkr4snxr0OXLRWsFLeRBIRPuQOvt4s8QYjmUlmlkyTZkRqS7EDVRZtzU3TiyDbXSzaOeF0XUKy8PchzukQ=="
     },
     "fast-deep-equal@3.1.3": {
       "integrity": "sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q=="
@@ -947,8 +945,8 @@
         "resolve-pkg-maps"
       ]
     },
-    "hono@4.12.8": {
-      "integrity": "sha512-VJCEvtrezO1IAR+kqEYnxUOoStaQPGrCmX3j4wDTNOcD1uRPFpGlwQUIW8niPuvHXaTUxeOUl5MMDGrl+tmO9A=="
+    "hono@4.12.14": {
+      "integrity": "sha512-am5zfg3yu6sqn5yjKBNqhnTX7Cv+m00ox+7jbaKkrLMRJ4rAdldd1xPd/JzbBWspqaQv6RSTrgFN95EsfhC+7w=="
     },
     "hsl-to-hex@1.0.0": {
       "integrity": "sha512-K6GVpucS5wFf44X0h2bLVRDsycgJmf9FF2elg+CrqD8GcFU8c6vYhgXn8NjUkFCwj+xDFb70qgLbTUm6sxwPmA==",
@@ -1038,8 +1036,8 @@
     "postgres@3.4.4": {
       "integrity": "sha512-IbyN+9KslkqcXa8AO9fxpk97PA4pzewvpi2B3Dwy9u4zpV32QicaEdgmF3eSQUzdRk7ttDHQejNgAEr4XoeH4A=="
     },
-    "postgres@3.4.8": {
-      "integrity": "sha512-d+JFcLM17njZaOLkv6SCev7uoLaBtfK86vMUXhW1Z4glPWh4jozno9APvW/XKFJ3CCxVoC7OL38BqRydtu5nGg=="
+    "postgres@3.4.9": {
+      "integrity": "sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw=="
     },
     "prop-types@15.8.1": {
       "integrity": "sha512-oj87CgZICdulUohogVAR7AjlC0327U4el4L6eAvOqCeudMDVU0NThNaV+b9Df4dXgSP1gXMTnPdhfe/2qDH5cg==",
@@ -1177,11 +1175,11 @@
       "jsr:@db/sqlite@0.13",
       "jsr:@logtape/logtape@0.9",
       "jsr:@std/assert@1",
-      "npm:@ai-sdk/google@^3.0.43",
-      "npm:ai@^6.0.116",
-      "npm:drizzle-orm@~0.45.1",
-      "npm:hono@^4.12.8",
-      "npm:postgres@^3.4.8",
+      "npm:@ai-sdk/google@^3.0.64",
+      "npm:ai@^6.0.168",
+      "npm:drizzle-orm@~0.45.2",
+      "npm:hono@^4.12.14",
+      "npm:postgres@^3.4.9",
       "npm:stripe@^20.4.1",
       "npm:zod@^4.3.6"
     ],
