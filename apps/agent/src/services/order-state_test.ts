@@ -100,8 +100,11 @@ Deno.test("isTerminal: terminal statuses have no outbound transitions", () => {
 // allowedTransitions — shape of the state machine
 // ---------------------------------------------------------------------------
 
-Deno.test("allowedTransitions: draft goes to estimated or cancelled", () => {
-  assertEquals([...allowedTransitions("draft")].sort(), ["cancelled", "estimated"]);
+Deno.test("allowedTransitions: draft goes to estimated, scheduled or cancelled", () => {
+  assertEquals(
+    [...allowedTransitions("draft")].sort(),
+    ["cancelled", "estimated", "scheduled"],
+  );
 });
 
 Deno.test("allowedTransitions: estimated goes to approved/declined/cancelled", () => {
@@ -263,8 +266,11 @@ Deno.test("availableActions: customer on estimated sees approve/decline/cancel",
   );
 });
 
-Deno.test("availableActions: customer on draft sees nothing (shop-only)", () => {
-  assertEquals(availableActions("draft", CUSTOMER), []);
+Deno.test("availableActions: customer on draft can only cancel", () => {
+  // Chat-flow draft: customer accumulates items + appointment; if they
+  // walk away mid-chat they can cancel. Shop owns the draft → scheduled
+  // confirm transition.
+  assertEquals(availableActions("draft", CUSTOMER), ["cancelled"]);
 });
 
 Deno.test("availableActions: admin on approved sees scheduled + cancelled", () => {

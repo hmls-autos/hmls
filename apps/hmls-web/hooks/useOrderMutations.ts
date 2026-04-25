@@ -16,6 +16,7 @@ export function useOrderMutations(
   const [transitioning, setTransitioning] = useState(false);
   const [savingItems, setSavingItems] = useState(false);
   const [savingCustomer, setSavingCustomer] = useState(false);
+  const [savingSchedule, setSavingSchedule] = useState(false);
 
   async function transitionStatus(
     newStatus: string,
@@ -68,12 +69,34 @@ export function useOrderMutations(
     }
   }
 
+  async function setSchedule(
+    scheduledAt: string,
+    durationMinutes: number,
+    location?: string | null,
+  ): Promise<void> {
+    setSavingSchedule(true);
+    try {
+      await authFetch(`/api/admin/orders/${orderId}/schedule`, {
+        method: "POST",
+        body: JSON.stringify({ scheduledAt, durationMinutes, location }),
+      });
+      revalidate();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to set appointment time");
+      throw e;
+    } finally {
+      setSavingSchedule(false);
+    }
+  }
+
   return {
     transitionStatus,
     saveItems,
     saveCustomer,
+    setSchedule,
     transitioning,
     savingItems,
     savingCustomer,
+    savingSchedule,
   };
 }

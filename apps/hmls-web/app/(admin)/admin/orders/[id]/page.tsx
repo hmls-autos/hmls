@@ -22,6 +22,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { ReassignBookingDialog } from "@/components/admin/mechanics/ReassignBookingDialog";
+import { SetTimeDialog } from "@/components/admin/orders/SetTimeDialog";
 import { OrderProgressBar } from "@/components/OrderProgressBar";
 import { CustomerEditor } from "@/components/order/CustomerEditor";
 import { ItemEditor } from "@/components/order/ItemEditor";
@@ -301,6 +302,7 @@ function BookingPanel({
   order,
   providerName,
   onAssign,
+  onSetTime,
   onConfirm,
   onReject,
   actionBusy,
@@ -315,14 +317,24 @@ function BookingPanel({
   };
   providerName: string | null;
   onAssign: () => void;
+  onSetTime: () => void;
   onConfirm: () => void;
   onReject: () => void;
   actionBusy: boolean;
 }) {
   const vehicle = order.vehicleInfo;
   const isUnassigned = order.providerId == null;
-  // "approved" = customer accepted but not yet confirmed/scheduled by shop
-  const needsDispatch = order.status === "approved";
+  const isUnscheduled = order.scheduledAt == null;
+  // Dispatch controls show on draft (chat-flow accumulation), approved
+  // (legacy portal flow), and scheduled (already-confirmed bookings need
+  // reschedule / reassign / reject overrides). The Confirm button is the
+  // single shop gate that promotes a complete draft to scheduled.
+  const needsDispatch =
+    order.status === "draft" ||
+    order.status === "approved" ||
+    order.status === "scheduled";
+  const canConfirm =
+    order.status === "draft" && !isUnscheduled && !isUnassigned;
   return (
     <Card className="gap-0 py-0">
       <CardHeader className="px-3 py-3">
@@ -339,7 +351,7 @@ function BookingPanel({
               .join(" ")}
           </p>
         )}
-        {order.scheduledAt && (
+        {order.scheduledAt ? (
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Calendar className="w-3 h-3" />
             {new Date(order.scheduledAt).toLocaleString("en-US", {
@@ -350,6 +362,13 @@ function BookingPanel({
               minute: "2-digit",
               hour12: true,
             })}
+          </p>
+        ) : (
+          <p className="flex items-center gap-1.5 text-xs">
+            <Calendar className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+            <span className="text-amber-600 dark:text-amber-400 font-medium">
+              No appointment time
+            </span>
           </p>
         )}
         <p className="flex items-center gap-1.5 text-xs">
@@ -384,6 +403,16 @@ function BookingPanel({
           <>
             <Separator />
             <div className="flex flex-col gap-1.5 pt-1">
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={onSetTime}
+                disabled={actionBusy}
+                className="justify-center text-amber-700 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:hover:bg-amber-900/40"
+              >
+                <Calendar className="size-3" />
+                {isUnscheduled ? "Set appointment time" : "Reschedule"}
+              </Button>
               {isUnassigned && (
                 <Button
                   variant="ghost"
@@ -396,17 +425,18 @@ function BookingPanel({
                   Assign mechanic
                 </Button>
               )}
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={onConfirm}
-                disabled={actionBusy || isUnassigned}
-                title={isUnassigned ? "Assign a mechanic first" : undefined}
-                className="justify-center text-green-700 bg-green-100 hover:bg-green-200 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40 disabled:opacity-40"
-              >
-                <CheckCircle className="size-3" />
-                Confirm booking
-              </Button>
+              {canConfirm && (
+                <Button
+                  variant="default"
+                  size="xs"
+                  onClick={onConfirm}
+                  disabled={actionBusy}
+                  className="justify-center bg-green-600 hover:bg-green-700 text-white"
+                >
+                  <CheckCircle className="size-3" />
+                  Confirm booking
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="xs"
@@ -555,15 +585,18 @@ export default function OrderDetailPage() {
 
   const [editMode, setEditMode] = useState<null | "items" | "customer">(null);
   const [reassignOpen, setReassignOpen] = useState(false);
+  const [setTimeOpen, setSetTimeOpen] = useState(false);
   const [bookingBusy, setBookingBusy] = useState(false);
   const { mechanics } = useAdminMechanics();
   const {
     transitionStatus,
     saveItems,
     saveCustomer,
+    setSchedule,
     transitioning,
     savingItems,
     savingCustomer,
+    savingSchedule,
   } = useOrderMutations(orderId, mutate);
 
   if (isLoading) {
@@ -630,6 +663,8 @@ export default function OrderDetailPage() {
   async function handleBookingConfirm() {
     setBookingBusy(true);
     try {
+      // The harness allows draft → scheduled when scheduledAt + providerId
+      // are present (the chat flow ensures this before the button enables).
       await transitionStatus("scheduled");
       await mutate();
     } catch (e) {
@@ -947,6 +982,7 @@ export default function OrderDetailPage() {
               order={order}
               providerName={bookingProviderName}
               onAssign={() => setReassignOpen(true)}
+              onSetTime={() => setSetTimeOpen(true)}
               onConfirm={handleBookingConfirm}
               onReject={handleBookingReject}
               actionBusy={bookingBusy}
@@ -1040,6 +1076,26 @@ export default function OrderDetailPage() {
         open={reassignOpen}
         onOpenChange={setReassignOpen}
         onAssigned={() => mutate()}
+      />
+
+      <SetTimeDialog
+        open={setTimeOpen}
+        onOpenChange={setSetTimeOpen}
+        initialScheduledAt={
+          order.scheduledAt ? new Date(order.scheduledAt).toISOString() : null
+        }
+        initialDurationMinutes={order.durationMinutes}
+        suggestedDurationMinutes={Math.max(
+          60,
+          Math.round(
+            order.items
+              .filter((it) => it.category === "labor")
+              .reduce((sum, it) => sum + (it.laborHours ?? 0) * 60, 0),
+          ) || 60,
+        )}
+        initialLocation={order.location}
+        saving={savingSchedule}
+        onSave={setSchedule}
       />
     </div>
   );

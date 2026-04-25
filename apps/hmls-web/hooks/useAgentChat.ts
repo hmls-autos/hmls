@@ -16,7 +16,6 @@ import {
   useRef,
   useState,
 } from "react";
-import type { BookingConfirmationData } from "@/components/BookingConfirmation";
 import type { EstimateCardData } from "@/components/EstimateCard";
 import {
   clearStoredChat,
@@ -29,10 +28,9 @@ import { CHAT_ENDPOINT } from "@/lib/config";
 
 export interface Message {
   id: string;
-  role: "user" | "assistant" | "estimate-card" | "booking-confirmation";
+  role: "user" | "assistant" | "estimate-card";
   content: string;
   estimateData?: EstimateCardData;
-  bookingData?: BookingConfirmationData;
 }
 
 interface UseAgentChatOptions {
@@ -174,18 +172,6 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
       for (const part of msg.parts.filter(isToolOrDynamicToolUIPart)) {
         if (part.state !== "output-available") continue;
         const toolName = getToolOrDynamicToolName(part);
-
-        if (
-          toolName === "create_booking" &&
-          (part.output as Record<string, unknown>)?.success !== undefined
-        ) {
-          result.push({
-            id: `${msg.id}-booking-${part.toolCallId}`,
-            role: "booking-confirmation",
-            content: "",
-            bookingData: part.output as BookingConfirmationData,
-          });
-        }
 
         if (
           toolName === "create_order" &&

@@ -2,6 +2,7 @@ import { hasToolCall, type ModelMessage, stepCountIs, streamText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { getLogger } from "@logtape/logtape";
 import { STAFF_SYSTEM_PROMPT } from "./staff-system-prompt.ts";
+import { loadSkills } from "./load-skills.ts";
 import { schedulingTools } from "./tools/scheduling.ts";
 import { orderOpsTools } from "./tools/order-ops.ts";
 import { adminOrderTools } from "./tools/admin-order-tools.ts";
@@ -10,6 +11,7 @@ import { askUserQuestionTools } from "../common/tools/ask-user-question.ts";
 import { laborLookupTools } from "../common/tools/labor-lookup.ts";
 import { partsLookupTools } from "../common/tools/parts-lookup.ts";
 import { orderTools } from "../common/tools/order.ts";
+import { scheduleTools } from "../common/tools/schedule.ts";
 import type { AgentConfig } from "./agent.ts";
 
 const logger = getLogger(["hmls", "agent", "staff"]);
@@ -25,16 +27,23 @@ export interface RunStaffAgentOptions {
   adminEmail?: string;
 }
 
-export function runStaffAgent(options: RunStaffAgentOptions) {
+// Same skill bundle as the customer agent — staff also needs the
+// pricing reference + state machine.
+const SKILLS_PROMISE = loadSkills(["order", "scheduling"]);
+
+export async function runStaffAgent(options: RunStaffAgentOptions) {
   const { messages, config, adminEmail } = options;
   const modelId = config.agentModel || DEFAULT_MODEL;
 
   const google = createGoogleGenerativeAI({ apiKey: config.googleApiKey });
+  const skills = await SKILLS_PROMISE;
+  const systemPrompt = skills ? `${STAFF_SYSTEM_PROMPT}\n\n${skills}` : STAFF_SYSTEM_PROMPT;
 
   const allTools: LegacyTool[] = [
     ...askUserQuestionTools,
     ...orderTools,
     ...schedulingTools,
+    ...scheduleTools,
     ...laborLookupTools,
     ...partsLookupTools,
     ...orderOpsTools,
@@ -47,7 +56,7 @@ export function runStaffAgent(options: RunStaffAgentOptions) {
 
   return streamText({
     model: google(modelId),
-    system: STAFF_SYSTEM_PROMPT,
+    system: systemPrompt,
     messages,
     tools,
     stopWhen: [stepCountIs(25), hasToolCall("ask_user_question")],

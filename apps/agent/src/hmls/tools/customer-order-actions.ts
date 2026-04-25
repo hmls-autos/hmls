@@ -8,96 +8,22 @@ import type { ToolContext } from "../../common/convert-tools.ts";
 import { patchItems, transition } from "../../services/order-state.ts";
 import { customerAgentActor, toolResultFromOrderState } from "../../services/order-state-tool.ts";
 
-// ---------------------------------------------------------------------------
-// Tool 1: approve_order
-// ---------------------------------------------------------------------------
-
-const approveOrderTool = {
-  name: "approve_order",
-  description:
-    "Customer approves an estimate/quote. Only valid when the order is in 'estimated' status. " +
-    "This does not charge the customer — it signals acceptance so the shop can assign a mechanic and schedule the appointment.",
-  schema: z.object({
-    orderId: z.string().describe("The order ID to approve"),
-  }),
-  execute: async (params: { orderId: string }, ctx: ToolContext | undefined) => {
-    const id = Number(params.orderId);
-    if (!Number.isInteger(id) || id <= 0) {
-      return toolResult({ success: false, error: "Invalid order ID" });
-    }
-    const actor = customerAgentActor(ctx);
-    if (!actor) return toolResult({ success: false, error: "Authentication required" });
-
-    // Ownership check — harness enforces role permission, not row ownership.
-    const [order] = await db
-      .select({ id: schema.orders.id, customerId: schema.orders.customerId })
-      .from(schema.orders)
-      .where(eq(schema.orders.id, id))
-      .limit(1);
-    if (!order || order.customerId !== ctx?.customerId) {
-      return toolResult({ success: false, error: `Order #${id} not found` });
-    }
-
-    const result = await transition(id, "approved", actor);
-    return toolResultFromOrderState(result, (row) => ({
-      orderId: row.id,
-      newStatus: row.status,
-      message: `Order #${row.id} approved. The shop will schedule your appointment.`,
-    }));
-  },
-};
+// `approve_order` and `decline_order` were removed: in the chat flow the
+// order accumulates items + appointment + auto-assigned mechanic on a
+// `draft`, and the customer's `schedule_order` call is itself the
+// affirmative-consent signal (audited via `schedule_attached`). Admin's
+// single Confirm click promotes draft → scheduled. Customers who change
+// their mind use `cancel_order` instead. The legacy portal /approve and
+// /decline endpoints remain for non-chat (PDF link) flows.
 
 // ---------------------------------------------------------------------------
-// Tool 2: decline_order
-// ---------------------------------------------------------------------------
-
-const declineOrderTool = {
-  name: "decline_order",
-  description:
-    "Customer declines an estimate/quote. Only valid when the order is in 'estimated' status. " +
-    "The shop may revise and resend the estimate.",
-  schema: z.object({
-    orderId: z.string().describe("The order ID to decline"),
-    reason: z.string().optional().describe("Optional reason for declining"),
-  }),
-  execute: async (
-    params: { orderId: string; reason?: string },
-    ctx: ToolContext | undefined,
-  ) => {
-    const id = Number(params.orderId);
-    if (!Number.isInteger(id) || id <= 0) {
-      return toolResult({ success: false, error: "Invalid order ID" });
-    }
-    const actor = customerAgentActor(ctx);
-    if (!actor) return toolResult({ success: false, error: "Authentication required" });
-
-    const [order] = await db
-      .select({ id: schema.orders.id, customerId: schema.orders.customerId })
-      .from(schema.orders)
-      .where(eq(schema.orders.id, id))
-      .limit(1);
-    if (!order || order.customerId !== ctx?.customerId) {
-      return toolResult({ success: false, error: `Order #${id} not found` });
-    }
-
-    const result = await transition(id, "declined", actor, { reason: params.reason });
-    return toolResultFromOrderState(result, (row) => ({
-      orderId: row.id,
-      newStatus: row.status,
-      message: `Order #${row.id} declined. The shop has been notified and may revise the estimate.`,
-    }));
-  },
-};
-
-// ---------------------------------------------------------------------------
-// Tool 3: cancel_order — customer-initiated cancel (pre-work only)
+// Tool 1: cancel_order — customer-initiated cancel (pre-work only)
 // ---------------------------------------------------------------------------
 
 const cancelOrderTool = {
   name: "cancel_order",
-  description:
-    "Customer cancels an order. Allowed while the order is in 'estimated' or 'scheduled' " +
-    "status (before any work begins). In-progress work must be handled by the shop.",
+  description: "Customer cancels an order. Allowed while the order is in 'draft', 'estimated' or " +
+    "'scheduled' status (before any work begins). In-progress work must be handled by the shop.",
   schema: z.object({
     orderId: z.string().describe("The order ID to cancel"),
     reason: z.string().optional().describe("Optional reason for cancellation"),
@@ -291,13 +217,4 @@ const modifyOrderItemsTool = {
 // Export
 // ---------------------------------------------------------------------------
 
-// Note: `request_reschedule` was removed — it duplicated
-// customer-booking-actions.ts / `request_booking_reschedule`. The agent
-// should only see one reschedule tool.
-
-export const customerOrderActionTools = [
-  approveOrderTool,
-  declineOrderTool,
-  cancelOrderTool,
-  modifyOrderItemsTool,
-];
+export const customerOrderActionTools = [cancelOrderTool, modifyOrderItemsTool];

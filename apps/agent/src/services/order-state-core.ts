@@ -37,7 +37,10 @@ export type Actor =
   | { kind: "admin"; email: string }
   | { kind: "mechanic"; providerId: number }
   | { kind: "agent"; surface: "customer_chat" | "staff_chat"; actingAs: Actor }
-  | { kind: "system"; source: "stripe_webhook" | "cron" | "migration" }
+  | {
+    kind: "system";
+    source: "stripe_webhook" | "cron" | "migration" | "auto_dispatch";
+  }
   | { kind: "share_token"; orderId: number };
 
 export type ActorKind = Actor["kind"];
@@ -47,7 +50,12 @@ export type ActorKind = Actor["kind"];
 // ---------------------------------------------------------------------------
 
 export const TRANSITIONS: Readonly<Record<OrderStatus, readonly OrderStatus[]>> = {
-  draft: ["estimated", "cancelled"],
+  // `draft → scheduled` is the chat-flow shortcut: the customer accumulates
+  // items + appointment + auto-assigned mechanic on a draft order, then
+  // admin's single "Confirm booking" click promotes the package straight to
+  // scheduled. The legacy `draft → estimated → approved → scheduled` path
+  // remains for portal/PDF approvals where the customer is not in a chat.
+  draft: ["estimated", "scheduled", "cancelled"],
   estimated: ["approved", "declined", "cancelled"],
   declined: ["revised"],
   revised: ["estimated", "cancelled"],
@@ -69,11 +77,14 @@ export const ACTOR_PERMISSIONS: Readonly<
   >
 > = {
   customer: {
+    // `draft` cancel: chat-flow draft accumulates items + appointment for
+    // the customer; they can walk away before admin confirms.
+    draft: ["cancelled"],
     estimated: ["approved", "declined", "cancelled"],
     scheduled: ["cancelled"],
   },
   admin: {
-    draft: ["estimated", "cancelled"],
+    draft: ["estimated", "scheduled", "cancelled"],
     estimated: ["approved", "declined", "cancelled"],
     declined: ["revised"],
     revised: ["estimated", "cancelled"],
