@@ -15,17 +15,21 @@ function vehicleLabel(o: MechanicOrder) {
   return [v.year, v.make, v.model].filter(Boolean).join(" ");
 }
 
-function groupByDay(orders: MechanicOrder[]) {
-  const map = new Map<string, MechanicOrder[]>();
+function partitionBySchedule(orders: MechanicOrder[]) {
+  const pending: MechanicOrder[] = [];
+  const byDay = new Map<string, MechanicOrder[]>();
   for (const o of orders) {
-    if (!o.scheduledAt) continue;
+    if (!o.scheduledAt) {
+      pending.push(o);
+      continue;
+    }
     const key = new Date(o.scheduledAt).toDateString();
-    const existing = map.get(key);
+    const existing = byDay.get(key);
     if (existing) existing.push(o);
-    else map.set(key, [o]);
+    else byDay.set(key, [o]);
   }
-  for (const [key, group] of map) {
-    map.set(
+  for (const [key, group] of byDay) {
+    byDay.set(
       key,
       group.sort((a, b) => {
         const ta = a.scheduledAt ? new Date(a.scheduledAt).getTime() : 0;
@@ -34,12 +38,24 @@ function groupByDay(orders: MechanicOrder[]) {
       }),
     );
   }
-  return map;
+  pending.sort((a, b) => a.id - b.id);
+  return { pending, byDay };
+}
+
+function durationLabel(minutes: number | null): string {
+  if (!minutes || minutes <= 0) return "—";
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h && m) return `${h}h ${m}m`;
+  if (h) return `${h}h`;
+  return `${m}m`;
 }
 
 function OrderCard({ order }: { order: MechanicOrder }) {
   const vehicle = vehicleLabel(order);
-  const time = order.scheduledAt ? formatTime(order.scheduledAt) : "—";
+  const time = order.scheduledAt
+    ? formatTime(order.scheduledAt)
+    : durationLabel(order.durationMinutes);
   const statusConfig = ORDER_STATUS[order.status] ?? {
     label: order.status,
     color: "bg-neutral-100 text-neutral-500",
@@ -96,10 +112,13 @@ export default function MechanicOrdersPage() {
 
   const { orders, isLoading } = useMechanicOrders(fromDate);
 
+  // Include `approved` so an order assigned-but-not-yet-confirmed by the
+  // shop still surfaces here. The mechanic needs to know it's coming even
+  // before the admin clicks "Confirm booking".
   const upcoming = orders.filter((o) =>
-    ["scheduled", "in_progress"].includes(o.status),
+    ["approved", "scheduled", "in_progress"].includes(o.status),
   );
-  const byDay = groupByDay(upcoming);
+  const { pending, byDay } = partitionBySchedule(upcoming);
   const sortedDays = [...byDay.keys()].sort(
     (a, b) => new Date(a).getTime() - new Date(b).getTime(),
   );
@@ -131,6 +150,18 @@ export default function MechanicOrdersPage() {
           </p>
         ) : (
           <div className="space-y-6">
+            {pending.length > 0 && (
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400 mb-2">
+                  Pending schedule
+                </h3>
+                <div className="space-y-2">
+                  {pending.map((o) => (
+                    <OrderCard key={o.id} order={o} />
+                  ))}
+                </div>
+              </div>
+            )}
             {sortedDays.map((day) => (
               <div key={day}>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">

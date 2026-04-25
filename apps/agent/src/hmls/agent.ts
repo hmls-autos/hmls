@@ -2,6 +2,7 @@ import { hasToolCall, type ModelMessage, stepCountIs, streamText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { getLogger } from "@logtape/logtape";
 import { SYSTEM_PROMPT } from "./system-prompt.ts";
+import { loadSkills } from "./load-skills.ts";
 import { schedulingTools } from "./tools/scheduling.ts";
 import { orderOpsTools } from "./tools/order-ops.ts";
 import { customerOrderActionTools } from "./tools/customer-order-actions.ts";
@@ -12,6 +13,7 @@ import { askUserQuestionTools } from "../common/tools/ask-user-question.ts";
 import { laborLookupTools } from "../common/tools/labor-lookup.ts";
 import { partsLookupTools } from "../common/tools/parts-lookup.ts";
 import { orderTools } from "../common/tools/order.ts";
+import { scheduleTools } from "../common/tools/schedule.ts";
 
 const logger = getLogger(["hmls", "agent", "hmls"]);
 
@@ -28,15 +30,22 @@ export interface RunAgentOptions {
   userContext?: UserContext;
 }
 
-export function runHmlsAgent(options: RunAgentOptions) {
+// Skill bodies inlined into the system prompt at boot. The customer agent
+// needs the order pricing reference + the scheduling state machine; both
+// live in `.skills/<name>/skill.md` as the single source of truth.
+const SKILLS_PROMISE = loadSkills(["order", "scheduling"]);
+
+export async function runHmlsAgent(options: RunAgentOptions) {
   const { messages, config, userContext } = options;
   const modelId = config.agentModel || DEFAULT_MODEL;
 
   const google = createGoogleGenerativeAI({ apiKey: config.googleApiKey });
 
-  const systemPrompt = userContext
-    ? `${SYSTEM_PROMPT}\n\n${formatUserContext(userContext)}`
-    : SYSTEM_PROMPT;
+  const skills = await SKILLS_PROMISE;
+  const parts = [SYSTEM_PROMPT];
+  if (skills) parts.push(skills);
+  if (userContext) parts.push(formatUserContext(userContext));
+  const systemPrompt = parts.join("\n\n");
 
   // Customer agent uses restricted order tools — no direct status transitions,
   // only approve/decline/cancel/request_reschedule + read-only get_order_status
@@ -51,6 +60,7 @@ export function runHmlsAgent(options: RunAgentOptions) {
     ...askUserQuestionTools,
     ...orderTools,
     ...schedulingTools,
+    ...scheduleTools,
     ...laborLookupTools,
     ...partsLookupTools,
     ...customerOrderTools,

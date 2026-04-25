@@ -542,10 +542,12 @@ export async function assignProvider(
   options: AssignProviderOptions = {},
 ): Promise<OrderStateResult> {
   const authority = resolveAuthority(actor);
-  if (authority.kind !== "admin") {
+  // Admin (manual dispatch) and system (auto-dispatch on customer schedule)
+  // are the only authorities that can write providerId.
+  if (authority.kind !== "admin" && authority.kind !== "system") {
     return {
       ok: false,
-      error: { code: "forbidden", reason: "Only admin can assign providers" },
+      error: { code: "forbidden", reason: `${authority.kind} cannot assign providers` },
     };
   }
 

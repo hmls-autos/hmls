@@ -8,11 +8,13 @@ import type { OrderItem } from "@hmls/agent/db";
 import {
   type Actor,
   addNote,
+  attachSchedule,
   type OrderStatus,
   patchItems,
   recordPayment,
   transition,
 } from "@hmls/agent/order-state";
+import { autoAssignProvider } from "@hmls/agent/auto-assign";
 import { sendOrderStateResult } from "../lib/order-state-http.ts";
 
 /** Build an admin Actor from the Hono auth context. */
@@ -282,6 +284,73 @@ orders.patch("/:id", async (c) => {
     return c.json({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
   }
   return c.json(latest);
+});
+
+// POST /orders/:id/schedule — set / reschedule the appointment time.
+// Routes through `attachSchedule` so the write is audited and the harness
+// auto-advances `approved` orders to `scheduled` (existing semantics).
+// `scheduled` / `in_progress` orders get a pure field update.
+orders.post("/:id/schedule", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id <= 0) {
+    return c.json({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
+  }
+
+  const body = await c.req.json<{
+    scheduledAt: string;
+    durationMinutes: number;
+    location?: string | null;
+  }>().catch(() => null);
+
+  if (!body || typeof body.scheduledAt !== "string") {
+    return c.json(
+      { error: { code: "BAD_REQUEST", message: "scheduledAt (ISO string) is required" } },
+      400,
+    );
+  }
+  const when = new Date(body.scheduledAt);
+  if (Number.isNaN(when.getTime())) {
+    return c.json(
+      { error: { code: "BAD_REQUEST", message: "scheduledAt is not a valid date" } },
+      400,
+    );
+  }
+  if (!Number.isInteger(body.durationMinutes) || body.durationMinutes <= 0) {
+    return c.json(
+      {
+        error: {
+          code: "BAD_REQUEST",
+          message: "durationMinutes (positive integer) is required",
+        },
+      },
+      400,
+    );
+  }
+
+  const authUser = c.get("authUser");
+  const result = await attachSchedule(
+    id,
+    {
+      scheduledAt: when,
+      durationMinutes: body.durationMinutes,
+      ...(body.location !== undefined ? { location: body.location } : {}),
+    },
+    adminActor(authUser.email),
+  );
+  if (!result.ok) return sendOrderStateResult(c, result);
+
+  // Uber-style auto-dispatch when admin sets the time on an unassigned
+  // order. Admin can still reassign manually from the BookingPanel.
+  if (result.value.providerId == null) {
+    await autoAssignProvider(id);
+  }
+  // Re-read so the response reflects the auto-assigned providerId.
+  const [refreshed] = await db
+    .select()
+    .from(schema.orders)
+    .where(eq(schema.orders.id, id))
+    .limit(1);
+  return c.json(refreshed ?? result.value);
 });
 
 // PATCH /orders/:id/status — generic status transition.

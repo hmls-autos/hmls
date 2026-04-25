@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 import { and, asc, between, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db, schema } from "@hmls/agent/db";
+import { type Actor, assignProvider } from "@hmls/agent/order-state";
 import { type AdminEnv, requireAdmin } from "../middleware/admin.ts";
+import { sendOrderStateResult } from "../lib/order-state-http.ts";
 import {
   availableMinutesForWeek,
   bookedMinutesForWeek,
@@ -9,6 +11,10 @@ import {
   endOfWeek,
   isOnJobNow,
 } from "../lib/mechanic-stats.ts";
+
+function adminActor(email: string | null | undefined): Actor {
+  return { kind: "admin", email: email ?? "admin" };
+}
 
 const adminMechanics = new Hono<AdminEnv>();
 
@@ -644,7 +650,9 @@ adminMechanics.get("/:id/orders", async (c) => {
   );
 });
 
-// POST /orders/:orderId/assign — assign / reassign the mechanic on an order
+// POST /orders/:orderId/assign — assign / reassign the mechanic on an order.
+// Routes through the order-state harness so the write is audited
+// (order_events row) and passes the same validation as other lifecycle ops.
 adminMechanics.post("/orders/:orderId/assign", async (c) => {
   const orderId = Number(c.req.param("orderId"));
   if (!Number.isInteger(orderId) || orderId <= 0) {
@@ -669,31 +677,12 @@ adminMechanics.post("/orders/:orderId/assign", async (c) => {
     );
   }
 
-  const [order] = await db
-    .select()
-    .from(schema.orders)
-    .where(eq(schema.orders.id, orderId))
-    .limit(1);
-  if (!order) {
-    return c.json(
-      { error: { code: "NOT_FOUND", message: "Order not found" } },
-      404,
-    );
-  }
-  if (order.providerId === body.providerId) {
-    return c.json(
-      {
-        error: {
-          code: "BAD_REQUEST",
-          message: "Order already assigned to that mechanic",
-        },
-      },
-      400,
-    );
-  }
-
+  // Pre-check the provider here so the "mechanic not found" error keeps its
+  // specific wording — the harness's `not_found` path is keyed on the id we
+  // pass in, so routing this through `sendOrderStateResult` alone would
+  // surface it as "Order #<providerId> not found" in the admin dialog.
   const [provider] = await db
-    .select()
+    .select({ id: schema.providers.id })
     .from(schema.providers)
     .where(eq(schema.providers.id, body.providerId))
     .limit(1);
@@ -703,25 +692,15 @@ adminMechanics.post("/orders/:orderId/assign", async (c) => {
       404,
     );
   }
-  if (!provider.isActive && !body.force) {
-    return c.json(
-      {
-        error: {
-          code: "BAD_REQUEST",
-          message: "Target mechanic is inactive. Pass force:true to assign anyway.",
-        },
-      },
-      400,
-    );
-  }
 
-  const [updated] = await db
-    .update(schema.orders)
-    .set({ providerId: body.providerId, updatedAt: new Date() })
-    .where(eq(schema.orders.id, orderId))
-    .returning();
-
-  return c.json(updated);
+  const authUser = c.get("authUser");
+  const result = await assignProvider(
+    orderId,
+    body.providerId,
+    adminActor(authUser.email),
+    { force: body.force },
+  );
+  return sendOrderStateResult(c, result);
 });
 
 export { adminMechanics };

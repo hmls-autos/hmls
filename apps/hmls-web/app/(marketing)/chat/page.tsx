@@ -5,7 +5,6 @@ import { Loader2, Send, Wrench } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, Suspense, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import { BookingConfirmation } from "@/components/BookingConfirmation";
 import { EstimateCard } from "@/components/EstimateCard";
 import { QuestionCard } from "@/components/QuestionCard";
 import { SlotPicker } from "@/components/SlotPicker";
@@ -265,11 +264,6 @@ function ChatPageInner() {
                     <EstimateCard data={msg.estimateData} />
                   </div>
                 </motion.div>
-              );
-            }
-            if (msg.role === "booking-confirmation" && msg.bookingData) {
-              return (
-                <BookingConfirmation key={msg.id} data={msg.bookingData} />
               );
             }
             return (

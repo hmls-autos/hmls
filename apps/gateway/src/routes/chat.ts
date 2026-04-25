@@ -107,7 +107,7 @@ chat.post("/", requireAuthUser, async (c) => {
   try {
     const modelMessages = await convertToModelMessages(messages);
 
-    const result = runHmlsAgent({
+    const result = await runHmlsAgent({
       messages: modelMessages,
       config: _config,
       userContext,

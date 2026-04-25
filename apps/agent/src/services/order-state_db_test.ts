@@ -19,6 +19,7 @@ import { assertEquals, assertStrictEquals } from "@std/assert";
 import { desc, eq, like } from "drizzle-orm";
 import { db, schema } from "../db/client.ts";
 import { addNote, attachSchedule, patchItems, recordPayment, transition } from "./order-state.ts";
+import { autoAssignProvider } from "./auto-assign.ts";
 import type { Actor, OrderStatus } from "./order-state-core.ts";
 import type { OrderItem } from "../db/schema.ts";
 
@@ -47,9 +48,28 @@ async function ensureTestCustomer(): Promise<number> {
 }
 
 async function sweepStaleFixtures(): Promise<void> {
-  // Deletes orders first (cascades to order_events), then the test customer
-  // is left in place for the next run.
+  // Deletes orders first (cascades to order_events), then test mechanics
+  // (cascades to availability/overrides). The test customer is left in
+  // place for the next run.
   await db.delete(schema.orders).where(like(schema.orders.contactName, `${TEST_MARKER}%`));
+  await db.delete(schema.providers).where(like(schema.providers.name, `${TEST_MARKER}%`));
+}
+
+async function insertTestMechanic(
+  opts: { name?: string; isActive?: boolean } = {},
+): Promise<typeof schema.providers.$inferSelect> {
+  const [row] = await db
+    .insert(schema.providers)
+    .values({
+      name: `${TEST_MARKER} ${opts.name ?? crypto.randomUUID().slice(0, 8)}`,
+      isActive: opts.isActive ?? true,
+    })
+    .returning();
+  return row;
+}
+
+async function deleteMechanic(id: number): Promise<void> {
+  await db.delete(schema.providers).where(eq(schema.providers.id, id));
 }
 
 async function insertTestOrder(opts: {
@@ -456,6 +476,136 @@ Deno.test({
         assertEquals(after.status, "draft", "addNote does not change status");
       } finally {
         await deleteOrder(order.id);
+      }
+    });
+
+    // -------------------------------------------------------------------
+    // Chat-flow shortcut: draft -> scheduled (admin Confirm) +
+    // auto-dispatch behavior. Exercises the new lifecycle path shipped
+    // in the one-shot booking change.
+    // -------------------------------------------------------------------
+
+    await t.step("transition: admin draft -> scheduled (chat-flow Confirm)", async () => {
+      const order = await insertTestOrder({ status: "draft", customerId });
+      try {
+        // Stamp scheduling fields first so the resulting `scheduled` order
+        // is well-formed (matches what `schedule_order` does in the chat).
+        const scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        const attached = await attachSchedule(order.id, {
+          scheduledAt,
+          durationMinutes: 60,
+        }, ADMIN_ACTOR);
+        assertEquals(attached.ok, true);
+
+        const after = await reloadOrder(order.id);
+        assertEquals(after.status, "draft", "attachSchedule on draft preserves status");
+        assertEquals(after.scheduledAt != null, true);
+
+        // Admin's "Confirm booking" — the only state mutation in the
+        // chat-flow path.
+        const result = await transition(order.id, "scheduled", ADMIN_ACTOR);
+        assertEquals(result.ok, true, "draft -> scheduled allowed for admin");
+
+        const final = await reloadOrder(order.id);
+        assertEquals(final.status, "scheduled");
+
+        const events = await getEvents(order.id);
+        const statusChanges = events.filter((e) => e.eventType === "status_change");
+        const draftToScheduled = statusChanges.find(
+          (e) => e.fromStatus === "draft" && e.toStatus === "scheduled",
+        );
+        assertEquals(draftToScheduled != null, true, "emits draft->scheduled status_change");
+      } finally {
+        await deleteOrder(order.id);
+      }
+    });
+
+    await t.step("transition: customer can cancel draft (mid-chat walk-away)", async () => {
+      const order = await insertTestOrder({ status: "draft", customerId });
+      try {
+        const customerActor: Actor = { kind: "customer", customerId };
+        const result = await transition(order.id, "cancelled", customerActor, {
+          reason: "changed mind",
+        });
+        assertEquals(result.ok, true, "customer.draft -> cancelled allowed");
+
+        const after = await reloadOrder(order.id);
+        assertEquals(after.status, "cancelled");
+        assertEquals(after.cancellationReason, "changed mind");
+      } finally {
+        await deleteOrder(order.id);
+      }
+    });
+
+    await t.step("autoAssignProvider: picks an eligible mechanic + emits event", async () => {
+      // Ensure at least one eligible mechanic exists. Dev DB may also have
+      // seeded providers; auto-assign picks any active mechanic with no
+      // conflict, so we only verify behavior, not which specific row got
+      // chosen.
+      const mech = await insertTestMechanic({ name: "auto-assign-happy" });
+      const order = await insertTestOrder({ status: "draft", customerId });
+      try {
+        // Set scheduling fields without assigning anyone.
+        const attached = await attachSchedule(order.id, {
+          scheduledAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+          durationMinutes: 60,
+        }, ADMIN_ACTOR);
+        assertEquals(attached.ok, true);
+
+        const outcome = await autoAssignProvider(order.id);
+        assertEquals(typeof outcome.providerId, "number", "picks some eligible mechanic");
+        assertEquals(outcome.providerId != null, true);
+
+        const after = await reloadOrder(order.id);
+        assertEquals(after.providerId, outcome.providerId, "writes picked id to order");
+
+        const events = await getEvents(order.id);
+        const assigned = events.find((e) => e.eventType === "provider_assigned");
+        assertEquals(assigned != null, true, "emits provider_assigned audit row");
+        assertEquals(assigned?.actor, "system:auto_dispatch");
+      } finally {
+        await deleteOrder(order.id);
+        await deleteMechanic(mech.id);
+      }
+    });
+
+    await t.step("autoAssignProvider: returns null on order with no scheduling", async () => {
+      const mech = await insertTestMechanic({ name: "auto-assign-no-time" });
+      const order = await insertTestOrder({ status: "draft", customerId });
+      try {
+        const outcome = await autoAssignProvider(order.id);
+        assertStrictEquals(outcome.providerId, null);
+        assertEquals(outcome.reason, "order is not scheduled");
+
+        const after = await reloadOrder(order.id);
+        assertStrictEquals(after.providerId, null, "no providerId written");
+      } finally {
+        await deleteOrder(order.id);
+        await deleteMechanic(mech.id);
+      }
+    });
+
+    await t.step("autoAssignProvider: skips when already assigned", async () => {
+      const mech = await insertTestMechanic({ name: "auto-assign-already" });
+      const order = await insertTestOrder({ status: "draft", customerId });
+      try {
+        const attached = await attachSchedule(order.id, {
+          scheduledAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+          durationMinutes: 60,
+          providerId: mech.id,
+        }, ADMIN_ACTOR);
+        assertEquals(attached.ok, true);
+
+        const outcome = await autoAssignProvider(order.id);
+        assertEquals(outcome.providerId, mech.id);
+        assertEquals(outcome.reason, "already assigned");
+
+        const events = await getEvents(order.id);
+        const assigned = events.filter((e) => e.eventType === "provider_assigned");
+        assertEquals(assigned.length, 0, "no extra provider_assigned event");
+      } finally {
+        await deleteOrder(order.id);
+        await deleteMechanic(mech.id);
       }
     });
 

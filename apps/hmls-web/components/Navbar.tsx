@@ -116,7 +116,10 @@ export default function Navbar() {
                   {adminLink.label}
                 </Link>
               )}
-              {isMechanic && (
+              {/* Admins with a linked provider row can also enter the
+                  mechanic panel; non-linked admins hit a 403 from the
+                  layout. */}
+              {(isMechanic || isAdmin) && (
                 <Link
                   href={mechanicLink.href}
                   className={`text-sm transition-colors rounded focus-visible:ring-2 focus-visible:ring-red-primary ${

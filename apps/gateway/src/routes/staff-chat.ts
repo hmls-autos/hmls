@@ -42,7 +42,7 @@ staffChat.post("/", requireAdmin, async (c) => {
   try {
     const modelMessages = await convertToModelMessages(messages);
 
-    const result = runStaffAgent({
+    const result = await runStaffAgent({
       messages: modelMessages,
       config: _config,
       adminEmail: authUser.email ?? undefined,

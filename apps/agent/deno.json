@@ -5,7 +5,8 @@
     ".": "./src/mod.ts",
     "./db": "./src/db/client.ts",
     "./order-state": "./src/services/order-state.ts",
-    "./order-state-core": "./src/services/order-state-core.ts"
+    "./order-state-core": "./src/services/order-state-core.ts",
+    "./auto-assign": "./src/services/auto-assign.ts"
   },
   "imports": {
     "@react-pdf/renderer": "npm:@react-pdf/renderer@^4.3.2",
