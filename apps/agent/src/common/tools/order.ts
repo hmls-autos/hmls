@@ -13,6 +13,7 @@
 import { z } from "zod";
 import { eq, ilike } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { getLogger } from "@logtape/logtape";
 import { db, schema } from "../../db/client.ts";
 import {
   buildFeeItems,
@@ -23,6 +24,8 @@ import {
 import { toolResult } from "@hmls/shared/tool-result";
 import type { DiscountType, LineItem, ServiceInput } from "../../hmls/skills/estimate/types.ts";
 import type { OrderItem } from "../../db/schema.ts";
+import { findVehicles, searchLaborTimes } from "../../hmls/tools/olp-client.ts";
+import { lookupPartsPrice } from "./parts-lookup.ts";
 import { patchItems } from "../../services/order-state.ts";
 import {
   customerAgentActor,
@@ -30,6 +33,8 @@ import {
   toolResultFromOrderState,
 } from "../../services/order-state-tool.ts";
 import type { ToolContext } from "../convert-tools.ts";
+
+const logger = getLogger(["hmls", "agent", "create_order"]);
 
 const discountEnum = z.enum([
   "returning_customer",
@@ -132,6 +137,100 @@ interface PriceServicesInput {
   isHoliday?: boolean;
   travelMiles?: number;
   discountType?: DiscountType;
+  vehicle?: { year: number; make: string; model: string };
+  /** Customer-side: pricing is server-determined. We override
+   *  laborHours from OLP, drop partsCost (shop adds parts on review),
+   *  and the caller has already stripped customItems / discount / fee
+   *  flags. A prompt-injecting customer cannot quote themselves a
+   *  cheaper price — every dollar comes from OLP or shop config. */
+  customerSide?: boolean;
+}
+
+/** Resolve laborHours for a service from OLP. Returns null if no match.
+ *  Tries the service name as-is first, then a fuzzy vehicle lookup. */
+async function olpLaborHours(
+  vehicle: { year: number; make: string; model: string },
+  serviceName: string,
+): Promise<number | null> {
+  try {
+    let vehicles = await findVehicles(vehicle.make, vehicle.model, vehicle.year);
+    if (vehicles.length === 0) {
+      vehicles = await findVehicles(vehicle.make, vehicle.model, vehicle.year, true);
+    }
+    if (vehicles.length === 0) return null;
+    const words = serviceName.split(/\s+/).filter((w) => w.length > 1);
+    if (words.length === 0) return null;
+    const hits = await searchLaborTimes(
+      vehicles.map((v) => v.id),
+      words,
+      undefined,
+    );
+    if (hits.length === 0) return null;
+    const hours = Number(hits[0].labor_hours);
+    return Number.isFinite(hours) && hours > 0 ? hours : null;
+  } catch (err) {
+    logger.warn("olpLaborHours lookup failed", { err: String(err) });
+    return null;
+  }
+}
+
+/** Resolve partsCost for a service from RockAuto. Returns null when the
+ *  service name doesn't map to a known part type (e.g. inspection, tire
+ *  rotation) or RockAuto has no listing — those orders draft with
+ *  partsCost=null and the shop fills in real parts pricing on review. */
+async function rockautoPartsCost(
+  vehicle: { year: number; make: string; model: string },
+  serviceName: string,
+): Promise<number | null> {
+  try {
+    const result = await lookupPartsPrice.execute(
+      {
+        year: vehicle.year,
+        make: vehicle.make,
+        model: vehicle.model,
+        partName: serviceName,
+      },
+      undefined,
+    );
+    // toolResult returns either { content: [{ text: JSON }] } or {} —
+    // parse the JSON and pull recommendedPrice.
+    const text = (result as { content?: Array<{ text?: string }> })
+      ?.content?.[0]?.text;
+    if (!text) return null;
+    const parsed = JSON.parse(text) as { recommendedPrice?: number };
+    return typeof parsed.recommendedPrice === "number" && parsed.recommendedPrice > 0
+      ? parsed.recommendedPrice
+      : null;
+  } catch (err) {
+    logger.warn("rockautoPartsCost lookup failed", { err: String(err) });
+    return null;
+  }
+}
+
+/** Replace LLM-supplied laborHours / partsCost with values looked up
+ *  directly from OLP / RockAuto. The customer agent CANNOT influence
+ *  pricing — every dollar comes from a database lookup or is left
+ *  blank for the shop to fill on review. */
+async function lookupServerSidePricing(
+  services: ServiceInput[],
+  vehicle: { year: number; make: string; model: string } | undefined,
+): Promise<ServiceInput[]> {
+  if (!vehicle) {
+    return services.map((s) => ({ ...s, laborHours: undefined, partsCost: undefined }));
+  }
+  return await Promise.all(
+    services.map(async (s) => {
+      const [labor, parts] = await Promise.all([
+        olpLaborHours(vehicle, s.name),
+        rockautoPartsCost(vehicle, s.name),
+      ]);
+      return {
+        ...s,
+        laborHours: labor ?? undefined,
+        partsCost: parts ?? undefined,
+      };
+    }),
+  );
 }
 
 async function priceServices(input: PriceServicesInput): Promise<{
@@ -140,8 +239,11 @@ async function priceServices(input: PriceServicesInput): Promise<{
   rangeLow: number;
   rangeHigh: number;
 }> {
+  const services = input.customerSide
+    ? await lookupServerSidePricing(input.services, input.vehicle)
+    : input.services;
   const serviceLineItems = await Promise.all(
-    input.services.map((s) => calculatePrice(s)),
+    services.map((s) => calculatePrice(s)),
   );
 
   const customLineItems: LineItem[] = (input.customItems ?? []).map((c) => ({
@@ -151,7 +253,7 @@ async function priceServices(input: PriceServicesInput): Promise<{
   }));
 
   const config = await getPricingConfig();
-  const laborCents = input.services.reduce(
+  const laborCents = services.reduce(
     (sum, s) => sum + Math.round((s.laborHours ?? 0) * config.hourlyRate),
     0,
   );
@@ -165,12 +267,12 @@ async function priceServices(input: PriceServicesInput): Promise<{
     isEarlyMorning: input.isEarlyMorning,
     travelMiles: input.travelMiles,
     totalLaborCents: laborCents,
-    services: input.services,
+    services,
   });
 
   const items: OrderItem[] = [
     ...serviceLineItems.map((li, i) =>
-      toOrderItem(li, "labor", { laborHours: input.services[i]?.laborHours })
+      toOrderItem(li, "labor", { laborHours: services[i]?.laborHours })
     ),
     ...customLineItems.map((li) => toOrderItem(li, "labor")),
     ...feeLineItems.map((li) => toOrderItem(li, "fee")),
@@ -181,7 +283,7 @@ async function priceServices(input: PriceServicesInput): Promise<{
     config,
     subtotalBeforeDiscount,
     input.discountType,
-    input.services.length,
+    services.length,
   );
 
   if (discount && discount.amount > 0) {
@@ -339,8 +441,33 @@ export const createOrderTool = {
     },
     ctx: ToolContext | undefined,
   ) => {
+    // Customer-side guard: drop everything a customer could use to
+    // self-determine pricing (flat-rate items, discount, fee flags),
+    // and force OLP-based labor + drop parts inside priceServices.
+    // Staff agent keeps full access — dispatcher applies these
+    // intentionally.
+    const isCustomerSide = customerAgentActor(ctx) != null;
+    if (isCustomerSide) {
+      params = {
+        ...params,
+        customItems: undefined,
+        discountType: undefined,
+        isRush: false,
+        isAfterHours: false,
+        isEarlyMorning: false,
+        isWeekend: false,
+        isSunday: false,
+        isHoliday: false,
+        travelMiles: undefined,
+      };
+    }
+
     // 1. Run the pricing engine first (cheap, side-effect-free).
-    const { items, subtotal, rangeLow, rangeHigh } = await priceServices(params);
+    const { items, subtotal, rangeLow, rangeHigh } = await priceServices({
+      ...params,
+      customerSide: isCustomerSide,
+      vehicle: params.vehicle,
+    });
 
     const vehicleInfo = {
       year: String(params.vehicle.year),
