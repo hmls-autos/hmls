@@ -11,6 +11,10 @@ export interface ServiceInput {
   tireCount?: number;
   /** Service involves battery replacement */
   involvesBattery?: boolean;
+  /** Customer is bringing their own parts. The agent omits `partsCost`
+   *  (or sets it to 0) for that service line; only labor is billed. The
+   *  shop verifies on review. */
+  customerSuppliedParts?: boolean;
 }
 
 export interface LineItem {
