@@ -1,5 +1,7 @@
 import type { Env } from "hono";
 import { createMiddleware } from "hono/factory";
+import { eq } from "drizzle-orm";
+import { db, schema } from "@hmls/agent/db";
 import { type AuthUser, verifyToken } from "../lib/supabase.ts";
 
 /** Env type for mechanic routes. Guarantees `providerId` is set. */
@@ -11,21 +13,23 @@ export type MechanicEnv = Env & {
 };
 
 /**
- * Allows any user whose JWT carries a `provider_id` claim, regardless of role.
- * Migration 0012 changed the RBAC hook to inject `provider_id` whenever an
- * active providers row links to the auth user, so admins who own a shop and
- * want to act as mechanics get the claim alongside their `admin` user_role.
- * Returns 401 if token missing/invalid, 403 if no provider_id claim.
+ * Two-step gate: (1) JWT must have role `mechanic` or `admin` — that's the
+ * authorization decision. (2) Resolve the active providers row linked via
+ * `auth_user_id` to populate `providerId` on context for downstream queries.
+ *
+ * Why not put `provider_id` in the JWT? The RBAC hook would have to read
+ * `providers`, which is RLS-protected — solvable with SECURITY DEFINER but
+ * that bakes a DB-internal id into a token and couples auth issuance to a
+ * mutable shop-data table. Keep the hook trivial (role only); resolve the
+ * provider row at request time. One indexed lookup per request.
  */
 export const requireMechanic = createMiddleware<MechanicEnv>(async (c, next) => {
-  // Dev bypass for local testing
   if (Deno.env.get("SKIP_AUTH") === "true") {
     const devProviderId = Number(Deno.env.get("DEV_PROVIDER_ID") ?? "1");
     c.set("authUser", {
       id: "dev-mechanic",
       email: "mechanic@localhost",
       role: "mechanic",
-      providerId: devProviderId,
     });
     c.set("providerId", devProviderId);
     await next();
@@ -48,14 +52,32 @@ export const requireMechanic = createMiddleware<MechanicEnv>(async (c, next) => 
     );
   }
 
-  if (typeof user.providerId !== "number") {
+  if (user.role !== "mechanic" && user.role !== "admin") {
     return c.json(
       { error: { code: "FORBIDDEN", message: "Mechanic access required" } },
       403,
     );
   }
 
+  const [row] = await db
+    .select({ id: schema.providers.id })
+    .from(schema.providers)
+    .where(eq(schema.providers.authUserId, user.id))
+    .limit(1);
+
+  if (!row) {
+    return c.json(
+      {
+        error: {
+          code: "FORBIDDEN",
+          message: "No provider profile linked to this account",
+        },
+      },
+      403,
+    );
+  }
+
   c.set("authUser", user);
-  c.set("providerId", user.providerId);
+  c.set("providerId", row.id);
   await next();
 });
