@@ -2,7 +2,7 @@
 
 import { ArrowLeft, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
-import { use, useState } from "react";
+import { use, useMemo, useState } from "react";
 import { AddTimeOffDialog } from "@/components/admin/mechanics/AddTimeOffDialog";
 import { EditHoursDialog } from "@/components/admin/mechanics/EditHoursDialog";
 import { EditProfileForm } from "@/components/admin/mechanics/EditProfileForm";
@@ -187,16 +187,28 @@ export default function MechanicDetailPage({
   const { mechanic, isLoading } = useAdminMechanic(id);
   // Pull a full year back so "Jobs completed" and "Recent completed" surface
   // historical data, not just the last 7 days. Server caps at 200 rows.
+  // Stabilize the date strings — recomputing them on every render with
+  // `new Date(Date.now()).toISOString()` produced a fresh value each tick,
+  // which changed the SWR key, which triggered a refetch, which triggered
+  // a re-render, which… you get it. useMemo pins the values per mount so
+  // the SWR key is stable.
+  const ordersFrom = useMemo(
+    () => new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
+    [],
+  );
+  const overridesFrom = useMemo(
+    () => new Date().toISOString().slice(0, 10),
+    [],
+  );
+  const overridesTo = useMemo(
+    () =>
+      new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    [],
+  );
+
   const { orders: mechanicOrders, mutate: mutateMechanicOrders } =
-    useAdminMechanicOrders(
-      id,
-      new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
-    );
+    useAdminMechanicOrders(id, ordersFrom);
   const { availability } = useAdminMechanicAvailability(id);
-  const overridesFrom = new Date().toISOString().slice(0, 10);
-  const overridesTo = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
   const { overrides, mutate: mutateOverrides } = useAdminMechanicOverrides(
     id,
     overridesFrom,
