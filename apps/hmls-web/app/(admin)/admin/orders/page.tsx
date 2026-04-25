@@ -174,6 +174,7 @@ export default function OrdersPage() {
               <Link
                 key={order.id}
                 href={`/admin/orders/${order.id}`}
+                prefetch={false}
                 className="flex items-center justify-between gap-3 bg-card border border-border rounded-xl p-4 hover:border-primary transition-colors group"
               >
                 <div className="flex items-center gap-3 min-w-0">
