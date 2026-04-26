@@ -1,0 +1,120 @@
+# TODOS
+
+Tracked work deferred from PRs. Each entry includes design context so a future implementer can pick
+it up cold.
+
+---
+
+## Bug B — PDF report endpoint always returns 400
+
+**What:** `GET /sessions/:id/report` requires `fixoSessions.result` jsonb populated. No code writes
+to it. Result: clicking "Report" in fixo-web always returns 400 "Session has no result yet".
+
+**Why:** Closes the diagnostic dogfood loop. Mechanic-side users want a takeaway artifact from each
+session.
+
+**Pros:** Working PDF report unlocks the full UX. Validates the agent's diagnosis quality in a
+structured form. Distinguishes "session in progress" from "session complete".
+
+**Cons:** Larger than the original 15-min sketch. Needs design work on session-boundary semantics +
+structured-output schema + UI.
+
+**Context:**
+
+- Original Plan A (D2 in 2026-04-26 plan-eng-review) said "on streamText.onFinish, write summary to
+  fixoSessions.result." Codex correctly flagged this as hand-wavy:
+  - `apps/gateway/src/routes/fixo/reports.ts:65-95` reads structured JSON
+    `{summary, overallSeverity, issues[], obdCodes[]}`. Agent only streams freeform text.
+  - Marking `status='complete'` on every `onFinish` breaks multi-turn — the first clarifying
+    question would complete the session, follow-ups would overwrite the result.
+- The right fix needs:
+  1. Explicit user "I'm done" trigger (button or "finish session" intent), not
+     implicit-on-stream-end.
+  2. A separate structured-output LLM call (`generateObject` with a Zod schema) on demand, distinct
+     from the conversational stream.
+  3. Schema:
+     `summary: string, overallSeverity: 'critical'|'high'|'medium'|'low', issues: Array<{title, severity, description, recommendedAction, estimatedCost?}>, obdCodes: Array<{code, meaning, severity}>`.
+  4. Session-completion semantics: `fixoSessions.status='complete' + completedAt` only set when user
+     finalizes. Subsequent activity reopens.
+- Until this lands, Plan B (current PR) hides the "Report" button when `fixoSessions.result` is null
+  to avoid the user-facing 400.
+
+**Depends on / blocked by:** None. Standalone follow-up PR.
+
+**Rejected alternatives:**
+
+- (A) Bundle into Plan B: rejected as PR-doubling work and deserving its own design conversation.
+- (C) Quick-and-dirty: dump full chat transcript into `fixoSessions.result`. Rejected — produces an
+  unusable PDF and builds on a bad foundation that would need to be ripped out.
+
+---
+
+## Credit-deduction race (codex finding #4 from 2026-04-26 plan-eng-review)
+
+**What:** `apps/gateway/src/middleware/fixo/credits.ts:42` `processCredits` is check-then-deduct
+without a lock or idempotency mechanism. Two concurrent `/sessions/:id/input` requests on the same
+`stripeCustomerId` can both pass the balance check before either calls `deductCredits`, causing
+overdraft.
+
+**Why:** Real bug. Exploitable: a user with `balance=5` and `cost=5/upload` who fires two concurrent
+uploads ends with `balance=-5` and gets a free upload. Low blast radius at beta volume but
+eventually exploitable.
+
+**Pros:** Closes a real billing-correctness hole. Sets up the credit subsystem for higher
+concurrency.
+
+**Cons:** Stripe `customers.createBalanceTransaction` doesn't have a native
+"decrement-if-sufficient" primitive — fix requires a workaround.
+
+**Context:**
+
+- Repro: two concurrent `POST /sessions/:id/input` with `type=photo`, balance just under
+  `2 × required`, both succeed, customer goes negative.
+- Fix paths (in increasing complexity):
+  1. **DB-cached balance with row lock**: maintain a local `customer_credit_balance` table mirroring
+     Stripe.
+     `UPDATE ... SET balance = balance - $cost WHERE stripe_customer_id = $id AND balance >= $cost RETURNING balance`
+     is atomic. Reconcile with Stripe nightly.
+  2. **Stripe idempotency_key**: derive `idempotency_key = hash(customerId, sessionId, mediaId)`.
+     Prevents same upload from double-charging on retry but doesn't prevent two different uploads
+     from both passing the read-balance check.
+  3. **Optimistic with retry**: read balance, attempt deduct, if Stripe reports insufficient
+     (retry-once-after-fresh-read).
+- Recommended path: (1) for correctness, augmented with (2) for retry-safety. Hold off on (3).
+
+**Depends on / blocked by:** None. Independent of Bug B.
+
+---
+
+## Verify audio/webm as `FileUIPart` (codex finding #8 from 2026-04-26 plan-eng-review)
+
+**What:** Plan B keeps the `analyzeAudioNoise` tool + client-side spectrogram path for audio. We
+chose to defer the experiment of "does Gemini 3 Flash via `@ai-sdk/google` accept `audio/webm` as a
+`FileUIPart` directly?". If it does, the spectrogram path can be deleted (~70 lines of WebAudio +
+the `analyzeAudioNoise` tool ~100 lines).
+
+**Why:** Possible 170-line deletion + cleaner architecture (single multimodal path for all media
+types).
+
+**Pros:** Removes a custom client-side audio-processing path. Simplifies the agent's tool surface to
+`lookupObdCode + extractVideoFrames + ask_user_question + labor/parts/estimate`. Aligns photo and
+audio paths.
+
+**Cons:** Bounded but real experiment. Need a baseline.
+
+**Context:**
+
+- Hypothesis: AI SDK v6's `FileUIPart` with `mediaType: 'audio/webm'` (or `audio/mp3`) routes
+  through `convertToModelMessages` → `@ai-sdk/google` → Gemini 3 multimodal input. Gemini 1.5+
+  supports audio input for ~9 hours total per request. Gemini 3 Flash Preview should support the
+  same.
+- Experiment design:
+  1. Curate 3-5 vehicle audio samples with known-correct diagnoses (engine knock, belt squeal, brake
+     grinding, etc.).
+  2. Run each via current spectrogram + `analyzeAudioNoise` path; record diagnosis.
+  3. Run each via `FileUIPart` audio path (same agent minus the tool); record diagnosis.
+  4. Score: which path identified the issue more accurately? Which gave more useful detail?
+- If FileUIPart audio is at parity or better: delete `analyzeAudioNoise` + spectrogram client code.
+- If worse: keep spectrogram path indefinitely; document the call.
+
+**Depends on / blocked by:** Plan B merged (the codepaths are stable).

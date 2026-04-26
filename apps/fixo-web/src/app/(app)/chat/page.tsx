@@ -1,6 +1,6 @@
 "use client";
 
-import { Car, FileDown } from "lucide-react";
+import { Car } from "lucide-react";
 import { redirect } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
@@ -14,7 +14,6 @@ import { ObdInput } from "@/components/media/ObdInput";
 import { UpgradeModal } from "@/components/UpgradeModal";
 import { useAgentChat } from "@/hooks/useAgentChat";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
-import { AGENT_URL } from "@/lib/config";
 
 function WelcomeScreen() {
   return (
@@ -55,6 +54,7 @@ export default function ChatPage() {
     scrollRef,
     inputRef,
     accessToken: session?.access_token,
+    sessionIdRef,
   });
 
   const { handleAudioSend, handlePhotoCapture, handleFilePick } =
@@ -63,24 +63,6 @@ export default function ChatPage() {
       sessionIdRef,
       sendMessage,
     });
-
-  const handleDownloadReport = useCallback(
-    async (sessionId: number) => {
-      if (!session?.access_token) return;
-      const res = await fetch(`${AGENT_URL}/sessions/${sessionId}/report`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (!res.ok) return;
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Fixo-Report-${sessionId}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    },
-    [session?.access_token],
-  );
 
   const handleObdSubmit = useCallback(
     (codes: string[]) => {
@@ -121,19 +103,9 @@ export default function ChatPage() {
         <h1 className="text-lg font-semibold">
           Fixo<span className="text-primary">.</span>
         </h1>
-        {messages.length > 0 && !isLoading && sessionIdRef.current && (
-          <button
-            type="button"
-            onClick={() =>
-              sessionIdRef.current && handleDownloadReport(sessionIdRef.current)
-            }
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-colors"
-            aria-label="Download report"
-          >
-            <FileDown className="w-4 h-4" />
-            Report
-          </button>
-        )}
+        {/* Report button hidden until Bug B PR populates fixoSessions.result.
+            Tapping it today returns 400 from /sessions/:id/report. See
+            TODOS.md → "Bug B" for the design conversation. */}
       </header>
 
       {/* Messages */}

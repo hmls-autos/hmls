@@ -47,6 +47,10 @@ interface UseAgentChatOptions {
   scrollRef?: RefObject<HTMLElement | null>;
   inputRef?: RefObject<HTMLInputElement | null>;
   accessToken?: string | null;
+  /** Source of truth for the current Fixo session id. The transport reads
+   * this on every request so the gateway can hydrate uploaded media as
+   * FileUIParts on the latest turn. */
+  sessionIdRef?: RefObject<number | null>;
 }
 
 /** Extract concatenated text from a UIMessage's parts. */
@@ -79,7 +83,7 @@ function loadStoredMessages(): UIMessage[] | undefined {
 }
 
 export function useAgentChat(options: UseAgentChatOptions = {}) {
-  const { scrollRef, inputRef, accessToken } = options;
+  const { scrollRef, inputRef, accessToken, sessionIdRef } = options;
   const [currentTool, setCurrentTool] = useState<string | null>(null);
   const [pendingEstimate, setPendingEstimate] =
     useState<FixoEstimateData | null>(null);
@@ -111,12 +115,18 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
     headersRef.current = h;
   }, [accessToken]);
 
-  // Create transport once, using a ref-based header resolver
+  // Create transport once, using ref-based resolvers so headers and the
+  // current sessionId stay live without recreating the transport.
   const transportRef = useRef<DefaultChatTransport<UIMessage> | null>(null);
+  const sessionIdRefForTransport = sessionIdRef;
   if (!transportRef.current) {
     transportRef.current = new DefaultChatTransport<UIMessage>({
       api: `${AGENT_URL}/task`,
       headers: () => headersRef.current,
+      body: () => {
+        const sid = sessionIdRefForTransport?.current ?? null;
+        return sid !== null ? { sessionId: sid } : {};
+      },
     });
   }
 

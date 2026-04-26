@@ -22,9 +22,9 @@ export {
   stripe,
 } from "./fixo/lib/stripe.ts";
 export {
+  createSignedReadUrl,
   deleteMedia,
   getMedia,
-  getMediaUrl,
   uploadMedia,
   type UploadResult,
 } from "./fixo/lib/storage.ts";

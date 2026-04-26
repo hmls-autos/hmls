@@ -20,7 +20,6 @@ function getStorageClient(): ReturnType<typeof createClient> {
 
 export interface UploadResult {
   key: string;
-  url: string;
 }
 
 export async function uploadMedia(
@@ -39,8 +38,10 @@ export async function uploadMedia(
     throw new Error(`[storage] Upload failed: ${error.message}`);
   }
 
-  const { data } = getStorageClient().storage.from(BUCKET).getPublicUrl(key);
-  return { key, url: data.publicUrl };
+  // Bucket is private. Callers that need a URL should mint a short-lived
+  // signed read URL via createSignedReadUrl when the URL is about to be
+  // consumed (e.g., right before handing it to a model provider).
+  return { key };
 }
 
 export async function getMedia(key: string): Promise<Uint8Array> {
@@ -55,9 +56,27 @@ export async function getMedia(key: string): Promise<Uint8Array> {
   return new Uint8Array(await data.arrayBuffer());
 }
 
-export function getMediaUrl(key: string): string {
-  const { data } = getStorageClient().storage.from(BUCKET).getPublicUrl(key);
-  return data.publicUrl;
+/**
+ * Create a short-lived signed read URL for a stored object.
+ *
+ * Used by /task to hydrate fixoMedia rows into the model's input as
+ * FileUIParts without making the bucket public. The TTL only needs to
+ * outlive the model's own fetch — diagnostic media may contain VINs,
+ * plates, addresses, faces, so we keep it as tight as practical.
+ */
+export async function createSignedReadUrl(
+  key: string,
+  expiresInSeconds = 900,
+): Promise<string> {
+  const { data, error } = await getStorageClient().storage
+    .from(BUCKET)
+    .createSignedUrl(key, expiresInSeconds);
+  if (error || !data) {
+    throw new Error(
+      `[storage] createSignedUrl failed for ${key}: ${error?.message ?? "no data"}`,
+    );
+  }
+  return data.signedUrl;
 }
 
 export async function deleteMedia(key: string): Promise<void> {

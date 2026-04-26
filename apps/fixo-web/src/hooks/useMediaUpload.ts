@@ -71,8 +71,10 @@ export function useMediaUpload({
       });
 
       if (res.ok) {
+        // Server hydrates the spectrogram into the next /task turn as a
+        // FileUIPart, so the chat message is just the user's intent.
         sendMessage(
-          `[Audio recording: ${recording.durationSeconds}s] Analyze this engine/vehicle sound.`,
+          `Analyze this ${recording.durationSeconds}s vehicle sound recording.`,
         );
       } else {
         sendMessage("[Audio upload failed — please try again]");
@@ -100,10 +102,12 @@ export function useMediaUpload({
       });
 
       if (res.ok) {
-        sendMessage(
-          "[Photo attached] Analyze this image for vehicle diagnostics.",
-          { imageUrl: dataUrl },
-        );
+        // Server hydrates the photo into the next /task turn as a FileUIPart.
+        // imageUrl is preserved so MessageBubble can render the local
+        // preview without waiting on a round-trip to the signed URL.
+        sendMessage("Analyze this photo for vehicle diagnostics.", {
+          imageUrl: dataUrl,
+        });
       } else {
         sendMessage("[Photo upload failed — please try again]");
       }
@@ -139,10 +143,9 @@ export function useMediaUpload({
         });
 
         if (res.ok) {
-          sendMessage(
-            "[Photo attached] Analyze this image for vehicle diagnostics.",
-            { imageUrl: dataUrl },
-          );
+          sendMessage("Analyze this photo for vehicle diagnostics.", {
+            imageUrl: dataUrl,
+          });
         } else {
           sendMessage("[Photo upload failed — please try again]");
         }

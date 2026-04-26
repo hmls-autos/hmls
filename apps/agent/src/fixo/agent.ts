@@ -2,11 +2,9 @@ import { hasToolCall, type ModelMessage, stepCountIs, streamText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { getLogger } from "@logtape/logtape";
 import { SYSTEM_PROMPT } from "./system-prompt.ts";
-import { analyzeImageTool } from "./tools/analyzeImage.ts";
 import { analyzeAudioNoiseTool } from "./tools/analyzeAudioNoise.ts";
 import { extractVideoFramesTool } from "./tools/extractVideoFrames.ts";
 import { lookupObdCodeTool } from "./tools/lookupObdCode.ts";
-import { getMediaTool, saveMediaTool } from "./tools/storage.ts";
 import { convertTools, type LegacyTool } from "../common/convert-tools.ts";
 import { askUserQuestionTools } from "../common/tools/ask-user-question.ts";
 import { laborLookupTools } from "../common/tools/labor-lookup.ts";
@@ -32,12 +30,14 @@ export function runFixoAgent(options: RunFixoAgentOptions) {
   const google = createGoogleGenerativeAI({ apiKey });
 
   const allTools: LegacyTool[] = [
-    analyzeImageTool,
+    // Photos and audio spectrograms reach the model as FileUIParts hydrated
+    // by the gateway in /task. analyzeImage / saveMedia / getMedia tools are
+    // gone — the model sees images directly. analyzeAudioNoise stays as a
+    // belt-and-suspenders option for the spectrogram path until D12's
+    // experiment retires it.
     analyzeAudioNoiseTool,
     extractVideoFramesTool,
     lookupObdCodeTool,
-    saveMediaTool,
-    getMediaTool,
     ...askUserQuestionTools,
     ...laborLookupTools,
     ...partsLookupTools,

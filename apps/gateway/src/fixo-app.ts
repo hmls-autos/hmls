@@ -25,6 +25,7 @@ export function createFixoApp() {
       origin: [
         "https://fixo.hmls.autos",
         "https://fixo.ink",
+        "http://localhost:3000",
         "http://localhost:3001",
       ],
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -92,14 +93,15 @@ export function createFixoApp() {
   app.use("/task", async (c, next) => {
     if (DEV_MODE) {
       logger.info("DEV_MODE: skipping auth");
+      const devUserId = "00000000-0000-0000-0000-000000000001";
       c.set("auth", {
-        userId: "dev-user",
+        userId: devUserId,
         email: "dev@localhost",
         tier: "plus" as const,
         stripeCustomerId: null,
         stripeSubscriptionId: null,
       });
-      await withContext({ userId: "dev-user", tier: "plus" }, next);
+      await withContext({ userId: devUserId, tier: "plus" }, next);
       return;
     }
     return requireAuth(c, next);

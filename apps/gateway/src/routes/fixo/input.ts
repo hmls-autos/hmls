@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db, schema } from "@hmls/agent/db";
 import { eq } from "drizzle-orm";
-import { type InputType, runFixoAgent, uploadMedia } from "@hmls/agent";
+import { type InputType, uploadMedia } from "@hmls/agent";
 import { processCredits } from "../../middleware/fixo/credits.ts";
 import { checkFreeTierLimit } from "../../middleware/fixo/tier.ts";
 import type { AuthContext } from "../../middleware/fixo/auth.ts";
@@ -10,10 +10,62 @@ type Variables = { auth: AuthContext };
 
 const input = new Hono<{ Variables: Variables }>();
 
+/** Verify a client-declared contentType is plausible for the requested input
+ * type. Defense-in-depth alongside the bucket-side allowed_mime_types config. */
+export function contentTypeMatches(
+  type: "photo" | "audio" | "video",
+  contentType: string,
+): boolean {
+  if (type === "photo") return contentType.startsWith("image/");
+  if (type === "audio") return contentType.startsWith("audio/");
+  if (type === "video") return contentType.startsWith("video/");
+  return false;
+}
+
 // POST /sessions/:id/input - Process input (non-streaming)
 input.post("/:id/input", async (c) => {
   const auth = c.get("auth");
   const sessionId = parseInt(c.req.param("id"));
+  if (!Number.isInteger(sessionId) || sessionId <= 0) {
+    return c.json({ error: "Invalid session id" }, 400);
+  }
+
+  let body;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  const { type, content, filename, contentType, durationSeconds, spectrogramBase64 } = body;
+
+  // Validate input type up front so unit tests don't need DB access. Text-only
+  // input goes through /task chat directly (not this endpoint) so 'text' is no
+  // longer accepted here.
+  const validTypes = ["obd", "photo", "audio", "video"];
+  if (!validTypes.includes(type)) {
+    return c.json({ error: "Invalid input type" }, 400);
+  }
+  if (type === "obd" && (typeof content !== "string" || !content.trim())) {
+    return c.json({ error: "OBD code is required" }, 400);
+  }
+  if (
+    (type === "photo" || type === "audio" || type === "video") &&
+    (typeof content !== "string" || !content)
+  ) {
+    return c.json({ error: "Media content is required" }, 400);
+  }
+  if (
+    (type === "photo" || type === "audio" || type === "video") &&
+    typeof contentType === "string" &&
+    !contentTypeMatches(type, contentType)
+  ) {
+    return c.json(
+      {
+        error: `contentType ${contentType} does not match input type ${type}`,
+      },
+      400,
+    );
+  }
 
   const [session] = await db
     .select()
@@ -26,15 +78,6 @@ input.post("/:id/input", async (c) => {
     (session.userId !== auth.userId && session.customerId !== auth.customerId)
   ) {
     return c.json({ error: "Session not found" }, 404);
-  }
-
-  const body = await c.req.json();
-  const { type, content, filename, contentType, durationSeconds, spectrogramBase64 } = body;
-
-  // Validate input type
-  const validTypes = ["text", "obd", "photo", "audio", "video"];
-  if (!validTypes.includes(type)) {
-    return c.json({ error: "Invalid input type" }, 400);
   }
 
   // Check free tier limits for SaaS users (non-legacy)
@@ -58,27 +101,26 @@ input.post("/:id/input", async (c) => {
     creditCharged = creditResult.charged;
   }
 
-  // Update session
+  // Bump session credit counter. Session.status is intentionally NOT changed
+  // here — Bug B (status lifecycle) will own session-boundary semantics in a
+  // follow-up PR.
   await db
     .update(schema.fixoSessions)
-    .set({
-      creditsCharged: session.creditsCharged + creditCharged,
-      status: "processing",
-    })
+    .set({ creditsCharged: session.creditsCharged + creditCharged })
     .where(eq(schema.fixoSessions.id, sessionId));
 
-  // Handle different input types
-  let agentInput: string;
+  // Persist input. The chat agent on /task hydrates fixoMedia rows for the
+  // session into FileUIParts when streaming a reply, so this endpoint stays
+  // pure storage + bookkeeping (no LLM call here).
+  let mediaId: number | null = null;
+  let spectrogramMediaId: number | null = null;
 
-  if (type === "text") {
-    agentInput = content;
-  } else if (type === "obd") {
+  if (type === "obd") {
     await db.insert(schema.obdCodes).values({
       sessionId,
       code: content,
       source: "manual",
     });
-    agentInput = `OBD-II Code: ${content}`;
   } else if (type === "photo" || type === "audio" || type === "video") {
     const binaryData = Uint8Array.from(
       atob(content),
@@ -91,8 +133,19 @@ input.post("/:id/input", async (c) => {
       String(sessionId),
     );
 
-    // Upload spectrogram PNG alongside audio if provided
-    let spectrogramUrl: string | undefined;
+    const [mediaRow] = await db.insert(schema.fixoMedia).values({
+      sessionId,
+      type,
+      storageKey: uploadResult.key,
+      creditCost: creditCharged,
+      processingStatus: "complete",
+      metadata: { filename, contentType, durationSeconds },
+    }).returning({ id: schema.fixoMedia.id });
+    mediaId = mediaRow.id;
+
+    // Audio: client also generates a spectrogram PNG. Persist it as its own
+    // fixoMedia row so the spectrogram path (analyzeAudioNoise tool) can
+    // pick it up the same way photo media gets hydrated.
     if (type === "audio" && spectrogramBase64) {
       const spectrogramData = Uint8Array.from(
         atob(spectrogramBase64),
@@ -104,38 +157,26 @@ input.post("/:id/input", async (c) => {
         "image/png",
         String(sessionId),
       );
-      spectrogramUrl = spectrogramUpload.url;
+      const [specRow] = await db.insert(schema.fixoMedia).values({
+        sessionId,
+        type: "photo",
+        storageKey: spectrogramUpload.key,
+        creditCost: 0,
+        processingStatus: "complete",
+        metadata: {
+          filename: `spectrogram-${filename}.png`,
+          contentType: "image/png",
+          spectrogramFor: mediaId,
+        },
+      }).returning({ id: schema.fixoMedia.id });
+      spectrogramMediaId = specRow.id;
     }
-
-    await db.insert(schema.fixoMedia).values({
-      sessionId,
-      type: type === "photo" ? "photo" : type === "audio" ? "audio" : "video",
-      storageKey: uploadResult.key,
-      creditCost: creditCharged,
-      metadata: { filename, contentType, durationSeconds },
-    });
-
-    if (type === "audio" && spectrogramUrl) {
-      // For audio: trigger spectrogram-based noise analysis using uploaded URL (not raw base64)
-      agentInput = `[AUDIO uploaded: ${filename}, duration: ${
-        durationSeconds ?? "unknown"
-      }s] A spectrogram has been generated from this vehicle sound recording. Use the analyzeAudioNoise tool with the following spectrogram URL to diagnose the sound. Spectrogram URL: ${spectrogramUrl}`;
-    } else {
-      agentInput = `[${type.toUpperCase()} uploaded: ${filename}] URL: ${uploadResult.url}`;
-    }
-  } else {
-    agentInput = content;
   }
 
-  // Run the fixo agent and collect the full text response
-  const result = runFixoAgent({
-    messages: [{ role: "user" as const, content: agentInput }],
-  });
-
-  const responseText = await result.text;
-
   return c.json({
-    response: responseText,
+    sessionId,
+    mediaId,
+    spectrogramMediaId,
     creditsCharged: creditCharged,
     sessionCreditsTotal: session.creditsCharged + creditCharged,
   });
