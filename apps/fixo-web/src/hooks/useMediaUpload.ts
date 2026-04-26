@@ -1,30 +1,12 @@
 import { type MutableRefObject, useCallback } from "react";
 
 import { AGENT_URL } from "@/lib/config";
+import { ensureSession } from "@/lib/session";
 
 interface UseMediaUploadOptions {
   accessToken: string | undefined;
   sessionIdRef: MutableRefObject<number | null>;
   sendMessage: (text: string, meta?: { imageUrl?: string }) => void;
-}
-
-async function ensureSession(
-  accessToken: string,
-  sessionIdRef: MutableRefObject<number | null>,
-): Promise<number | null> {
-  if (sessionIdRef.current) return sessionIdRef.current;
-
-  const res = await fetch(`${AGENT_URL}/sessions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  sessionIdRef.current = data.sessionId;
-  return data.sessionId;
 }
 
 async function uploadMedia(

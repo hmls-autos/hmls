@@ -17,6 +17,7 @@ import {
   useState,
 } from "react";
 import { AGENT_URL } from "@/lib/config";
+import { ensureSession } from "@/lib/session";
 
 export interface FixoEstimateData {
   success: true;
@@ -238,9 +239,15 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
           url: options.imageUrl,
         };
       }
+      // Fire-and-forget session creation so text-only and OBD-only chats also
+      // get a session id (needed for /complete and /report). Concurrent callers
+      // share one in-flight POST via the helper.
+      if (accessToken && sessionIdRef && !sessionIdRef.current) {
+        void ensureSession(accessToken, sessionIdRef);
+      }
       chatSendMessage({ text: content });
     },
-    [chatSendMessage, chatMessages],
+    [chatSendMessage, chatMessages, accessToken, sessionIdRef],
   );
 
   const clearMessages = useCallback(() => {

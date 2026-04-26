@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { summarizeFixoSession } from "@hmls/agent";
 import { getLogger } from "@logtape/logtape";
 import type { AuthContext } from "../../middleware/fixo/auth.ts";
+import { hydrateSessionMedia } from "./lib/hydrate-media.ts";
 
 const logger = getLogger(["hmls", "gateway", "fixo", "complete"]);
 
@@ -63,6 +64,23 @@ complete.post("/:id/complete", async (c) => {
   });
 
   try {
+    // Reattach uploaded media as FileUIParts the same way /task does. The
+    // client's persisted UIMessages only contain the text turns ("Analyze
+    // this photo..."); without this, generateObject sees no images and the
+    // PDF report omits the actual evidence.
+    const attachedMedia = await hydrateSessionMedia(
+      messages,
+      sessionId,
+      auth.userId,
+      auth.customerId,
+    );
+    if (attachedMedia > 0) {
+      logger.info("Hydrated session media for completion", {
+        sessionId,
+        attachedMedia,
+      });
+    }
+
     const modelMessages = await convertToModelMessages(messages);
     const result = await summarizeFixoSession({ messages: modelMessages });
 
