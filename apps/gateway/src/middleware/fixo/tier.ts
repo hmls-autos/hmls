@@ -39,6 +39,10 @@ export async function checkFreeTierLimit(
   const conditions = [
     eq(schema.fixoSessions.userId, auth.userId),
     gte(schema.fixoSessions.createdAt, monthStart),
+    // Don't penalize the user for transient failures — a session whose
+    // /complete crashed before producing a result shouldn't permanently
+    // consume one of their three monthly slots.
+    ne(schema.fixoSessions.status, "failed"),
   ];
   if (excludeSessionId !== undefined) {
     conditions.push(ne(schema.fixoSessions.id, excludeSessionId));

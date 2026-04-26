@@ -143,6 +143,21 @@ complete.post("/:id/complete", async (c) => {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
+    // Mark failed so the tier-quota count excludes this row — without this,
+    // a transient Gemini error would permanently consume one of the user's
+    // three monthly free-tier slots even though no result was produced.
+    // Best-effort: a DB error here is not worth surfacing over the original.
+    try {
+      await db
+        .update(schema.fixoSessions)
+        .set({ status: "failed" })
+        .where(eq(schema.fixoSessions.id, sessionId));
+    } catch (markErr) {
+      logger.warn("Could not mark fixo session as failed", {
+        sessionId,
+        error: markErr instanceof Error ? markErr.message : String(markErr),
+      });
+    }
     return c.json(
       { error: error instanceof Error ? error.message : String(error) },
       500,
