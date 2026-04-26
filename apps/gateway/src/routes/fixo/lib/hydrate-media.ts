@@ -9,13 +9,18 @@ const logger = getLogger(["hmls", "gateway", "fixo", "hydrate-media"]);
 const SIGNED_URL_TTL_SECONDS = 900; // 15 min — outlives any practical Gemini fetch
 
 /**
- * Hydrate fixoMedia rows for a session as FileUIParts on the latest user
- * message, so the model can see attached photos (and audio spectrograms)
- * natively rather than via a fetch-by-URL tool. Mutates `messages` in place.
+ * Hydrate a Fixo session's server-side state into the chat transcript before
+ * the LLM sees it. Attaches uploaded photos as FileUIParts and stored OBD-II
+ * codes as a text part, both on the latest user message. Mutates `messages`
+ * in place; returns the count of FileUIParts added (OBD codes don't count).
  *
- * Bucket-side files are private; we mint short-lived signed read URLs only
- * when the model is about to consume them. Used by both /task (chat stream)
- * and /complete (final session summary) so neither flow drops attachments.
+ * Why this exists: the client persists chatMessages to localStorage, but the
+ * actual photo bytes live in Supabase Storage and OBD codes live in
+ * fixo_obd_codes. Without this, /task and /complete would both run the LLM
+ * over a transcript that's missing the evidence the diagnosis is based on.
+ *
+ * Bucket-side files are private; signed read URLs are short-lived (15 min)
+ * so they outlive a single Gemini fetch but don't leak as durable links.
  */
 export async function hydrateSessionMedia(
   messages: UIMessage[],
@@ -38,19 +43,25 @@ export async function hydrateSessionMedia(
     return 0;
   }
 
-  const mediaRows = await db
-    .select()
-    .from(schema.fixoMedia)
-    .where(
-      and(
-        eq(schema.fixoMedia.sessionId, sessionId),
-        eq(schema.fixoMedia.processingStatus, "complete"),
+  const [mediaRows, obdRows] = await Promise.all([
+    db
+      .select()
+      .from(schema.fixoMedia)
+      .where(
+        and(
+          eq(schema.fixoMedia.sessionId, sessionId),
+          eq(schema.fixoMedia.processingStatus, "complete"),
+        ),
       ),
-    );
-  if (mediaRows.length === 0) return 0;
+    db
+      .select()
+      .from(schema.obdCodes)
+      .where(eq(schema.obdCodes.sessionId, sessionId)),
+  ]);
+  if (mediaRows.length === 0 && obdRows.length === 0) return 0;
 
-  // Find the last user-role message; that's where we attach the media so the
-  // model treats it as input to the current turn.
+  // Find the last user-role message; that's where we attach hydrated content
+  // so the model treats it as input to the current turn.
   let target: UIMessage | undefined;
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === "user") {
@@ -60,6 +71,13 @@ export async function hydrateSessionMedia(
   }
   if (!target) return 0;
   if (!Array.isArray(target.parts)) target.parts = [];
+
+  if (obdRows.length > 0) {
+    target.parts.push({
+      type: "text",
+      text: `Stored OBD-II codes for this session: ${obdRows.map((r) => r.code).join(", ")}`,
+    });
+  }
 
   let attached = 0;
   for (const row of mediaRows) {

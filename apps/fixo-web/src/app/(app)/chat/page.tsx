@@ -46,6 +46,7 @@ export default function ChatPage() {
   const {
     messages,
     uiMessages,
+    sessionId,
     isLoading,
     sendMessage,
     currentTool,
@@ -158,13 +159,11 @@ export default function ChatPage() {
         <h1 className="text-lg font-semibold">
           Fixo<span className="text-primary">.</span>
         </h1>
-        {messages.length > 0 && !isLoading && sessionIdRef.current && (
+        {messages.length > 0 && !isLoading && sessionId !== null && (
           <button
             type="button"
             disabled={isFinalizing}
-            onClick={() =>
-              sessionIdRef.current && handleDownloadReport(sessionIdRef.current)
-            }
+            onClick={() => handleDownloadReport(sessionId)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             aria-label="Finish session and download report"
           >

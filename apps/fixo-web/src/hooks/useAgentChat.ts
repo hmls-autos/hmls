@@ -98,15 +98,16 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
   const [initialMessages] = useState(loadStoredMessages);
 
   // Re-pair the restored transcript with its backend session id so the next
-  // /complete and /report call hits the right fixoMedia rows. Runs once.
-  const sessionRestoredRef = useRef(false);
-  if (!sessionRestoredRef.current) {
-    sessionRestoredRef.current = true;
-    if (sessionIdRef && !sessionIdRef.current) {
-      const restored = loadStoredSessionId();
-      if (restored !== null) sessionIdRef.current = restored;
+  // /complete and /report call hits the right fixoMedia rows. Tracked as
+  // both a ref (the transport reads it on every send, can't trigger renders)
+  // and reactive state (the Report button gates on it).
+  const [sessionId, setSessionId] = useState<number | null>(() => {
+    const restored = loadStoredSessionId();
+    if (restored !== null && sessionIdRef && !sessionIdRef.current) {
+      sessionIdRef.current = restored;
     }
-  }
+    return restored;
+  });
   // Tracks imageUrls by message index for new messages whose IDs aren't
   // known until after AI SDK v6 assigns them internally.
   const pendingImageUrlRef = useRef<{ index: number; url: string } | null>(
@@ -256,19 +257,34 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
       }
       // Fire-and-forget session creation so text-only and OBD-only chats also
       // get a session id (needed for /complete and /report). Concurrent callers
-      // share one in-flight POST via the helper.
+      // share one in-flight POST via the helper. The .then mirrors the new id
+      // into React state so the Report button rerenders without waiting for
+      // the next chatMessages update (closes the timing race codex flagged).
       if (accessToken && sessionIdRef && !sessionIdRef.current) {
-        void ensureSession(accessToken, sessionIdRef);
+        void ensureSession(accessToken, sessionIdRef).then((id) => {
+          if (id !== null) setSessionId(id);
+        });
       }
       chatSendMessage({ text: content });
     },
     [chatSendMessage, chatMessages, accessToken, sessionIdRef],
   );
 
+  // Catch session creation that originated from useMediaUpload (it shares the
+  // same ref but doesn't know about our state setter). Cheap: fires on every
+  // chat update, but the no-op branch is just a ref read.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: chatMessages is the trigger; the effect body only reads the ref and current sessionId
+  useEffect(() => {
+    if (sessionIdRef?.current && sessionIdRef.current !== sessionId) {
+      setSessionId(sessionIdRef.current);
+    }
+  }, [chatMessages, sessionId, sessionIdRef]);
+
   const clearMessages = useCallback(() => {
     setChatMessages([]);
     imageUrlMapRef.current.clear();
     if (sessionIdRef) sessionIdRef.current = null;
+    setSessionId(null);
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {
@@ -284,6 +300,7 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
   return {
     messages,
     uiMessages: chatMessages,
+    sessionId,
     isLoading,
     error,
     currentTool,

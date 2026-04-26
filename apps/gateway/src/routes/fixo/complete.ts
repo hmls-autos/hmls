@@ -5,7 +5,6 @@ import { eq } from "drizzle-orm";
 import { summarizeFixoSession } from "@hmls/agent";
 import { getLogger } from "@logtape/logtape";
 import type { AuthContext } from "../../middleware/fixo/auth.ts";
-import { checkFreeTierLimit } from "../../middleware/fixo/tier.ts";
 import { hydrateSessionMedia } from "./lib/hydrate-media.ts";
 
 const logger = getLogger(["hmls", "gateway", "fixo", "complete"]);
@@ -29,18 +28,6 @@ complete.post("/:id/complete", async (c) => {
     return c.json({ error: "Invalid session ID" }, 400);
   }
 
-  // Same gate as /task: this endpoint runs a fresh Gemini generateObject
-  // call, so without a tier check a free user could spam /complete for
-  // unlimited LLM usage (codex finding from review of #34).
-  const tierBlock = await checkFreeTierLimit(auth, "text");
-  if (tierBlock) {
-    logger.warn("Tier limit reached on completion", {
-      userId: auth.userId,
-      sessionId,
-    });
-    return tierBlock;
-  }
-
   const [session] = await db
     .select()
     .from(schema.fixoSessions)
@@ -52,6 +39,22 @@ complete.post("/:id/complete", async (c) => {
     (session.userId !== auth.userId && session.customerId !== auth.customerId)
   ) {
     return c.json({ error: "Session not found" }, 404);
+  }
+
+  // Cache-on-existence short-circuit: if a result is already stored, return it
+  // without re-running generateObject. Doubles as the billing-bypass defense
+  // (a single session can only trigger the LLM once before result is cached)
+  // and makes re-downloads instant. Status reset on follow-up activity is the
+  // deferred TODO ("Session-reopen on activity after completion") — until that
+  // lands, fresh diagnoses for an already-finalized session require explicitly
+  // clearing it server-side.
+  if (session.result) {
+    return c.json({
+      sessionId,
+      status: "complete",
+      result: session.result,
+      cached: true,
+    });
   }
 
   let body: { messages?: UIMessage[] };
