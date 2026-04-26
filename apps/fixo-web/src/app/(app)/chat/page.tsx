@@ -34,7 +34,7 @@ function WelcomeScreen() {
 }
 
 export default function ChatPage() {
-  const { session, isLoading: authLoading } = useAuth();
+  const { session, user, isLoading: authLoading } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sessionIdRef = useRef<number | null>(null);
@@ -58,6 +58,7 @@ export default function ChatPage() {
     inputRef,
     accessToken: session?.access_token,
     sessionIdRef,
+    userId: user?.id,
   });
 
   const [isFinalizing, setIsFinalizing] = useState(false);
@@ -68,6 +69,7 @@ export default function ChatPage() {
       accessToken: session?.access_token,
       sessionIdRef,
       sendMessage,
+      userId: user?.id,
     });
 
   const handleDownloadReport = useCallback(

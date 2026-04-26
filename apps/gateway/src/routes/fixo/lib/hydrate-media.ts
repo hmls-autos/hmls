@@ -1,4 +1,4 @@
-import type { UIMessage } from "ai";
+import type { FileUIPart, UIMessage } from "ai";
 import { and, eq } from "drizzle-orm";
 import { createSignedReadUrl } from "@hmls/agent";
 import { db, schema } from "@hmls/agent/db";
@@ -8,29 +8,25 @@ const logger = getLogger(["hmls", "gateway", "fixo", "hydrate-media"]);
 
 const SIGNED_URL_TTL_SECONDS = 900; // 15 min — outlives any practical Gemini fetch
 
+interface SessionEvidence {
+  obdCodes: string[];
+  photoFileParts: FileUIPart[];
+}
+
 /**
- * Hydrate a Fixo session's server-side state into the chat transcript before
- * the LLM sees it. Attaches uploaded photos as FileUIParts and stored OBD-II
- * codes as a text part, both on the latest user message. Mutates `messages`
- * in place; returns the count of FileUIParts added (OBD codes don't count).
+ * Fetch the server-side evidence (uploaded photos and stored OBD-II codes)
+ * for a session, gated by ownership. Returns parts ready to splice into a
+ * UIMessage array. Used by both /task hydration and /complete summarization.
  *
- * Why this exists: the client persists chatMessages to localStorage, but the
- * actual photo bytes live in Supabase Storage and OBD codes live in
- * fixo_obd_codes. Without this, /task and /complete would both run the LLM
- * over a transcript that's missing the evidence the diagnosis is based on.
- *
- * Bucket-side files are private; signed read URLs are short-lived (15 min)
- * so they outlive a single Gemini fetch but don't leak as durable links.
+ * Photos return as FileUIPart with short-lived signed URLs (15 min) — long
+ * enough for one Gemini fetch, short enough not to leak as durable links.
  */
-export async function hydrateSessionMedia(
-  messages: UIMessage[],
+async function loadSessionEvidence(
   sessionId: number,
   authUserId: string,
   authCustomerId: number | undefined,
-): Promise<number> {
-  if (messages.length === 0) return 0;
-
-  // Verify the caller owns the session before we surface any media URLs.
+): Promise<SessionEvidence | null> {
+  // Verify the caller owns the session before we surface any URLs or codes.
   const [session] = await db
     .select()
     .from(schema.fixoSessions)
@@ -40,7 +36,7 @@ export async function hydrateSessionMedia(
     !session ||
     (session.userId !== authUserId && session.customerId !== authCustomerId)
   ) {
-    return 0;
+    return null;
   }
 
   const [mediaRows, obdRows] = await Promise.all([
@@ -58,28 +54,8 @@ export async function hydrateSessionMedia(
       .from(schema.obdCodes)
       .where(eq(schema.obdCodes.sessionId, sessionId)),
   ]);
-  if (mediaRows.length === 0 && obdRows.length === 0) return 0;
 
-  // Find the last user-role message; that's where we attach hydrated content
-  // so the model treats it as input to the current turn.
-  let target: UIMessage | undefined;
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === "user") {
-      target = messages[i];
-      break;
-    }
-  }
-  if (!target) return 0;
-  if (!Array.isArray(target.parts)) target.parts = [];
-
-  if (obdRows.length > 0) {
-    target.parts.push({
-      type: "text",
-      text: `Stored OBD-II codes for this session: ${obdRows.map((r) => r.code).join(", ")}`,
-    });
-  }
-
-  let attached = 0;
+  const photoFileParts: FileUIPart[] = [];
   for (const row of mediaRows) {
     const meta = (row.metadata ?? {}) as { contentType?: string };
     // Photo and the spectrogram-stored-as-photo case both render as image
@@ -94,8 +70,7 @@ export async function hydrateSessionMedia(
         row.storageKey,
         SIGNED_URL_TTL_SECONDS,
       );
-      target.parts.push({ type: "file", mediaType, url: signedUrl });
-      attached++;
+      photoFileParts.push({ type: "file", mediaType, url: signedUrl });
     } catch (err) {
       logger.warn("Failed to sign URL for media row {mediaId}", {
         mediaId: row.id,
@@ -105,5 +80,105 @@ export async function hydrateSessionMedia(
     }
   }
 
-  return attached;
+  return {
+    obdCodes: obdRows.map((r) => r.code),
+    photoFileParts,
+  };
+}
+
+/**
+ * Attach session evidence (photos + OBD codes) to the LATEST user message.
+ * Used by /task because the user just sent that message and the upload
+ * belongs to the active turn — the model sees the photo at exactly the
+ * right point in the conversation. Mutates `messages` in place; returns
+ * the count of FileUIParts added.
+ */
+export async function hydrateSessionMedia(
+  messages: UIMessage[],
+  sessionId: number,
+  authUserId: string,
+  authCustomerId: number | undefined,
+): Promise<number> {
+  if (messages.length === 0) return 0;
+
+  const evidence = await loadSessionEvidence(
+    sessionId,
+    authUserId,
+    authCustomerId,
+  );
+  if (!evidence) return 0;
+  if (evidence.obdCodes.length === 0 && evidence.photoFileParts.length === 0) {
+    return 0;
+  }
+
+  let target: UIMessage | undefined;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "user") {
+      target = messages[i];
+      break;
+    }
+  }
+  if (!target) return 0;
+  if (!Array.isArray(target.parts)) target.parts = [];
+
+  if (evidence.obdCodes.length > 0) {
+    target.parts.push({
+      type: "text",
+      text: `Stored OBD-II codes for this session: ${evidence.obdCodes.join(", ")}`,
+    });
+  }
+  for (const part of evidence.photoFileParts) {
+    target.parts.push(part);
+  }
+
+  return evidence.photoFileParts.length;
+}
+
+/**
+ * PREPEND a synthetic user message containing all session evidence to the
+ * front of the transcript. Used by /complete because we're summarizing the
+ * whole conversation, not advancing the active turn — the LLM should have
+ * the photos and OBD codes as session-wide context from the start, before
+ * the assistant turns that referenced them. Without this, multi-turn
+ * sessions would put evidence after the diagnosis, breaking attribution.
+ *
+ * Mutates `messages` in place; returns the count of FileUIParts added.
+ */
+export async function prependSessionEvidence(
+  messages: UIMessage[],
+  sessionId: number,
+  authUserId: string,
+  authCustomerId: number | undefined,
+): Promise<number> {
+  const evidence = await loadSessionEvidence(
+    sessionId,
+    authUserId,
+    authCustomerId,
+  );
+  if (!evidence) return 0;
+  if (evidence.obdCodes.length === 0 && evidence.photoFileParts.length === 0) {
+    return 0;
+  }
+
+  const introText = "Session evidence (uploaded by the user during this " +
+    "diagnostic session, listed here as session-wide context):";
+
+  const parts: UIMessage["parts"] = [{ type: "text", text: introText }];
+  if (evidence.obdCodes.length > 0) {
+    parts.push({
+      type: "text",
+      text: `OBD-II codes: ${evidence.obdCodes.join(", ")}`,
+    });
+  }
+  for (const part of evidence.photoFileParts) {
+    parts.push(part);
+  }
+
+  messages.unshift({
+    id: `session-evidence-${sessionId}`,
+    role: "user",
+    parts,
+  });
+
+  return evidence.photoFileParts.length;
 }

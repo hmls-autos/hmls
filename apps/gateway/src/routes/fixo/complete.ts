@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { summarizeFixoSession } from "@hmls/agent";
 import { getLogger } from "@logtape/logtape";
 import type { AuthContext } from "../../middleware/fixo/auth.ts";
-import { hydrateSessionMedia } from "./lib/hydrate-media.ts";
+import { prependSessionEvidence } from "./lib/hydrate-media.ts";
 
 const logger = getLogger(["hmls", "gateway", "fixo", "complete"]);
 
@@ -80,18 +80,20 @@ complete.post("/:id/complete", async (c) => {
   });
 
   try {
-    // Reattach uploaded media as FileUIParts the same way /task does. The
-    // client's persisted UIMessages only contain the text turns ("Analyze
-    // this photo..."); without this, generateObject sees no images and the
-    // PDF report omits the actual evidence.
-    const attachedMedia = await hydrateSessionMedia(
+    // Prepend a synthetic message with session evidence so the summarizer
+    // sees photos and OBD codes as session-wide context, ahead of any
+    // assistant turn that referenced them. Different from /task, which
+    // attaches evidence to the active turn — for a multi-turn summary,
+    // putting evidence at the end of the transcript would land it after
+    // the diagnosis and break attribution.
+    const attachedMedia = await prependSessionEvidence(
       messages,
       sessionId,
       auth.userId,
       auth.customerId,
     );
     if (attachedMedia > 0) {
-      logger.info("Hydrated session media for completion", {
+      logger.info("Prepended session evidence for completion", {
         sessionId,
         attachedMedia,
       });

@@ -4,17 +4,27 @@ import type { MutableRefObject } from "react";
 
 import { AGENT_URL } from "@/lib/config";
 
-const SESSION_ID_STORAGE_KEY = "fixo-chat-session-id";
+const SESSION_ID_STORAGE_PREFIX = "fixo-chat-session-id";
+
+// Scope by userId so a sign-out/sign-in on the same browser doesn't restore
+// the previous account's session id (which the new user doesn't own — every
+// /complete and /report call would 404). Anonymous fallback is for when the
+// caller doesn't know the user yet; never collides with a real userId.
+function storageKey(userId: string | null | undefined): string {
+  return userId
+    ? `${SESSION_ID_STORAGE_PREFIX}:${userId}`
+    : `${SESSION_ID_STORAGE_PREFIX}:anon`;
+}
 
 const inFlight = new WeakMap<
   MutableRefObject<number | null>,
   Promise<number | null>
 >();
 
-function persistSessionId(id: number) {
+function persistSessionId(id: number, userId: string | null | undefined) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(SESSION_ID_STORAGE_KEY, String(id));
+    localStorage.setItem(storageKey(userId), String(id));
   } catch {
     /* localStorage full or unavailable */
   }
@@ -25,10 +35,12 @@ function persistSessionId(id: number) {
  * mount to re-pair a restored transcript with the backend session that
  * actually owns its uploaded media. Returns null if absent or corrupt.
  */
-export function loadStoredSessionId(): number | null {
+export function loadStoredSessionId(
+  userId: string | null | undefined,
+): number | null {
   if (typeof window === "undefined") return null;
   try {
-    const stored = localStorage.getItem(SESSION_ID_STORAGE_KEY);
+    const stored = localStorage.getItem(storageKey(userId));
     if (!stored) return null;
     const n = parseInt(stored, 10);
     return Number.isInteger(n) && n > 0 ? n : null;
@@ -38,10 +50,10 @@ export function loadStoredSessionId(): number | null {
 }
 
 /** Clear the persisted session id, e.g. when the user starts a new chat. */
-export function clearStoredSessionId() {
+export function clearStoredSessionId(userId: string | null | undefined) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.removeItem(SESSION_ID_STORAGE_KEY);
+    localStorage.removeItem(storageKey(userId));
   } catch {
     /* ignore */
   }
@@ -55,6 +67,7 @@ export function clearStoredSessionId() {
 export async function ensureSession(
   accessToken: string,
   sessionIdRef: MutableRefObject<number | null>,
+  userId: string | null | undefined,
 ): Promise<number | null> {
   if (sessionIdRef.current) return sessionIdRef.current;
 
@@ -75,7 +88,7 @@ export async function ensureSession(
     // Persist so a refresh that restores the chat transcript also re-pairs
     // it with the same backend session — otherwise media hydration on
     // /complete looks at a fresh empty session.
-    persistSessionId(data.sessionId);
+    persistSessionId(data.sessionId, userId);
     return data.sessionId;
   })();
 

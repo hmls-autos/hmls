@@ -56,6 +56,9 @@ interface UseAgentChatOptions {
    * this on every request so the gateway can hydrate uploaded media as
    * FileUIParts on the latest turn. */
   sessionIdRef?: RefObject<number | null>;
+  /** Authenticated user id, used to scope persisted session/transcript so a
+   * sign-out/sign-in on the same browser doesn't leak across accounts. */
+  userId?: string | null;
 }
 
 /** Extract concatenated text from a UIMessage's parts. */
@@ -71,12 +74,24 @@ function getToolParts(msg: UIMessage) {
   return msg.parts.filter(isToolOrDynamicToolUIPart);
 }
 
-const STORAGE_KEY = "fixo-chat-history";
+const STORAGE_KEY_PREFIX = "fixo-chat-history";
 
-function loadStoredMessages(): UIMessage[] | undefined {
+// Scope chat-history storage by userId so account switches on the same
+// browser don't show user A's transcript to user B. Anonymous fallback is
+// for the (brief) window before auth resolves; collisions with real users
+// are impossible since real ids never equal "anon".
+function chatHistoryKey(userId: string | null | undefined): string {
+  return userId
+    ? `${STORAGE_KEY_PREFIX}:${userId}`
+    : `${STORAGE_KEY_PREFIX}:anon`;
+}
+
+function loadStoredMessages(
+  userId: string | null | undefined,
+): UIMessage[] | undefined {
   if (typeof window === "undefined") return undefined;
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(chatHistoryKey(userId));
     if (stored) {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -88,21 +103,21 @@ function loadStoredMessages(): UIMessage[] | undefined {
 }
 
 export function useAgentChat(options: UseAgentChatOptions = {}) {
-  const { scrollRef, inputRef, accessToken, sessionIdRef } = options;
+  const { scrollRef, inputRef, accessToken, sessionIdRef, userId } = options;
   const [currentTool, setCurrentTool] = useState<string | null>(null);
   const [pendingEstimate, setPendingEstimate] =
     useState<FixoEstimateData | null>(null);
   const imageUrlMapRef = useRef<Map<string, string>>(new Map());
 
-  // Load persisted messages once on mount
-  const [initialMessages] = useState(loadStoredMessages);
+  // Load persisted messages once on mount, scoped to this user.
+  const [initialMessages] = useState(() => loadStoredMessages(userId));
 
   // Re-pair the restored transcript with its backend session id so the next
   // /complete and /report call hits the right fixoMedia rows. Tracked as
   // both a ref (the transport reads it on every send, can't trigger renders)
   // and reactive state (the Report button gates on it).
   const [sessionId, setSessionId] = useState<number | null>(() => {
-    const restored = loadStoredSessionId();
+    const restored = loadStoredSessionId(userId);
     if (restored !== null && sessionIdRef && !sessionIdRef.current) {
       sessionIdRef.current = restored;
     }
@@ -170,18 +185,20 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
 
   const isLoading = status === "submitted" || status === "streaming";
 
-  // Persist messages to localStorage
+  // Persist messages to localStorage, scoped to this user so account switches
+  // on the same browser don't show one user the other user's transcript.
   useEffect(() => {
     try {
+      const key = chatHistoryKey(userId);
       if (chatMessages.length > 0) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(chatMessages));
+        localStorage.setItem(key, JSON.stringify(chatMessages));
       } else {
-        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(key);
       }
     } catch {
       /* localStorage full or unavailable */
     }
-  }, [chatMessages]);
+  }, [chatMessages, userId]);
 
   // Track active tool calls and detect create_fixo_estimate output
   useEffect(() => {
@@ -261,13 +278,13 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
       // into React state so the Report button rerenders without waiting for
       // the next chatMessages update (closes the timing race codex flagged).
       if (accessToken && sessionIdRef && !sessionIdRef.current) {
-        void ensureSession(accessToken, sessionIdRef).then((id) => {
+        void ensureSession(accessToken, sessionIdRef, userId).then((id) => {
           if (id !== null) setSessionId(id);
         });
       }
       chatSendMessage({ text: content });
     },
-    [chatSendMessage, chatMessages, accessToken, sessionIdRef],
+    [chatSendMessage, chatMessages, accessToken, sessionIdRef, userId],
   );
 
   // Catch session creation that originated from useMediaUpload (it shares the
@@ -286,12 +303,12 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
     if (sessionIdRef) sessionIdRef.current = null;
     setSessionId(null);
     try {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(chatHistoryKey(userId));
     } catch {
       /* ignore */
     }
-    clearStoredSessionId();
-  }, [setChatMessages, sessionIdRef]);
+    clearStoredSessionId(userId);
+  }, [setChatMessages, sessionIdRef, userId]);
 
   const clearError = useCallback(() => {
     chatClearError();
