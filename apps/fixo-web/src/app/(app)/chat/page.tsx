@@ -1,6 +1,6 @@
 "use client";
 
-import { Car } from "lucide-react";
+import { Car, FileDown } from "lucide-react";
 import { redirect } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
@@ -14,6 +14,7 @@ import { ObdInput } from "@/components/media/ObdInput";
 import { UpgradeModal } from "@/components/UpgradeModal";
 import { useAgentChat } from "@/hooks/useAgentChat";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
+import { AGENT_URL } from "@/lib/config";
 
 function WelcomeScreen() {
   return (
@@ -44,6 +45,7 @@ export default function ChatPage() {
 
   const {
     messages,
+    uiMessages,
     isLoading,
     sendMessage,
     currentTool,
@@ -57,12 +59,65 @@ export default function ChatPage() {
     sessionIdRef,
   });
 
+  const [isFinalizing, setIsFinalizing] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+
   const { handleAudioSend, handlePhotoCapture, handleFilePick } =
     useMediaUpload({
       accessToken: session?.access_token,
       sessionIdRef,
       sendMessage,
     });
+
+  const handleDownloadReport = useCallback(
+    async (sessionId: number) => {
+      if (!session?.access_token || isFinalizing) return;
+      setReportError(null);
+      setIsFinalizing(true);
+      try {
+        // Finalize the session first: this calls generateObject server-side and
+        // populates fixo_sessions.result + status='complete'. The chat history
+        // lives in client state, so we must hand it to the server explicitly.
+        const completeRes = await fetch(
+          `${AGENT_URL}/sessions/${sessionId}/complete`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ messages: uiMessages }),
+          },
+        );
+        if (!completeRes.ok) {
+          const detail = await completeRes
+            .json()
+            .catch(() => ({ error: completeRes.statusText }));
+          throw new Error(detail.error ?? "Failed to finalize session");
+        }
+
+        const reportRes = await fetch(
+          `${AGENT_URL}/sessions/${sessionId}/report`,
+          { headers: { Authorization: `Bearer ${session.access_token}` } },
+        );
+        if (!reportRes.ok) {
+          throw new Error("Failed to generate report PDF");
+        }
+        const blob = await reportRes.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Fixo-Report-${sessionId}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        setReportError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setIsFinalizing(false);
+      }
+    },
+    [session?.access_token, uiMessages, isFinalizing],
+  );
 
   const handleObdSubmit = useCallback(
     (codes: string[]) => {
@@ -103,9 +158,20 @@ export default function ChatPage() {
         <h1 className="text-lg font-semibold">
           Fixo<span className="text-primary">.</span>
         </h1>
-        {/* Report button hidden until Bug B PR populates fixoSessions.result.
-            Tapping it today returns 400 from /sessions/:id/report. See
-            TODOS.md → "Bug B" for the design conversation. */}
+        {messages.length > 0 && !isLoading && sessionIdRef.current && (
+          <button
+            type="button"
+            disabled={isFinalizing}
+            onClick={() =>
+              sessionIdRef.current && handleDownloadReport(sessionIdRef.current)
+            }
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            aria-label="Finish session and download report"
+          >
+            <FileDown className="w-4 h-4" />
+            {isFinalizing ? "Generating..." : "Report"}
+          </button>
+        )}
       </header>
 
       {/* Messages */}
@@ -122,6 +188,11 @@ export default function ChatPage() {
         {currentTool && <ToolIndicator tool={currentTool} />}
         {error && !isUpgradeError && (
           <div className="text-center text-sm text-red-500 py-2">{error}</div>
+        )}
+        {reportError && (
+          <div className="text-center text-sm text-red-500 py-2">
+            {reportError}
+          </div>
         )}
         <div ref={scrollRef} />
       </div>

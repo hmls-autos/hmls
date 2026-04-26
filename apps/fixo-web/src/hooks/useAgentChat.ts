@@ -259,6 +259,7 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
 
   return {
     messages,
+    uiMessages: chatMessages,
     isLoading,
     error,
     currentTool,

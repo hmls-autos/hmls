@@ -1,0 +1,102 @@
+import { Hono } from "hono";
+import { convertToModelMessages, type UIMessage } from "ai";
+import { db, schema } from "@hmls/agent/db";
+import { eq } from "drizzle-orm";
+import { summarizeFixoSession } from "@hmls/agent";
+import { getLogger } from "@logtape/logtape";
+import type { AuthContext } from "../../middleware/fixo/auth.ts";
+
+const logger = getLogger(["hmls", "gateway", "fixo", "complete"]);
+
+type Variables = { auth: AuthContext };
+
+const complete = new Hono<{ Variables: Variables }>();
+
+// POST /sessions/:id/complete - Finalize session: generate structured result + mark complete.
+//
+// Body: { messages: UIMessage[] } - the full chat transcript from the client.
+//
+// Distinct from streaming chat: a separate generateObject call produces the structured
+// JSON the PDF report endpoint expects. Marking status='complete' is explicit and
+// triggered only by this endpoint, never on stream finish.
+complete.post("/:id/complete", async (c) => {
+  const auth = c.get("auth");
+  const sessionId = parseInt(c.req.param("id"));
+
+  if (!Number.isInteger(sessionId) || sessionId <= 0) {
+    return c.json({ error: "Invalid session ID" }, 400);
+  }
+
+  const [session] = await db
+    .select()
+    .from(schema.fixoSessions)
+    .where(eq(schema.fixoSessions.id, sessionId))
+    .limit(1);
+
+  if (
+    !session ||
+    (session.userId !== auth.userId && session.customerId !== auth.customerId)
+  ) {
+    return c.json({ error: "Session not found" }, 404);
+  }
+
+  let body: { messages?: UIMessage[] };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const { messages } = body;
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return c.json(
+      { error: "messages array is required and must be non-empty" },
+      400,
+    );
+  }
+
+  const startTime = Date.now();
+  logger.info("Completing fixo session", {
+    sessionId,
+    userId: auth.userId,
+    messageCount: messages.length,
+  });
+
+  try {
+    const modelMessages = await convertToModelMessages(messages);
+    const result = await summarizeFixoSession({ messages: modelMessages });
+
+    await db
+      .update(schema.fixoSessions)
+      .set({
+        result,
+        status: "complete",
+        completedAt: new Date(),
+      })
+      .where(eq(schema.fixoSessions.id, sessionId));
+
+    const duration = Date.now() - startTime;
+    logger.info("Fixo session completed", {
+      sessionId,
+      duration,
+      issueCount: result.issues.length,
+      overallSeverity: result.overallSeverity,
+    });
+
+    return c.json({ sessionId, status: "complete", result });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logger.error("Failed to complete fixo session", {
+      sessionId,
+      duration,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return c.json(
+      { error: error instanceof Error ? error.message : String(error) },
+      500,
+    );
+  }
+});
+
+export { complete };
