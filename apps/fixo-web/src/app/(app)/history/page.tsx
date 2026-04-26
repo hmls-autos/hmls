@@ -1,10 +1,17 @@
 "use client";
 
-import { AlertTriangle, CheckCircle, Clock, Loader2 } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  FileDown,
+  Loader2,
+} from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { AGENT_URL } from "@/lib/config";
+import { downloadReportPdf } from "@/lib/download-report";
 
 interface FixoSession {
   id: number;
@@ -66,6 +73,8 @@ export default function HistoryPage() {
   const { session } = useAuth();
   const [sessions, setSessions] = useState<FixoSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState<number | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session?.access_token) return;
@@ -88,6 +97,22 @@ export default function HistoryPage() {
 
     fetchSessions();
   }, [session?.access_token]);
+
+  const handleDownload = useCallback(
+    async (sessionId: number) => {
+      if (!session?.access_token || downloading !== null) return;
+      setDownloadError(null);
+      setDownloading(sessionId);
+      try {
+        await downloadReportPdf(sessionId, session.access_token);
+      } catch (e) {
+        setDownloadError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setDownloading(null);
+      }
+    },
+    [session?.access_token, downloading],
+  );
 
   return (
     <div className="flex flex-col h-dvh">
@@ -118,37 +143,64 @@ export default function HistoryPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {sessions.map((s) => (
-              <Link
-                key={s.id}
-                href={`/chat?session=${s.id}`}
-                className="block bg-surface-alt rounded-xl p-4 border border-border hover:border-primary/30 transition-colors"
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    {statusIcon(s.status)}
-                    <span className="text-sm font-medium capitalize">
-                      {s.status}
-                    </span>
-                  </div>
-                  <span className="text-xs text-text-secondary">
-                    {formatDate(s.createdAt)}
-                  </span>
-                </div>
-                {s.result?.summary && (
-                  <p className="text-sm text-text-secondary line-clamp-2 mb-2">
-                    {s.result.summary}
-                  </p>
-                )}
-                {s.result?.overallSeverity && (
-                  <span
-                    className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${severityColor(s.result.overallSeverity)}`}
+            {downloadError && (
+              <div className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">
+                {downloadError}
+              </div>
+            )}
+            {sessions.map((s) => {
+              const canDownload = s.status === "complete" && s.result !== null;
+              const isDownloading = downloading === s.id;
+              return (
+                <div
+                  key={s.id}
+                  className="bg-surface-alt rounded-xl border border-border hover:border-primary/30 transition-colors"
+                >
+                  <Link
+                    href={`/chat?session=${s.id}`}
+                    className="block p-4 pb-3"
                   >
-                    {s.result.overallSeverity}
-                  </span>
-                )}
-              </Link>
-            ))}
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        {statusIcon(s.status)}
+                        <span className="text-sm font-medium capitalize">
+                          {s.status}
+                        </span>
+                      </div>
+                      <span className="text-xs text-text-secondary">
+                        {formatDate(s.createdAt)}
+                      </span>
+                    </div>
+                    {s.result?.summary && (
+                      <p className="text-sm text-text-secondary line-clamp-2 mb-2">
+                        {s.result.summary}
+                      </p>
+                    )}
+                    {s.result?.overallSeverity && (
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${severityColor(s.result.overallSeverity)}`}
+                      >
+                        {s.result.overallSeverity}
+                      </span>
+                    )}
+                  </Link>
+                  {canDownload && (
+                    <div className="border-t border-border px-4 py-2 flex justify-end">
+                      <button
+                        type="button"
+                        disabled={isDownloading}
+                        onClick={() => handleDownload(s.id)}
+                        className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-primary text-sm font-medium hover:bg-primary/10 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                        aria-label={`Download report for session ${s.id}`}
+                      >
+                        <FileDown className="w-4 h-4" />
+                        {isDownloading ? "Downloading..." : "Download report"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

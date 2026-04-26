@@ -1,6 +1,7 @@
 "use client";
 
-import { Car } from "lucide-react";
+import type { Session } from "@supabase/supabase-js";
+import { Car, FileDown } from "lucide-react";
 import { redirect } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
@@ -14,6 +15,9 @@ import { ObdInput } from "@/components/media/ObdInput";
 import { UpgradeModal } from "@/components/UpgradeModal";
 import { useAgentChat } from "@/hooks/useAgentChat";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
+import { AGENT_URL } from "@/lib/config";
+import { downloadReportPdf } from "@/lib/download-report";
+import { ensureSession } from "@/lib/session";
 
 function WelcomeScreen() {
   return (
@@ -32,8 +36,42 @@ function WelcomeScreen() {
   );
 }
 
+// Auth gate. useAgentChat persists chat history scoped by userId, and the
+// useChat hook only consumes its initialMessages on first mount — so if the
+// hook mounted while auth was still loading, it would read the `:anon`
+// localStorage keys, miss the user's saved transcript, and then overwrite it
+// when the persistence effect fires under the real user key. Mounting the
+// chat UI only after auth resolves avoids that whole class of restore bugs.
 export default function ChatPage() {
-  const { session, isLoading: authLoading } = useAuth();
+  const { session, user, isLoading: authLoading } = useAuth();
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center h-dvh">
+        <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!session || !user) {
+    redirect("/login");
+  }
+
+  // Key by user.id so a cross-tab auth swap (Supabase broadcasts to all tabs
+  // on sign-in/sign-out) forces a full remount of the chat subtree. Without
+  // this, useAgentChat would hold user A's chatMessages and sessionIdRef
+  // while userId flipped to B, persisting A's transcript under B's storage
+  // key and aiming uploads at A's session.
+  return <ChatPageInner key={user.id} session={session} userId={user.id} />;
+}
+
+function ChatPageInner({
+  session,
+  userId,
+}: {
+  session: Session;
+  userId: string;
+}) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sessionIdRef = useRef<number | null>(null);
@@ -44,6 +82,7 @@ export default function ChatPage() {
 
   const {
     messages,
+    uiMessages,
     isLoading,
     sendMessage,
     currentTool,
@@ -53,16 +92,63 @@ export default function ChatPage() {
   } = useAgentChat({
     scrollRef,
     inputRef,
-    accessToken: session?.access_token,
+    accessToken: session.access_token,
     sessionIdRef,
+    userId,
   });
+
+  const [isFinalizing, setIsFinalizing] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   const { handleAudioSend, handlePhotoCapture, handleFilePick } =
     useMediaUpload({
-      accessToken: session?.access_token,
+      accessToken: session.access_token,
       sessionIdRef,
       sendMessage,
+      userId,
     });
+
+  const handleDownloadReport = useCallback(async () => {
+    if (isFinalizing) return;
+    setReportError(null);
+    setIsFinalizing(true);
+    try {
+      // Lazy session creation: text-only chats don't have a session id until
+      // the user actually needs one. The Report click is that moment. This
+      // keeps the free-tier session-count quota gated on report generation,
+      // not on every chat send.
+      const sid = await ensureSession(
+        session.access_token,
+        sessionIdRef,
+        userId,
+      );
+      if (!sid) throw new Error("Failed to start a session");
+
+      // Finalize the session first: this calls generateObject server-side and
+      // populates fixo_sessions.result + status='complete'. The chat history
+      // lives in client state, so we must hand it to the server explicitly.
+      const completeRes = await fetch(`${AGENT_URL}/sessions/${sid}/complete`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ messages: uiMessages }),
+      });
+      if (!completeRes.ok) {
+        const detail = await completeRes
+          .json()
+          .catch(() => ({ error: completeRes.statusText }));
+        throw new Error(detail.error ?? "Failed to finalize session");
+      }
+
+      await downloadReportPdf(sid, session.access_token);
+    } catch (e) {
+      setReportError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsFinalizing(false);
+    }
+  }, [session.access_token, uiMessages, isFinalizing, userId]);
 
   const handleObdSubmit = useCallback(
     (codes: string[]) => {
@@ -84,18 +170,6 @@ export default function ChatPage() {
     }
   }, [isUpgradeError, error, upgradeMessage, clearError]);
 
-  if (authLoading) {
-    return (
-      <div className="flex items-center justify-center h-dvh">
-        <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (!session) {
-    redirect("/login");
-  }
-
   return (
     <div className="flex flex-col h-dvh">
       {/* Header */}
@@ -103,9 +177,18 @@ export default function ChatPage() {
         <h1 className="text-lg font-semibold">
           Fixo<span className="text-primary">.</span>
         </h1>
-        {/* Report button hidden until Bug B PR populates fixoSessions.result.
-            Tapping it today returns 400 from /sessions/:id/report. See
-            TODOS.md → "Bug B" for the design conversation. */}
+        {messages.length > 0 && !isLoading && (
+          <button
+            type="button"
+            disabled={isFinalizing}
+            onClick={handleDownloadReport}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            aria-label="Finish session and download report"
+          >
+            <FileDown className="w-4 h-4" />
+            {isFinalizing ? "Generating..." : "Report"}
+          </button>
+        )}
       </header>
 
       {/* Messages */}
@@ -122,6 +205,11 @@ export default function ChatPage() {
         {currentTool && <ToolIndicator tool={currentTool} />}
         {error && !isUpgradeError && (
           <div className="text-center text-sm text-red-500 py-2">{error}</div>
+        )}
+        {reportError && (
+          <div className="text-center text-sm text-red-500 py-2">
+            {reportError}
+          </div>
         )}
         <div ref={scrollRef} />
       </div>

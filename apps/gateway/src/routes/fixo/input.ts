@@ -5,6 +5,7 @@ import { type InputType, uploadMedia } from "@hmls/agent";
 import { processCredits } from "../../middleware/fixo/credits.ts";
 import { checkFreeTierLimit } from "../../middleware/fixo/tier.ts";
 import type { AuthContext } from "../../middleware/fixo/auth.ts";
+import { reopenIfComplete } from "./lib/session-lifecycle.ts";
 
 type Variables = { auth: AuthContext };
 
@@ -101,9 +102,7 @@ input.post("/:id/input", async (c) => {
     creditCharged = creditResult.charged;
   }
 
-  // Bump session credit counter. Session.status is intentionally NOT changed
-  // here — Bug B (status lifecycle) will own session-boundary semantics in a
-  // follow-up PR.
+  // Bump session credit counter.
   await db
     .update(schema.fixoSessions)
     .set({ creditsCharged: session.creditsCharged + creditCharged })
@@ -172,6 +171,14 @@ input.post("/:id/input", async (c) => {
       spectrogramMediaId = specRow.id;
     }
   }
+
+  // Reopen AFTER the new input is durably stored. If uploadMedia or the
+  // insert above failed, we'd have nulled out the user's report (status
+  // back to processing, result=null) for an upload that never persisted.
+  // Now the reopen only happens once we know there's new evidence to
+  // justify regenerating the diagnosis. Auth-gated so an attacker can't
+  // wipe someone else's report by passing their session id.
+  await reopenIfComplete(sessionId, auth.userId, auth.customerId);
 
   return c.json({
     sessionId,

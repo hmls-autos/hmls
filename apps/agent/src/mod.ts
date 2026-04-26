@@ -2,6 +2,12 @@
 export { type AgentConfig, type RunAgentOptions, runHmlsAgent } from "./hmls/agent.ts";
 export { runStaffAgent, type RunStaffAgentOptions } from "./hmls/staff-agent.ts";
 export { runFixoAgent, type RunFixoAgentOptions } from "./fixo/agent.ts";
+export {
+  fixoResultSchema,
+  type FixoSessionResult,
+  summarizeFixoSession,
+  type SummarizeFixoSessionOptions,
+} from "./fixo/summarize.ts";
 
 // Types
 export { formatUserContext, type UserContext } from "./types/user-context.ts";

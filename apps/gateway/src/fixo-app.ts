@@ -9,6 +9,7 @@ import { input } from "./routes/fixo/input.ts";
 import { chat } from "./routes/fixo/chat.ts";
 import { billing, webhookHandler } from "./routes/fixo/billing.ts";
 import { reports } from "./routes/fixo/reports.ts";
+import { complete } from "./routes/fixo/complete.ts";
 import { vehicleRoutes } from "./routes/fixo/vehicles.ts";
 
 const DEV_MODE = Deno.env.get("DEV_MODE") === "true";
@@ -111,6 +112,7 @@ export function createFixoApp() {
   app.route("/sessions", sessions);
   app.route("/sessions", input);
   app.route("/sessions", reports);
+  app.route("/sessions", complete);
   app.route("/task", chat);
   app.route("/vehicles", vehicleRoutes);
   app.route("/billing", billing);

@@ -1,30 +1,15 @@
 import { type MutableRefObject, useCallback } from "react";
 
 import { AGENT_URL } from "@/lib/config";
+import { ensureSession } from "@/lib/session";
 
 interface UseMediaUploadOptions {
   accessToken: string | undefined;
   sessionIdRef: MutableRefObject<number | null>;
   sendMessage: (text: string, meta?: { imageUrl?: string }) => void;
-}
-
-async function ensureSession(
-  accessToken: string,
-  sessionIdRef: MutableRefObject<number | null>,
-): Promise<number | null> {
-  if (sessionIdRef.current) return sessionIdRef.current;
-
-  const res = await fetch(`${AGENT_URL}/sessions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  sessionIdRef.current = data.sessionId;
-  return data.sessionId;
+  /** Authenticated user id, scopes the persisted session id so a sign-out/
+   * sign-in on the same browser doesn't reuse the previous account's id. */
+  userId: string | null | undefined;
 }
 
 async function uploadMedia(
@@ -46,6 +31,7 @@ export function useMediaUpload({
   accessToken,
   sessionIdRef,
   sendMessage,
+  userId,
 }: UseMediaUploadOptions) {
   const handleAudioSend = useCallback(
     async (recording: {
@@ -55,7 +41,7 @@ export function useMediaUpload({
     }) => {
       if (!accessToken) return;
 
-      const sessionId = await ensureSession(accessToken, sessionIdRef);
+      const sessionId = await ensureSession(accessToken, sessionIdRef, userId);
       if (!sessionId) {
         sendMessage("[Audio recording failed to upload]");
         return;
@@ -80,7 +66,7 @@ export function useMediaUpload({
         sendMessage("[Audio upload failed — please try again]");
       }
     },
-    [accessToken, sessionIdRef, sendMessage],
+    [accessToken, sessionIdRef, sendMessage, userId],
   );
 
   const handlePhotoCapture = useCallback(
@@ -88,7 +74,7 @@ export function useMediaUpload({
       if (!accessToken) return;
 
       const base64 = dataUrl.split(",")[1];
-      const sessionId = await ensureSession(accessToken, sessionIdRef);
+      const sessionId = await ensureSession(accessToken, sessionIdRef, userId);
       if (!sessionId) {
         sendMessage("[Photo upload failed]");
         return;
@@ -112,7 +98,7 @@ export function useMediaUpload({
         sendMessage("[Photo upload failed — please try again]");
       }
     },
-    [accessToken, sessionIdRef, sendMessage],
+    [accessToken, sessionIdRef, sendMessage, userId],
   );
 
   const handleFilePick = useCallback(
@@ -129,7 +115,11 @@ export function useMediaUpload({
         const dataUrl = reader.result as string;
         const base64 = dataUrl.split(",")[1];
 
-        const sessionId = await ensureSession(accessToken, sessionIdRef);
+        const sessionId = await ensureSession(
+          accessToken,
+          sessionIdRef,
+          userId,
+        );
         if (!sessionId) {
           sendMessage("[Photo upload failed]");
           return;
@@ -152,7 +142,7 @@ export function useMediaUpload({
       };
       reader.readAsDataURL(file);
     },
-    [accessToken, sessionIdRef, sendMessage],
+    [accessToken, sessionIdRef, sendMessage, userId],
   );
 
   return { handleAudioSend, handlePhotoCapture, handleFilePick };
