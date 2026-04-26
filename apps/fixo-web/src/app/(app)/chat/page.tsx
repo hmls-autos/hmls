@@ -1,5 +1,6 @@
 "use client";
 
+import type { Session } from "@supabase/supabase-js";
 import { Car, FileDown } from "lucide-react";
 import { redirect } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -33,8 +34,37 @@ function WelcomeScreen() {
   );
 }
 
+// Auth gate. useAgentChat persists chat history scoped by userId, and the
+// useChat hook only consumes its initialMessages on first mount — so if the
+// hook mounted while auth was still loading, it would read the `:anon`
+// localStorage keys, miss the user's saved transcript, and then overwrite it
+// when the persistence effect fires under the real user key. Mounting the
+// chat UI only after auth resolves avoids that whole class of restore bugs.
 export default function ChatPage() {
   const { session, user, isLoading: authLoading } = useAuth();
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center h-dvh">
+        <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!session || !user) {
+    redirect("/login");
+  }
+
+  return <ChatPageInner session={session} userId={user.id} />;
+}
+
+function ChatPageInner({
+  session,
+  userId,
+}: {
+  session: Session;
+  userId: string;
+}) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sessionIdRef = useRef<number | null>(null);
@@ -56,9 +86,9 @@ export default function ChatPage() {
   } = useAgentChat({
     scrollRef,
     inputRef,
-    accessToken: session?.access_token,
+    accessToken: session.access_token,
     sessionIdRef,
-    userId: user?.id,
+    userId,
   });
 
   const [isFinalizing, setIsFinalizing] = useState(false);
@@ -66,15 +96,15 @@ export default function ChatPage() {
 
   const { handleAudioSend, handlePhotoCapture, handleFilePick } =
     useMediaUpload({
-      accessToken: session?.access_token,
+      accessToken: session.access_token,
       sessionIdRef,
       sendMessage,
-      userId: user?.id,
+      userId,
     });
 
   const handleDownloadReport = useCallback(
     async (sessionId: number) => {
-      if (!session?.access_token || isFinalizing) return;
+      if (isFinalizing) return;
       setReportError(null);
       setIsFinalizing(true);
       try {
@@ -119,7 +149,7 @@ export default function ChatPage() {
         setIsFinalizing(false);
       }
     },
-    [session?.access_token, uiMessages, isFinalizing],
+    [session.access_token, uiMessages, isFinalizing],
   );
 
   const handleObdSubmit = useCallback(
@@ -141,18 +171,6 @@ export default function ChatPage() {
       clearError();
     }
   }, [isUpgradeError, error, upgradeMessage, clearError]);
-
-  if (authLoading) {
-    return (
-      <div className="flex items-center justify-center h-dvh">
-        <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (!session) {
-    redirect("/login");
-  }
 
   return (
     <div className="flex flex-col h-dvh">

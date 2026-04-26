@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { summarizeFixoSession } from "@hmls/agent";
 import { getLogger } from "@logtape/logtape";
 import type { AuthContext } from "../../middleware/fixo/auth.ts";
+import { checkFreeTierLimit } from "../../middleware/fixo/tier.ts";
 import { prependSessionEvidence } from "./lib/hydrate-media.ts";
 
 const logger = getLogger(["hmls", "gateway", "fixo", "complete"]);
@@ -42,12 +43,11 @@ complete.post("/:id/complete", async (c) => {
   }
 
   // Cache-on-existence short-circuit: if a result is already stored, return it
-  // without re-running generateObject. Doubles as the billing-bypass defense
-  // (a single session can only trigger the LLM once before result is cached)
-  // and makes re-downloads instant. Status reset on follow-up activity is the
-  // deferred TODO ("Session-reopen on activity after completion") — until that
-  // lands, fresh diagnoses for an already-finalized session require explicitly
-  // clearing it server-side.
+  // without re-running generateObject. Makes re-downloads instant and lets
+  // tier-limited users re-download finalized reports past the session quota.
+  // Status reset on follow-up activity is the deferred TODO ("Session-reopen
+  // on activity after completion") — until that lands, fresh diagnoses for an
+  // already-finalized session require clearing the result server-side.
   if (session.result) {
     return c.json({
       sessionId,
@@ -55,6 +55,21 @@ complete.post("/:id/complete", async (c) => {
       result: session.result,
       cached: true,
     });
+  }
+
+  // Tier gate runs AFTER the cache check so re-downloads work even at the
+  // limit. POST /sessions itself isn't tier-gated, so without this a free
+  // user could create unlimited fresh sessions and call /complete on each
+  // for unlimited Gemini usage. checkFreeTierLimit counts sessions per
+  // month, capping first-time completions at the same 3-per-month bound
+  // /task already enforces.
+  const tierBlock = await checkFreeTierLimit(auth, "text");
+  if (tierBlock) {
+    logger.warn("Tier limit reached on first-time completion", {
+      userId: auth.userId,
+      sessionId,
+    });
+    return tierBlock;
   }
 
   let body: { messages?: UIMessage[] };
