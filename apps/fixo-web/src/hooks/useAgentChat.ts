@@ -57,6 +57,14 @@ interface UseAgentChatOptions {
   /** Authenticated user id, used to scope persisted session/transcript so a
    * sign-out/sign-in on the same browser doesn't leak across accounts. */
   userId?: string | null;
+  /** Pre-resolved transcript from the server (cross-device resume). When
+   * defined — even as `[]` — it overrides the localStorage fallback. Pass
+   * `undefined` to keep the legacy local-only behavior. */
+  initialMessages?: UIMessage[];
+  /** Pre-resolved session id (e.g. from `?session=` URL param or server
+   * lookup). When defined — even as `null` — overrides the localStorage
+   * fallback so the parent stays the single source of truth. */
+  initialSessionId?: number | null;
 }
 
 /** Extract concatenated text from a UIMessage's parts. */
@@ -101,14 +109,29 @@ function loadStoredMessages(
 }
 
 export function useAgentChat(options: UseAgentChatOptions = {}) {
-  const { scrollRef, inputRef, accessToken, sessionIdRef, userId } = options;
+  const {
+    scrollRef,
+    inputRef,
+    accessToken,
+    sessionIdRef,
+    userId,
+    initialMessages: providedInitialMessages,
+    initialSessionId: providedInitialSessionId,
+  } = options;
   const [currentTool, setCurrentTool] = useState<string | null>(null);
   const [pendingEstimate, setPendingEstimate] =
     useState<FixoEstimateData | null>(null);
   const imageUrlMapRef = useRef<Map<string, string>>(new Map());
 
-  // Load persisted messages once on mount, scoped to this user.
-  const [initialMessages] = useState(() => loadStoredMessages(userId));
+  // Resolve the boot transcript: caller-supplied (server-resolved, supports
+  // cross-device resume) wins; otherwise fall back to localStorage so a
+  // single-device user with no signal from the parent still sees their
+  // history after a refresh.
+  const [initialMessages] = useState(() =>
+    providedInitialMessages !== undefined
+      ? providedInitialMessages
+      : loadStoredMessages(userId),
+  );
 
   // Re-pair the restored transcript with its backend session id so /complete
   // and /report hit the right fixoMedia rows. Ref-only — the chat page reads
@@ -116,16 +139,20 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
   // every send for hydration. No reactive state needed because the Report
   // button no longer gates on sessionId presence.
   //
-  // Critically, only restore the session id when chat history was ALSO
-  // restored. If the history key is missing or corrupt, the surviving
-  // session-id key is orphaned: a fresh chat would otherwise inherit the
-  // previous session's photos and OBD codes server-side, leaking evidence
-  // into a brand-new report. Clear orphaned ids on the spot.
+  // Caller may pass `initialSessionId` (URL param / server lookup) to
+  // override the localStorage path entirely. Otherwise: only restore the
+  // session id when chat history was ALSO restored. If the history key is
+  // missing or corrupt, the surviving session-id key is orphaned: a fresh
+  // chat would otherwise inherit the previous session's photos and OBD
+  // codes server-side, leaking evidence into a brand-new report. Clear
+  // orphaned ids on the spot.
   const sessionRestoredRef = useRef(false);
   if (!sessionRestoredRef.current) {
     sessionRestoredRef.current = true;
     if (sessionIdRef && !sessionIdRef.current) {
-      if (initialMessages && initialMessages.length > 0) {
+      if (providedInitialSessionId !== undefined) {
+        sessionIdRef.current = providedInitialSessionId;
+      } else if (initialMessages && initialMessages.length > 0) {
         const restored = loadStoredSessionId(userId);
         if (restored !== null) sessionIdRef.current = restored;
       } else {

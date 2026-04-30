@@ -36,8 +36,21 @@ sessions.get("/", async (c) => {
     conditions.push(eq(schema.fixoSessions.customerId, auth.customerId));
   }
 
+  // Explicitly omit `messages` — the list view only needs the summary fields,
+  // and the persisted transcript can be large enough that streaming the whole
+  // history page payload would slow noticeably for heavy users.
   const sessions_ = await db
-    .select()
+    .select({
+      id: schema.fixoSessions.id,
+      customerId: schema.fixoSessions.customerId,
+      userId: schema.fixoSessions.userId,
+      vehicleId: schema.fixoSessions.vehicleId,
+      status: schema.fixoSessions.status,
+      creditsCharged: schema.fixoSessions.creditsCharged,
+      createdAt: schema.fixoSessions.createdAt,
+      completedAt: schema.fixoSessions.completedAt,
+      result: schema.fixoSessions.result,
+    })
     .from(schema.fixoSessions)
     .where(or(...conditions))
     .orderBy(desc(schema.fixoSessions.createdAt));

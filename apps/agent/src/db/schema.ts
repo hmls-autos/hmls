@@ -280,6 +280,10 @@ export const fixoSessions = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
     completedAt: timestamp("completed_at"),
     result: jsonb("result"),
+    // Persisted UIMessage[] transcript for cross-device continuation.
+    // Written by /task onFinish when sessionId is supplied; read by
+    // GET /sessions/:id so the web client can resume on a fresh device.
+    messages: jsonb("messages"),
   },
   (table) => [index("idx_fixo_sessions_customer").on(table.customerId)],
 );

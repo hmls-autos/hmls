@@ -3,6 +3,8 @@ import { convertToModelMessages, type UIMessage } from "ai";
 import { runFixoAgent } from "@hmls/agent";
 import { checkFreeTierLimit } from "../../middleware/fixo/tier.ts";
 import { getLogger } from "@logtape/logtape";
+import { db, schema } from "@hmls/agent/db";
+import { and, eq, or } from "drizzle-orm";
 import type { AuthContext } from "../../middleware/fixo/auth.ts";
 import { hydrateSessionMedia } from "./lib/hydrate-media.ts";
 import { reopenIfComplete } from "./lib/session-lifecycle.ts";
@@ -60,6 +62,13 @@ chat.post("/", async (c) => {
   });
 
   try {
+    // Snapshot the inbound messages BEFORE hydrateSessionMedia mutates them
+    // with signed-URL FileUIParts. Those URLs expire in 15 min, so persisting
+    // the hydrated copy would leave stale links in the saved transcript that
+    // 403 on cross-device resume. Persist the user-visible transcript only;
+    // the gateway re-hydrates evidence on every turn from fixoMedia anyway.
+    const originalMessages: UIMessage[] = structuredClone(messages);
+
     let attachedMedia = 0;
     if (parsedSessionId !== null && Number.isInteger(parsedSessionId)) {
       // Follow-up activity after a finalized session re-opens it so the
@@ -89,7 +98,39 @@ chat.post("/", async (c) => {
 
     const result = runFixoAgent({ messages: modelMessages, userId });
 
-    const response = result.toUIMessageStreamResponse();
+    const response = result.toUIMessageStreamResponse({
+      originalMessages,
+      onFinish: async ({ messages: finalMessages }) => {
+        if (parsedSessionId === null) return;
+        // Ownership-scoped UPDATE — guessing another user's session id can't
+        // overwrite their transcript. No-op if they don't own this row.
+        const ownerPredicate = auth.customerId !== undefined
+          ? or(
+            eq(schema.fixoSessions.userId, auth.userId),
+            eq(schema.fixoSessions.customerId, auth.customerId),
+          )
+          : eq(schema.fixoSessions.userId, auth.userId);
+        try {
+          await db
+            .update(schema.fixoSessions)
+            .set({ messages: finalMessages })
+            .where(
+              and(
+                eq(schema.fixoSessions.id, parsedSessionId),
+                ownerPredicate,
+              ),
+            );
+        } catch (err) {
+          // Persistence is best-effort: localStorage on the client still has
+          // the same transcript, so a transient DB hiccup doesn't lose user
+          // data. Log so we notice if it becomes systematic.
+          logger.warn("Failed to persist chat transcript", {
+            sessionId: parsedSessionId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      },
+    });
     const duration = Date.now() - startTime;
     logger.info("Request finished", {
       userId,
