@@ -6,7 +6,6 @@ import { db, schema } from "@hmls/agent/db";
 import { Errors } from "@hmls/shared/errors";
 import { getLogger } from "@logtape/logtape";
 import { type AuthUserEnv, requireAuthUser } from "../middleware/auth.ts";
-import { stripProviderMetadata } from "../lib/strip-provider-metadata.ts";
 
 const logger = getLogger(["hmls", "gateway", "chat"]);
 
@@ -114,7 +113,7 @@ chat.post("/", requireAuthUser, async (c) => {
       userContext,
     });
 
-    const response = stripProviderMetadata(result.toUIMessageStreamResponse());
+    const response = result.toUIMessageStreamResponse();
     const duration = Date.now() - startTime;
     logger.info("Request finished", { userId, messageCount, duration });
     return response;

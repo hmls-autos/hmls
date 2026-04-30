@@ -4,7 +4,6 @@ import { runFixoAgent } from "@hmls/agent";
 import { checkFreeTierLimit } from "../../middleware/fixo/tier.ts";
 import { getLogger } from "@logtape/logtape";
 import type { AuthContext } from "../../middleware/fixo/auth.ts";
-import { stripProviderMetadata } from "../../lib/strip-provider-metadata.ts";
 import { hydrateSessionMedia } from "./lib/hydrate-media.ts";
 import { reopenIfComplete } from "./lib/session-lifecycle.ts";
 
@@ -90,7 +89,7 @@ chat.post("/", async (c) => {
 
     const result = runFixoAgent({ messages: modelMessages, userId });
 
-    const response = stripProviderMetadata(result.toUIMessageStreamResponse());
+    const response = result.toUIMessageStreamResponse();
     const duration = Date.now() - startTime;
     logger.info("Request finished", {
       userId,
