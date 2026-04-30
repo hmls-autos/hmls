@@ -1,10 +1,17 @@
 "use client";
 
-import ReactMarkdown from "react-markdown";
+import { Streamdown } from "streamdown";
 
-export function Markdown({ content }: { content: string }) {
+export function Markdown({
+  content,
+  isStreaming,
+}: {
+  content: string;
+  isStreaming?: boolean;
+}) {
   return (
-    <ReactMarkdown
+    <Streamdown
+      mode={isStreaming ? "streaming" : "static"}
       components={{
         p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
         ul: ({ children }) => (
@@ -36,6 +43,6 @@ export function Markdown({ content }: { content: string }) {
       }}
     >
       {content}
-    </ReactMarkdown>
+    </Streamdown>
   );
 }

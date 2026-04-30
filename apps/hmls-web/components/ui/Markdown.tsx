@@ -1,18 +1,23 @@
 "use client";
 
-import ReactMarkdown from "react-markdown";
+import { Streamdown } from "streamdown";
 
 interface MarkdownProps {
   content: string;
   className?: string;
+  isStreaming?: boolean;
 }
 
-export function Markdown({ content, className = "" }: MarkdownProps) {
+export function Markdown({
+  content,
+  className = "",
+  isStreaming,
+}: MarkdownProps) {
   return (
     <div className={`prose dark:prose-invert prose-sm max-w-none ${className}`}>
-      <ReactMarkdown
+      <Streamdown
+        mode={isStreaming ? "streaming" : "static"}
         components={{
-          // Style overrides for chat context
           p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
           ul: ({ children }) => (
             <ul className="mb-2 ml-4 list-disc">{children}</ul>
@@ -57,7 +62,7 @@ export function Markdown({ content, className = "" }: MarkdownProps) {
         }}
       >
         {content}
-      </ReactMarkdown>
+      </Streamdown>
     </div>
   );
 }

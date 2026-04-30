@@ -1,5 +1,7 @@
 @import "tailwindcss";
+@import "streamdown/styles.css";
 @plugin "@tailwindcss/typography";
+@source "../node_modules/streamdown/dist/*.js";
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ── Light palette (default) ── */
