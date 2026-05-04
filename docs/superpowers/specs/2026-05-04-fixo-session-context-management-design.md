@@ -1,30 +1,46 @@
 # Fixo Session & Context Management — Design
 
-**Date:** 2026-05-04
-**Status:** Approved (brainstorming complete, ready for plan)
-**Owner:** Spinsirr
+**Date:** 2026-05-04 **Status:** Approved (brainstorming complete, ready for plan) **Owner:**
+Spinsirr
 
 ## 1. Problem
 
 Fixo's chat experience has two related gaps:
 
-1. **No session-management UX.** Sessions exist as DB rows ([`fixo_sessions`](packages/shared/src/db/schema.ts:294)), and a separate `/history` page lists them, but the chat page itself has no "new chat", session list, rename, or delete affordances. Users can only switch sessions by navigating to `/history` and clicking back. Lazy session creation also breaks cross-device continuity for text-only chats — they live only in localStorage until the user generates a report.
-2. **No agent-side context management.** [`runFixoAgent`](apps/agent/src/fixo/agent.ts:49) passes the full message history straight to `streamText` every turn. There is no token budget, no sliding window, no summarization. Long conversations blow up input-token cost linearly and will eventually approach Gemini's context window.
+1. **No session-management UX.** Sessions exist as DB rows
+   ([`fixo_sessions`](packages/shared/src/db/schema.ts:294)), and a separate `/history` page lists
+   them, but the chat page itself has no "new chat", session list, rename, or delete affordances.
+   Users can only switch sessions by navigating to `/history` and clicking back. Lazy session
+   creation also breaks cross-device continuity for text-only chats — they live only in localStorage
+   until the user generates a report.
+2. **No agent-side context management.** [`runFixoAgent`](apps/agent/src/fixo/agent.ts:49) passes
+   the full message history straight to `streamText` every turn. There is no token budget, no
+   sliding window, no summarization. Long conversations blow up input-token cost linearly and will
+   eventually approach Gemini's context window.
 
-Compounding these: the current data model conflates "session" with "diagnostic case." Status enum (`pending → complete → failed`), `result` column, `completedAt`, and the [`reopenIfComplete`](apps/gateway/src/routes/fixo/lib/session-lifecycle.ts:21) patch logic all assume sessions are short-lived task units — a model that fights ChatGPT-style continuous chat UX.
+Compounding these: the current data model conflates "session" with "diagnostic case." Status enum
+(`pending → complete → failed`), `result` column, `completedAt`, and the
+[`reopenIfComplete`](apps/gateway/src/routes/fixo/lib/session-lifecycle.ts:21) patch logic all
+assume sessions are short-lived task units — a model that fights ChatGPT-style continuous chat UX.
 
 ## 2. Goals
 
-- **Session = conversation.** Sessions are open-ended, never "complete." Reports become a separate entity.
-- **Vehicle as the primary grouping.** Sidebar groups sessions by `fixo_sessions.vehicle_id`. No new "project" entity — the existing `vehicles` table is the project.
-- **Visible session management.** Users can create, switch, rename, archive, and delete chats from a sidebar inside `/chat` itself.
-- **Bounded agent context cost.** Long conversations stay at roughly constant input-token cost via incremental summarization.
-- **Calmer schema.** Drop the patch logic (`reopenIfComplete`, status enum, status-based tier counting) that the task model required.
+- **Session = conversation.** Sessions are open-ended, never "complete." Reports become a separate
+  entity.
+- **Vehicle as the primary grouping.** Sidebar groups sessions by `fixo_sessions.vehicle_id`. No new
+  "project" entity — the existing `vehicles` table is the project.
+- **Visible session management.** Users can create, switch, rename, archive, and delete chats from a
+  sidebar inside `/chat` itself.
+- **Bounded agent context cost.** Long conversations stay at roughly constant input-token cost via
+  incremental summarization.
+- **Calmer schema.** Drop the patch logic (`reopenIfComplete`, status enum, status-based tier
+  counting) that the task model required.
 
 Non-goals (V2 candidates):
 
 - Cross-session search, tags, folders, pinning
-- Cross-session "project memory" — facts known about a vehicle persisting into every new chat about that vehicle
+- Cross-session "project memory" — facts known about a vehicle persisting into every new chat about
+  that vehicle
 - Shared / collaborative sessions
 - Vector retrieval ("find a past session with similar symptoms")
 - Structured fact extraction (vs free-text summary)
@@ -35,17 +51,17 @@ Non-goals (V2 candidates):
 
 ### 3.1 Mental-model shift
 
-| Aspect | Current (task model) | Target (conversation model) |
-|---|---|---|
-| Session unit | One diagnostic case | One ongoing chat |
-| Lifecycle | `pending → complete → failed` | Open forever; archive or delete |
-| Result | Single `result` jsonb on session | Multiple snapshot rows in `fixo_reports`, including snapshotted vehicle + media metadata |
-| Completion | Explicit `/complete` flips status | `/complete` inserts a report row, session unaffected |
-| Reopen | `reopenIfComplete` after follow-up | Not needed |
-| Sort order | `created_at` | `last_message_at` (new column) |
-| Free-tier counter | `count(sessions WHERE status != failed)` per month | `fixo_message_events` (idempotent per-message) + `count(fixo_reports)` per month |
-| Grouping | Flat list | Grouped by `vehicle_id` (existing column) |
-| History view | `/history` page | Sidebar `Show archived` toggle |
+| Aspect            | Current (task model)                               | Target (conversation model)                                                              |
+| ----------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Session unit      | One diagnostic case                                | One ongoing chat                                                                         |
+| Lifecycle         | `pending → complete → failed`                      | Open forever; archive or delete                                                          |
+| Result            | Single `result` jsonb on session                   | Multiple snapshot rows in `fixo_reports`, including snapshotted vehicle + media metadata |
+| Completion        | Explicit `/complete` flips status                  | `/complete` inserts a report row, session unaffected                                     |
+| Reopen            | `reopenIfComplete` after follow-up                 | Not needed                                                                               |
+| Sort order        | `created_at`                                       | `last_message_at` (new column)                                                           |
+| Free-tier counter | `count(sessions WHERE status != failed)` per month | `fixo_message_events` (idempotent per-message) + `count(fixo_reports)` per month         |
+| Grouping          | Flat list                                          | Grouped by `vehicle_id` (existing column)                                                |
+| History view      | `/history` page                                    | Sidebar `Show archived` toggle                                                           |
 
 ### 3.2 Component boundaries
 
@@ -101,22 +117,24 @@ CREATE INDEX idx_fixo_sessions_user_last_msg
 DROP TYPE fixo_session_status;
 ```
 
-| Column | Type | Notes |
-|---|---|---|
-| `id`, `user_id`, `customer_id`, `vehicle_id` | (existing) | unchanged. Sidebar groups by `vehicle_id`. |
-| `messages` | jsonb | unchanged — full transcript of `UIMessage[]`. |
-| `credits_charged` | integer | unchanged — legacy Stripe credits. |
-| `created_at` | timestamptz | unchanged. |
-| `title` | text | nullable until first auto-gen completes; UI fallback uses message preview. |
-| `title_is_user_set` | boolean | once true, auto-titler skips this row. |
-| `summary` | text | rolled-up "known facts" memo (max ~800 tokens). |
-| `last_summarized_message_id` | text | **stable** message id (from UIMessage.id) of the last message folded into `summary`. Used instead of an array index because the messages array is mutated by hydration paths ([hydrate-media.ts:183](apps/gateway/src/routes/fixo/lib/hydrate-media.ts:183), [chat.ts:65](apps/gateway/src/routes/fixo/chat.ts:65)) — index-based cursors silently drift. |
-| `last_message_at` | timestamptz | bumped on every successful POST /task. Used for sidebar sort order so revived old conversations float to the top. |
-| `archived_at` | timestamptz | soft-delete; default `GET /sessions` excludes; sidebar "Show archived" toggle includes. |
+| Column                                       | Type        | Notes                                                                                                                                                                                                                                                                                                                                                     |
+| -------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`, `user_id`, `customer_id`, `vehicle_id` | (existing)  | unchanged. Sidebar groups by `vehicle_id`.                                                                                                                                                                                                                                                                                                                |
+| `messages`                                   | jsonb       | unchanged — full transcript of `UIMessage[]`.                                                                                                                                                                                                                                                                                                             |
+| `credits_charged`                            | integer     | unchanged — legacy Stripe credits.                                                                                                                                                                                                                                                                                                                        |
+| `created_at`                                 | timestamptz | unchanged.                                                                                                                                                                                                                                                                                                                                                |
+| `title`                                      | text        | nullable until first auto-gen completes; UI fallback uses message preview.                                                                                                                                                                                                                                                                                |
+| `title_is_user_set`                          | boolean     | once true, auto-titler skips this row.                                                                                                                                                                                                                                                                                                                    |
+| `summary`                                    | text        | rolled-up "known facts" memo (max ~800 tokens).                                                                                                                                                                                                                                                                                                           |
+| `last_summarized_message_id`                 | text        | **stable** message id (from UIMessage.id) of the last message folded into `summary`. Used instead of an array index because the messages array is mutated by hydration paths ([hydrate-media.ts:183](apps/gateway/src/routes/fixo/lib/hydrate-media.ts:183), [chat.ts:65](apps/gateway/src/routes/fixo/chat.ts:65)) — index-based cursors silently drift. |
+| `last_message_at`                            | timestamptz | bumped on every successful POST /task. Used for sidebar sort order so revived old conversations float to the top.                                                                                                                                                                                                                                         |
+| `archived_at`                                | timestamptz | soft-delete; default `GET /sessions` excludes; sidebar "Show archived" toggle includes.                                                                                                                                                                                                                                                                   |
 
 ### 4.2 `fixo_reports` (new)
 
-Reports are **full snapshots**, not pointers — vehicle metadata and media URLs are copied at generation time. This satisfies D3 (Decision 3, 2026-05-04 brainstorming): later vehicle edits or media deletions must not change historical report rendering.
+Reports are **full snapshots**, not pointers — vehicle metadata and media URLs are copied at
+generation time. This satisfies D3 (Decision 3, 2026-05-04 brainstorming): later vehicle edits or
+media deletions must not change historical report rendering.
 
 ```sql
 CREATE TABLE fixo_reports (
@@ -135,11 +153,13 @@ CREATE INDEX idx_fixo_reports_user    ON fixo_reports(user_id, generated_at DESC
 
 `message_count` = number of `messages` array entries at the moment the report was generated.
 
-`uuid` (not serial) for parity with [`fixo_estimates`](packages/shared/src/db/schema.ts:355) and to avoid leaking growth rate when report ids appear in URLs.
+`uuid` (not serial) for parity with [`fixo_estimates`](packages/shared/src/db/schema.ts:355) and to
+avoid leaking growth rate when report ids appear in URLs.
 
 ### 4.3 `fixo_message_events` (new — replaces the prior counter table)
 
-Idempotent per-message ledger. The PRIMARY KEY on the user-message id makes the count exact-once even under client retries / network jitter.
+Idempotent per-message ledger. The PRIMARY KEY on the user-message id makes the count exact-once
+even under client retries / network jitter.
 
 ```sql
 CREATE TABLE fixo_message_events (
@@ -161,7 +181,8 @@ ON CONFLICT (user_message_id) DO NOTHING
 RETURNING user_message_id;
 ```
 
-If `RETURNING` produces a row → first time we see this message → counts toward quota. If empty → it's a retry/replay, **do not** double-count.
+If `RETURNING` produces a row → first time we see this message → counts toward quota. If empty →
+it's a retry/replay, **do not** double-count.
 
 **Read path (quota check):**
 
@@ -172,7 +193,9 @@ WHERE user_id = $1 AND month = $2;
 
 Indexed scan, O(messages-this-month) — bounded.
 
-This replaces the originally-proposed `fixo_message_counters` table because the fire-and-forget UPDATE pattern was both lossy (process death between stream finish and counter write) and double-countable (client retry). The events table fixes both.
+This replaces the originally-proposed `fixo_message_counters` table because the fire-and-forget
+UPDATE pattern was both lossy (process death between stream finish and counter write) and
+double-countable (client retry). The events table fixes both.
 
 ## 5. Frontend UX
 
@@ -183,17 +206,24 @@ This replaces the originally-proposed `fixo_message_counters` table because the 
 /chat/[id]      — named session page
 ```
 
-`/history` route is **deleted**. Archive functionality moves to a "Show archived" toggle in the sidebar (§5.6).
+`/history` route is **deleted**. Archive functionality moves to a "Show archived" toggle in the
+sidebar (§5.6).
 
-`/chat` (no id) renders only the welcome screen + input. **First-send flow** (codex review #5 — handles in-flight remount race):
+`/chat` (no id) renders only the welcome screen + input. **First-send flow** (codex review #5 —
+handles in-flight remount race):
 
 1. User types a message and hits send.
 2. Hook awaits `POST /sessions` → returns `{ sessionId }`.
-3. Hook stores sessionId in a ref + calls `window.history.replaceState(null, '', '/chat/' + id)` (NOT `router.push` / `router.replace`). Native history mutation does not unmount the React tree, so the in-flight stream survives.
+3. Hook stores sessionId in a ref + calls `window.history.replaceState(null, '', '/chat/' + id)`
+   (NOT `router.push` / `router.replace`). Native history mutation does not unmount the React tree,
+   so the in-flight stream survives.
 4. Stream proceeds against the new sessionId.
-5. On next navigation event (sidebar click, hard refresh), the URL is correct and `/chat/[id]` resolves normally.
+5. On next navigation event (sidebar click, hard refresh), the URL is correct and `/chat/[id]`
+   resolves normally.
 
-`router.push('/chat/' + id)` is reserved for *navigation* away from a finished session (sidebar clicks, history back-button), not for the initial URL-upgrade after creation. This keeps the hook's `key={id}` strategy safe — keying only flips when the user explicitly switches conversations.
+`router.push('/chat/' + id)` is reserved for _navigation_ away from a finished session (sidebar
+clicks, history back-button), not for the initial URL-upgrade after creation. This keeps the hook's
+`key={id}` strategy safe — keying only flips when the user explicitly switches conversations.
 
 ### 5.2 Sidebar (`apps/fixo-web/src/components/Sidebar.tsx`)
 
@@ -214,20 +244,26 @@ Sidebar (lg+ permanent, mobile via Sheet from BottomNav)
 └── BottomNav (mobile only — already exists)
 ```
 
-ChatListItem ⋯ menu: Rename / Archive / Delete. Vehicle group headers are collapsible (state per-group in localStorage).
+ChatListItem ⋯ menu: Rename / Archive / Delete. Vehicle group headers are collapsible (state
+per-group in localStorage).
 
 New components, all under `apps/fixo-web/src/components/chat/`:
 
-- `ChatList.tsx` — fetches `GET /sessions` via SWR, groups by `vehicle_id`, renders 20 most-recent per vehicle
+- `ChatList.tsx` — fetches `GET /sessions` via SWR, groups by `vehicle_id`, renders 20 most-recent
+  per vehicle
 - `ChatListItem.tsx` — single row + ⋯ menu
 - `VehicleGroupHeader.tsx` — collapsible group header showing vehicle year/make/model
 - `NewChatButton.tsx` — sidebar header CTA
 - `RenameDialog.tsx` — shadcn Dialog wrapping `PATCH /sessions/:id`
-- `DeleteConfirmDialog.tsx` — destructive confirmation; states "Reports and uploaded photos will be permanently deleted"
+- `DeleteConfirmDialog.tsx` — destructive confirmation; states "Reports and uploaded photos will be
+  permanently deleted"
 
 Mobile: BottomNav gets a new "Chats" tab that opens the ChatList in a full-screen `Sheet`.
 
-**No SSR / server component for `/chat/[id]`.** The session fetch happens client-side with a skeleton state during load, mirroring existing patterns. Server components would need `@supabase/ssr` cookie reading + Bearer-header forwarding, and the latency win does not justify the auth-flow complexity for a private route.
+**No SSR / server component for `/chat/[id]`.** The session fetch happens client-side with a
+skeleton state during load, mirroring existing patterns. Server components would need
+`@supabase/ssr` cookie reading + Bearer-header forwarding, and the latency win does not justify the
+auth-flow complexity for a private route.
 
 ### 5.3 Title generation
 
@@ -240,7 +276,8 @@ if (parsedSessionId !== null) {
   //   - title_is_user_set = false prevents auto-overwrite of a renamed title
   generateText({
     model: google("gemini-2.5-flash"),
-    prompt: `Summarize this car-diagnosis conversation as a 4-6 word title. No quotes, no period.\n\nConversation:\n${preview}`,
+    prompt:
+      `Summarize this car-diagnosis conversation as a 4-6 word title. No quotes, no period.\n\nConversation:\n${preview}`,
   })
     .then((result) =>
       db.update(fixoSessions)
@@ -257,30 +294,47 @@ if (parsedSessionId !== null) {
 
 Fallback when `title` is null: UI displays first 40 chars of first user message + "…".
 
-User rename: `PATCH /sessions/:id { title }` sets `title_is_user_set = true`. The auto-title path checks both the `IS NULL` and the `title_is_user_set = false` predicates and writes nothing if either fails.
+User rename: `PATCH /sessions/:id { title }` sets `title_is_user_set = true`. The auto-title path
+checks both the `IS NULL` and the `title_is_user_set = false` predicates and writes nothing if
+either fails.
 
 ### 5.4 Data flow on switch
 
 1. User clicks ChatListItem → `router.push('/chat/' + id)`
-2. `/chat/[id]/page.tsx` (client component with skeleton) fetches `GET /sessions/:id` and seeds `useAgentChat`
+2. `/chat/[id]/page.tsx` (client component with skeleton) fetches `GET /sessions/:id` and seeds
+   `useAgentChat`
 3. Hook mounts with `key={id}` so it fully resets between sessions
 4. localStorage path is preserved as offline fallback (existing behavior)
 
 ### 5.5 Vehicle grouping
 
-Sidebar groups by `fixo_sessions.vehicle_id`. Sessions without a vehicle (legacy or in-flight before vehicle is captured) live in the **"Unassigned"** group.
+Sidebar groups by `fixo_sessions.vehicle_id`. Sessions without a vehicle (legacy or in-flight before
+vehicle is captured) live in the **"Unassigned"** group.
 
-Once an agent turn captures or confirms a vehicle, the agent's `assign_vehicle` tool (already exists or trivially added) writes `fixo_sessions.vehicle_id`. The sidebar SWR cache invalidates on the same /sessions key, so the session moves into its vehicle group on next refresh.
+Once an agent turn captures or confirms a vehicle, the agent's `assign_vehicle` tool (already exists
+or trivially added) writes `fixo_sessions.vehicle_id`. The sidebar SWR cache invalidates on the same
+/sessions key, so the session moves into its vehicle group on next refresh.
 
-Vehicle group order: **most recent activity wins** — the group whose newest session has the latest `last_message_at` floats to the top.
+Vehicle group order: **most recent activity wins** — the group whose newest session has the latest
+`last_message_at` floats to the top.
 
 ### 5.6 Archive vs delete
 
-- **Archive** (`PATCH archived_at`) — soft-delete; row stays, reports stay, removed from default `GET /sessions`. Sidebar "Show archived" toggle calls `GET /sessions?include_archived=true` and renders archived sessions inline (greyed out) within their vehicle group. Reversible via "Unarchive" action that PATCHes `archived_at = null`.
+- **Archive** (`PATCH archived_at`) — soft-delete; row stays, reports stay, removed from default
+  `GET /sessions`. Sidebar "Show archived" toggle calls `GET /sessions?include_archived=true` and
+  renders archived sessions inline (greyed out) within their vehicle group. Reversible via
+  "Unarchive" action that PATCHes `archived_at = null`.
 - **Delete** (`DELETE /sessions/:id`) — hard delete. Order of operations inside the route handler:
-  1. `SELECT r2_key FROM fixo_media WHERE session_id = :id` — collect storage keys before the cascade wipes them. (Note: column is `r2_key` per [schema.ts:323](packages/shared/src/db/schema.ts:323), even though the Drizzle field is named `storageKey`.)
-  2. `DELETE FROM fixo_sessions WHERE id = :id AND user_id = :auth.userId` — DB-level CASCADE removes `fixo_reports`, `fixo_media`, `fixo_obd_codes`, `fixo_message_events` rows (FKs are added/altered to `ON DELETE CASCADE` in the same migration — see §7).
-  3. Best-effort `supabase.storage.remove(keys)` for the collected media files. Failure here logs a warn but does not roll back step 2 — the DB is the source of truth, orphaned blobs are harmless and cheaper to GC later than to keep alive.
+  1. `SELECT r2_key FROM fixo_media WHERE session_id = :id` — collect storage keys before the
+     cascade wipes them. (Note: column is `r2_key` per
+     [schema.ts:323](packages/shared/src/db/schema.ts:323), even though the Drizzle field is named
+     `storageKey`.)
+  2. `DELETE FROM fixo_sessions WHERE id = :id AND user_id = :auth.userId` — DB-level CASCADE
+     removes `fixo_reports`, `fixo_media`, `fixo_obd_codes`, `fixo_message_events` rows (FKs are
+     added/altered to `ON DELETE CASCADE` in the same migration — see §7).
+  3. Best-effort `supabase.storage.remove(keys)` for the collected media files. Failure here logs a
+     warn but does not roll back step 2 — the DB is the source of truth, orphaned blobs are harmless
+     and cheaper to GC later than to keep alive.
 
   Confirmation dialog required, uses destructive-color shadcn button.
 
@@ -292,25 +346,36 @@ Vehicle group order: **most recent activity wins** — the group whose newest se
 // apps/agent/src/fixo/build-context.ts (new)
 export async function buildAgentContext(opts: {
   sessionId: number;
-  latestMessages: ModelMessage[];        // already in model-message form
-  uiMessages: UIMessage[];               // raw UI messages, used to extract stable ids
+  latestMessages: ModelMessage[]; // already in model-message form
+  uiMessages: UIMessage[]; // raw UI messages, used to extract stable ids
 }): Promise<{ systemPrompt: string; modelMessages: ModelMessage[] }>;
 ```
 
-**Logic** (the entire body runs inside a single transaction with `SELECT ... FOR UPDATE` on the session row, mirroring [/complete:64](apps/gateway/src/routes/fixo/complete.ts:64) — see §6.5 for the concurrency rationale):
+**Logic** (the entire body runs inside a single transaction with `SELECT ... FOR UPDATE` on the
+session row, mirroring [/complete:64](apps/gateway/src/routes/fixo/complete.ts:64) — see §6.5 for
+the concurrency rationale):
 
 1. `SELECT summary, last_summarized_message_id FROM fixo_sessions WHERE id = :sid FOR UPDATE`.
-2. Find the cursor index in `uiMessages` by scanning for the message whose `.id` matches `last_summarized_message_id` (or 0 if null). Stable id resolves codex review #3 — array position drifts when hydration paths prepend/mutate parts.
+2. Find the cursor index in `uiMessages` by scanning for the message whose `.id` matches
+   `last_summarized_message_id` (or 0 if null). Stable id resolves codex review #3 — array position
+   drifts when hydration paths prepend/mutate parts.
 3. Compute `unsummarizedMessages = uiMessages.slice(cursorIndex)`.
-4. Estimate input tokens of `unsummarizedMessages + summary` using a real tokenizer (see §6.2). If the tokenizer is unavailable in the runtime, fall back to `chars / 3.5` and log a `fixo.compact.estimator.degraded` warning so we know we are in fallback mode.
-5. Trigger summarization if `estimatedTokens > COMPACT_THRESHOLD` OR `unsummarizedMessages.length > KEEP_RECENT_COUNT * 2`.
+4. Estimate input tokens of `unsummarizedMessages + summary` using a real tokenizer (see §6.2). If
+   the tokenizer is unavailable in the runtime, fall back to `chars / 3.5` and log a
+   `fixo.compact.estimator.degraded` warning so we know we are in fallback mode.
+5. Trigger summarization if `estimatedTokens > COMPACT_THRESHOLD` OR
+   `unsummarizedMessages.length > KEEP_RECENT_COUNT * 2`.
 6. If triggered:
-   - `messagesToFold = unsummarizedMessages.slice(0, unsummarizedMessages.length - KEEP_RECENT_COUNT)` (UIMessage[])
-   - Call `runSummarizer({ previousSummary, messagesToFold })` — converts UIMessage to summarizer-friendly form internally.
+   - `messagesToFold = unsummarizedMessages.slice(0, unsummarizedMessages.length - KEEP_RECENT_COUNT)`
+     (UIMessage[])
+   - Call `runSummarizer({ previousSummary, messagesToFold })` — converts UIMessage to
+     summarizer-friendly form internally.
    - `UPDATE fixo_sessions SET summary = $newSummary, last_summarized_message_id = $messagesToFold.at(-1).id WHERE id = :sid`.
 7. Assemble:
    - `systemPrompt = SYSTEM_PROMPT + (summary ? "\n\n## Known facts so far\n" + summary : "")`
-   - `modelMessages = latestMessages.slice(-KEEP_RECENT_COUNT)` — since `convertToModelMessages` preserves 1:1 ordering, taking the last N from `latestMessages` corresponds to the last N entries of `uiMessages` (which is what the agent should see).
+   - `modelMessages = latestMessages.slice(-KEEP_RECENT_COUNT)` — since `convertToModelMessages`
+     preserves 1:1 ordering, taking the last N from `latestMessages` corresponds to the last N
+     entries of `uiMessages` (which is what the agent should see).
 8. COMMIT.
 
 **Call site:**
@@ -329,17 +394,20 @@ const result = runFixoAgent({ systemPrompt, modelMessages, userId });
 ### 6.2 Constants and tokenizer
 
 ```ts
-const COMPACT_THRESHOLD = 30_000;  // input tokens
-const KEEP_RECENT_COUNT = 12;      // raw messages preserved
+const COMPACT_THRESHOLD = 30_000; // input tokens
+const KEEP_RECENT_COUNT = 12; // raw messages preserved
 const SUMMARIZER_MODEL = "gemini-2.5-flash";
 ```
 
-**Tokenizer:** prefer a real count over the original `chars / 4` heuristic (codex review #11 — tool outputs, reasoning parts, signed URLs, file parts all skew the heuristic in different directions, making compaction triggering unpredictable).
+**Tokenizer:** prefer a real count over the original `chars / 4` heuristic (codex review #11 — tool
+outputs, reasoning parts, signed URLs, file parts all skew the heuristic in different directions,
+making compaction triggering unpredictable).
 
 Order of preference, picking the first that works in the Deno runtime:
 
 1. AI SDK v6's `countTokens` if exposed for the configured Google provider.
-2. `@google/generative-ai`'s `countTokens` REST call (~50ms, cached per-session via in-memory LRU keyed by message-id list hash).
+2. `@google/generative-ai`'s `countTokens` REST call (~50ms, cached per-session via in-memory LRU
+   keyed by message-id list hash).
 3. `js-tiktoken` cl100k\_base — close-enough proxy for Gemini, no network.
 4. `chars / 3.5` fallback — same shape as before, slightly more conservative than `/4`.
 
@@ -372,28 +440,35 @@ Drop:
 Output: one terse markdown bullet list under 800 tokens. No prose.
 ```
 
-**D1 (decision, 2026-05-04):** the previous draft told the summarizer to drop photo/audio mentions entirely, on the assumption that hydration would re-attach them every turn. That assumption is wrong: [hydrate-media.ts:139](apps/gateway/src/routes/fixo/lib/hydrate-media.ts:139) marks `hydrated_at` and skips already-hydrated rows on subsequent turns. After compaction the agent would forget every previously-uploaded image. The prompt above keeps a textual residue so the agent retains the *content* of uploaded evidence even after the file parts age out.
+**D1 (decision, 2026-05-04):** the previous draft told the summarizer to drop photo/audio mentions
+entirely, on the assumption that hydration would re-attach them every turn. That assumption is
+wrong: [hydrate-media.ts:139](apps/gateway/src/routes/fixo/lib/hydrate-media.ts:139) marks
+`hydrated_at` and skips already-hydrated rows on subsequent turns. After compaction the agent would
+forget every previously-uploaded image. The prompt above keeps a textual residue so the agent
+retains the _content_ of uploaded evidence even after the file parts age out.
 
 ### 6.4 Manual compact
 
 `POST /sessions/:id/compact`:
 
-- Forces summarization regardless of threshold (folds everything except the last `KEEP_RECENT_COUNT` messages).
+- Forces summarization regardless of threshold (folds everything except the last `KEEP_RECENT_COUNT`
+  messages).
 - Same transaction shape as §6.1 — `SELECT FOR UPDATE` + summarize + write inside one transaction.
 - Returns `{ summary, lastSummarizedMessageId }`. UI shows a toast "Compacted N messages."
-- The chat-page transcript is **not** cleared. The user still sees every message; only the agent's view is condensed.
+- The chat-page transcript is **not** cleared. The user still sees every message; only the agent's
+  view is condensed.
 
 UI: a small "Clean up context" button in the chat header next to the "Report" button.
 
 ### 6.5 Failure modes and concurrency
 
-| Failure | Behavior |
-|---|---|
-| Summarizer call errors / times out | log warn; `buildAgentContext` falls back to sending all `latestMessages` for this turn; next turn retries. |
+| Failure                                   | Behavior                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Summarizer call errors / times out        | log warn; `buildAgentContext` falls back to sending all `latestMessages` for this turn; next turn retries.                                                                                                                                                                                                                              |
 | Concurrent /task vs /task on same session | both block on `SELECT FOR UPDATE`; second waits for the first to commit. Only one summarize+write happens per concurrent burst. Cost: ~2-3s serialization tail when summarization is actually triggered. Acceptable because (a) Gemini 2.5 Flash is fast and (b) the alternative is silent corruption of the summary (codex review #2). |
-| Concurrent /task vs /compact | same lock, same serialization. |
-| Tokenizer unavailable | log `fixo.compact.estimator.degraded`; use `chars / 3.5` fallback; spec author follows up to wire a real tokenizer in the next sprint. |
-| Cursor drift (codex review #3) | not possible: cursor is `last_summarized_message_id` (stable UIMessage id), not array index. Hydration prepending synthetic messages does not invalidate the cursor — we look up by id, not position. |
+| Concurrent /task vs /compact              | same lock, same serialization.                                                                                                                                                                                                                                                                                                          |
+| Tokenizer unavailable                     | log `fixo.compact.estimator.degraded`; use `chars / 3.5` fallback; spec author follows up to wire a real tokenizer in the next sprint.                                                                                                                                                                                                  |
+| Cursor drift (codex review #3)            | not possible: cursor is `last_summarized_message_id` (stable UIMessage id), not array index. Hydration prepending synthetic messages does not invalidate the cursor — we look up by id, not position.                                                                                                                                   |
 
 ### 6.6 Observability
 
@@ -546,12 +621,19 @@ COMMIT;
 
 This migration is **not reversible**. Verification before prod:
 
-- Run on staging clone; assert `count(fixo_reports) == count(fixo_sessions WHERE result IS NOT NULL AND user_id IS NOT NULL)` pre-drop.
+- Run on staging clone; assert
+  `count(fixo_reports) == count(fixo_sessions WHERE result IS NOT NULL AND user_id IS NOT NULL)`
+  pre-drop.
 - `pg_dump` of `fixo_sessions` and `fixo_reports` taken immediately before prod migration.
 
-Single-PR migration is acceptable because Fixo has no production users yet (per discussion 2026-05-04).
+Single-PR migration is acceptable because Fixo has no production users yet (per discussion
+2026-05-04).
 
-**Note on auto-archive:** the prior draft auto-archived all `status='complete'` sessions. **Removed** — codex review #12 correctly flagged this as a product decision masquerading as migration. With `/history` deleted (§5.1) and archive being a sidebar toggle, completed sessions naturally live in the active list keyed by `last_message_at`. If a user truly does not want a finished session in their sidebar, they can archive it manually.
+**Note on auto-archive:** the prior draft auto-archived all `status='complete'` sessions.
+**Removed** — codex review #12 correctly flagged this as a product decision masquerading as
+migration. With `/history` deleted (§5.1) and archive being a sidebar toggle, completed sessions
+naturally live in the active list keyed by `last_message_at`. If a user truly does not want a
+finished session in their sidebar, they can archive it manually.
 
 ### 7.1 Files deleted
 
@@ -620,61 +702,86 @@ async function requireReportQuota(auth: AuthContext): Promise<Response | null>;
 
 ### 8.2 Endpoint gating
 
-| Endpoint | Gate | Counter source |
-|---|---|---|
-| `POST /task` | `requireTextQuota` | `count(fixo_message_events WHERE user_id AND month)` |
-| `POST /sessions/:id/input` | `requireMediaTier(mediaType)` | n/a — Plus-only |
-| `POST /sessions/:id/complete` | `requireReportQuota` | `count(fixo_reports WHERE user_id AND generated_at >= month_start)` |
-| `POST /sessions` | (none) — empty session creation is free | n/a |
-| `POST /sessions/:id/compact` | (none) — manual maintenance, not chat | n/a |
-| `PATCH /sessions/:id` | (none) | n/a |
-| `DELETE /sessions/:id` | (none) | n/a |
+| Endpoint                      | Gate                                    | Counter source                                                      |
+| ----------------------------- | --------------------------------------- | ------------------------------------------------------------------- |
+| `POST /task`                  | `requireTextQuota`                      | `count(fixo_message_events WHERE user_id AND month)`                |
+| `POST /sessions/:id/input`    | `requireMediaTier(mediaType)`           | n/a — Plus-only                                                     |
+| `POST /sessions/:id/complete` | `requireReportQuota`                    | `count(fixo_reports WHERE user_id AND generated_at >= month_start)` |
+| `POST /sessions`              | (none) — empty session creation is free | n/a                                                                 |
+| `POST /sessions/:id/compact`  | (none) — manual maintenance, not chat   | n/a                                                                 |
+| `PATCH /sessions/:id`         | (none)                                  | n/a                                                                 |
+| `DELETE /sessions/:id`        | (none)                                  | n/a                                                                 |
 
 ### 8.3 Idempotency mechanics
 
-The `fixo_message_events` table (§4.3) makes counting exact-once on the user-message id. POST /task entry path:
+The `fixo_message_events` table (§4.3) makes counting exact-once on the user-message id. POST /task
+entry path:
 
 1. Read latest message id from the request body (`messages[messages.length - 1].id`).
 2. `INSERT ... ON CONFLICT DO NOTHING RETURNING user_message_id`.
-3. If RETURNING produced a row → it's a new message → run quota check `count(fixo_message_events WHERE user_id AND month)`. If over limit, ROLLBACK the INSERT and return 403.
-4. If RETURNING was empty → it's a replay/retry → skip the quota check (already counted on first try) and proceed.
+3. If RETURNING produced a row → it's a new message → run quota check
+   `count(fixo_message_events WHERE user_id AND month)`. If over limit, ROLLBACK the INSERT and
+   return 403.
+4. If RETURNING was empty → it's a replay/retry → skip the quota check (already counted on first
+   try) and proceed.
 
-This replaces the original onFinish-based counter pattern, which codex review #4 correctly identified as both lossy (process death between finish and write) and double-countable (client retry).
+This replaces the original onFinish-based counter pattern, which codex review #4 correctly
+identified as both lossy (process death between finish and write) and double-countable (client
+retry).
 
 ## 9. Testing
 
 ### 9.1 Integration (Deno test + Supabase test schema)
 
-- New session → eager create on first send → URL upgrades to `/chat/[id]` via `history.replaceState` → in-flight stream survives the URL change → title auto-generates within ~3s
+- New session → eager create on first send → URL upgrades to `/chat/[id]` via `history.replaceState`
+  → in-flight stream survives the URL change → title auto-generates within ~3s
 - `fixo_message_events`: same user_message_id POSTed twice does not double-count
-- 30K-token threshold (real tokenizer) triggers compaction; `summary` populated; `last_summarized_message_id` set to the stable id of the last folded message; next `/task` sees only summary + last 12 raw messages
-- Hydration prepending a synthetic evidence message does NOT advance the cursor inappropriately (regression test for codex review #3)
-- `POST /sessions/:id/compact` works regardless of threshold; concurrent `/task` is serialized (assert `fixo.compact.serialized_wait_ms` log fires)
-- `POST /sessions/:id/complete` creates a `fixo_reports` row with `vehicle_snapshot` and `media_snapshot` populated; session row unchanged
-- After report creation, deleting a `fixo_media` row or editing the `vehicles` row does NOT change the rendered PDF (snapshot integrity)
-- Multiple `/complete` calls create multiple report rows; `GET /sessions/:id/reports` lists them DESC by `generated_at`
-- `PATCH /sessions/:id { archived_at }` excludes from default `GET /sessions`; visible with `?include_archived=true`
-- `PATCH /sessions/:id { title }` sets `title_is_user_set = true`; auto-titler skips it on subsequent runs
+- 30K-token threshold (real tokenizer) triggers compaction; `summary` populated;
+  `last_summarized_message_id` set to the stable id of the last folded message; next `/task` sees
+  only summary + last 12 raw messages
+- Hydration prepending a synthetic evidence message does NOT advance the cursor inappropriately
+  (regression test for codex review #3)
+- `POST /sessions/:id/compact` works regardless of threshold; concurrent `/task` is serialized
+  (assert `fixo.compact.serialized_wait_ms` log fires)
+- `POST /sessions/:id/complete` creates a `fixo_reports` row with `vehicle_snapshot` and
+  `media_snapshot` populated; session row unchanged
+- After report creation, deleting a `fixo_media` row or editing the `vehicles` row does NOT change
+  the rendered PDF (snapshot integrity)
+- Multiple `/complete` calls create multiple report rows; `GET /sessions/:id/reports` lists them
+  DESC by `generated_at`
+- `PATCH /sessions/:id { archived_at }` excludes from default `GET /sessions`; visible with
+  `?include_archived=true`
+- `PATCH /sessions/:id { title }` sets `title_is_user_set = true`; auto-titler skips it on
+  subsequent runs
 - `DELETE /sessions/:id` cascades to reports, media, obd_codes, message_events; storage cleanup runs
-- Sidebar grouping: 3 sessions across 2 vehicles + 1 unassigned → 3 groups in the response, each correctly populated, sorted within by `last_message_at DESC`
+- Sidebar grouping: 3 sessions across 2 vehicles + 1 unassigned → 3 groups in the response, each
+  correctly populated, sorted within by `last_message_at DESC`
 - Free-tier user: 5 messages permitted, 6th rejected with 403; same response shape as today
 - Plus user: 100 messages permitted, no quota check overhead
-- Compaction summarizer prompt regression: feed a fixture conversation with a photo + OBD code + symptom description through `runSummarizer`; assert all three appear in output bullets (D1)
+- Compaction summarizer prompt regression: feed a fixture conversation with a photo + OBD code +
+  symptom description through `runSummarizer`; assert all three appear in output bullets (D1)
 
 ### 9.2 Unit
 
-- `buildAgentContext`: no-summary, partial-summary, threshold-not-hit, threshold-hit-this-turn, hydration-mutated-messages-array cases
-- `estimateTokens`: empirical accuracy on a sample of real messages (text-only, mixed text+tool, mixed text+file)
-- `summarizer`: golden-output test (input messages → expected key facts present in output, including media descriptions)
-- `requireTextQuota` / `requireMediaTier` / `requireReportQuota`: each in isolation, including 200/403 paths
+- `buildAgentContext`: no-summary, partial-summary, threshold-not-hit, threshold-hit-this-turn,
+  hydration-mutated-messages-array cases
+- `estimateTokens`: empirical accuracy on a sample of real messages (text-only, mixed text+tool,
+  mixed text+file)
+- `summarizer`: golden-output test (input messages → expected key facts present in output, including
+  media descriptions)
+- `requireTextQuota` / `requireMediaTier` / `requireReportQuota`: each in isolation, including
+  200/403 paths
 
 ### 9.3 Migration
 
 - Run `0016_session_b_model.sql` on staging clone of prod schema
-- Assert `count(fixo_reports) == count(fixo_sessions WHERE result IS NOT NULL AND user_id IS NOT NULL)`
-- Assert legacy `customer_id`-only sessions are NOT migrated to reports (their `result` column is lost — D2 explicit decision)
+- Assert
+  `count(fixo_reports) == count(fixo_sessions WHERE result IS NOT NULL AND user_id IS NOT NULL)`
+- Assert legacy `customer_id`-only sessions are NOT migrated to reports (their `result` column is
+  lost — D2 explicit decision)
 - Assert `messages` column is intact (no rows lost)
-- Assert `last_message_at` is populated for all rows (defaults to `created_at` if no message timestamps)
+- Assert `last_message_at` is populated for all rows (defaults to `created_at` if no message
+  timestamps)
 - Assert no auto-archive happened (`archived_at IS NULL` for all migrated rows)
 
 ### 9.4 Manual QA checklist (lifted into the implementation plan)
@@ -685,31 +792,39 @@ This replaces the original onFinish-based counter pattern, which codex review #4
 - Delete confirmation dialog wording mentions reports + photos will be lost
 - Title-gen failure shows truncated message preview, never a blank entry
 - Offline → online: localStorage path resumes correctly when network returns
-- First-send: typing fast and hitting send before sidebar finishes animating still produces a valid /chat/[id] URL with the message in flight
+- First-send: typing fast and hitting send before sidebar finishes animating still produces a valid
+  /chat/[id] URL with the message in flight
 - Free-tier user: hits message limit at 5, hits report limit at 1, sees correct upgrade message
-- Compact button: clicking it on a long conversation shows a "Compacted N messages" toast and the conversation visually unchanged
+- Compact button: clicking it on a long conversation shows a "Compacted N messages" toast and the
+  conversation visually unchanged
 
 ## 10. Open questions
 
 None blocking. Defer to plan/implementation:
 
-- Exact SWR keys and revalidation strategy for ChatList (probably `/sessions` with `revalidateOnFocus: false`)
-- Storage cleanup invocation pattern in the DELETE route (likely a single Supabase storage `remove` call with an array of keys)
-- Whether `/chat/[id]` should 404 or redirect to `/chat` for archived sessions accessed by URL (lean: navigate but show "Archived" badge in header)
+- Exact SWR keys and revalidation strategy for ChatList (probably `/sessions` with
+  `revalidateOnFocus: false`)
+- Storage cleanup invocation pattern in the DELETE route (likely a single Supabase storage `remove`
+  call with an array of keys)
+- Whether `/chat/[id]` should 404 or redirect to `/chat` for archived sessions accessed by URL
+  (lean: navigate but show "Archived" badge in header)
 - Pick exactly one tokenizer from §6.2's preference list during plan phase
 
 ## 11. Out of scope (V2)
 
 - Cross-session full-text search
 - Tags / folders / pinning beyond vehicle grouping
-- Project memory — facts about a vehicle persisting into every new chat about that vehicle (T2/T3 from the brainstorming session)
+- Project memory — facts about a vehicle persisting into every new chat about that vehicle (T2/T3
+  from the brainstorming session)
 - Real-time multi-device sync (WebSocket / pusher)
 - Vector retrieval across sessions
 - Structured fact extraction (instead of free-text summary)
 - Tool-result clearing (Anthropic-style `clear_tool_uses_*`)
 - Per-shop SaaS prompt customization (multi-tenant tier)
 - Plus → Free downgrade behavior mid-month (Stripe webhook handling out of scope)
-- Long-conversation `messages` array trimming — once a session crosses tens of thousands of messages, the JSONB column becomes a perf concern. V2: drop already-summarized messages from the column, keep only the summary + recent window.
+- Long-conversation `messages` array trimming — once a session crosses tens of thousands of
+  messages, the JSONB column becomes a perf concern. V2: drop already-summarized messages from the
+  column, keep only the summary + recent window.
 
 ## 12. References
 

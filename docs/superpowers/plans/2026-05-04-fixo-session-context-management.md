@@ -1,29 +1,44 @@
 # Fixo Session & Context Management — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
+> (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Move Fixo from a task-shaped session model (closed diagnostic cases) to a conversation-shaped one (open-ended chats), add agent-side context summarization, and rebuild the session UX with vehicle grouping.
+**Goal:** Move Fixo from a task-shaped session model (closed diagnostic cases) to a
+conversation-shaped one (open-ended chats), add agent-side context summarization, and rebuild the
+session UX with vehicle grouping.
 
-**Architecture:** Drop `fixo_sessions.status`/`result`/`completed_at`; add `title`, `summary`, `last_summarized_message_id`, `last_message_at`, `archived_at`. Move reports to a new `fixo_reports` table with vehicle + media snapshots. Replace lossy onFinish counter with idempotent `fixo_message_events` table. Wrap the agent's context build in a `SELECT FOR UPDATE` transaction with sliding-window summarization via Gemini 2.5 Flash. Frontend gets a sidebar with vehicle grouping; `/history` is deleted.
+**Architecture:** Drop `fixo_sessions.status`/`result`/`completed_at`; add `title`, `summary`,
+`last_summarized_message_id`, `last_message_at`, `archived_at`. Move reports to a new `fixo_reports`
+table with vehicle + media snapshots. Replace lossy onFinish counter with idempotent
+`fixo_message_events` table. Wrap the agent's context build in a `SELECT FOR UPDATE` transaction
+with sliding-window summarization via Gemini 2.5 Flash. Frontend gets a sidebar with vehicle
+grouping; `/history` is deleted.
 
-**Tech Stack:** Deno workspace, Hono 4, Drizzle 0.45 (postgres-js), AI SDK v6 (`@ai-sdk/google`), Next.js 16 (fixo-web), Bun, Biome, Tailwind 4, shadcn, SWR.
+**Tech Stack:** Deno workspace, Hono 4, Drizzle 0.45 (postgres-js), AI SDK v6 (`@ai-sdk/google`),
+Next.js 16 (fixo-web), Bun, Biome, Tailwind 4, shadcn, SWR.
 
-**Spec:** [docs/superpowers/specs/2026-05-04-fixo-session-context-management-design.md](docs/superpowers/specs/2026-05-04-fixo-session-context-management-design.md)
+**Spec:**
+[docs/superpowers/specs/2026-05-04-fixo-session-context-management-design.md](docs/superpowers/specs/2026-05-04-fixo-session-context-management-design.md)
 
 ---
 
 ## Phase 0 — Schema & Migration
 
-The migration is single-PR + single-transaction. It is **not reversible** (the legacy `result`/`status`/`completed_at` columns are dropped).
+The migration is single-PR + single-transaction. It is **not reversible** (the legacy
+`result`/`status`/`completed_at` columns are dropped).
 
 ### Task 0.1: Update Drizzle schema
 
 **Files:**
+
 - Modify: `packages/shared/src/db/schema.ts:294-313` (fixoSessions definition)
-- Modify: `packages/shared/src/db/schema.ts:280-292` (sessionStatusEnum + processingStatusEnum block — drop sessionStatusEnum)
+- Modify: `packages/shared/src/db/schema.ts:280-292` (sessionStatusEnum + processingStatusEnum block
+  — drop sessionStatusEnum)
 - Modify: `packages/shared/src/db/schema.ts:389-396` (exported types)
 
-- [ ] **Step 1: Drop the `sessionStatusEnum` definition.** It is referenced only by `fixoSessions.status`, which we are also dropping.
+- [ ] **Step 1: Drop the `sessionStatusEnum` definition.** It is referenced only by
+      `fixoSessions.status`, which we are also dropping.
 
 ```ts
 // REMOVE this block (was around line 280):
@@ -62,7 +77,8 @@ export const fixoSessions = pgTable(
 );
 ```
 
-Make sure `boolean` is imported from `drizzle-orm/pg-core` (it likely already is — check the existing imports at top of file).
+Make sure `boolean` is imported from `drizzle-orm/pg-core` (it likely already is — check the
+existing imports at top of file).
 
 - [ ] **Step 3: Add the new `fixoReports` table** right after `fixoSessions`:
 
@@ -153,7 +169,8 @@ export type NewFixoMessageEvent = typeof fixoMessageEvents.$inferInsert;
 deno task check
 ```
 
-Expected: PASS. (Other files reference `fixo_sessions.status` / `result` / `completedAt` and will fail — that's OK and expected. Note them for later phases.)
+Expected: PASS. (Other files reference `fixo_sessions.status` / `result` / `completedAt` and will
+fail — that's OK and expected. Note them for later phases.)
 
 - [ ] **Step 8: Commit**
 
@@ -165,6 +182,7 @@ git commit -m "schema(fixo): conversation-model fields + reports + message event
 ### Task 0.2: Hand-write migration 0016_session_b_model.sql
 
 **Files:**
+
 - Create: `apps/agent/migrations/0016_session_b_model.sql`
 
 drizzle-kit's auto-generator cannot produce the backfill logic. Hand-write the file.
@@ -298,7 +316,9 @@ COMMIT;
 
 - [ ] **Step 2: Verify migration filename + journal entry**
 
-drizzle-kit's journal is at `apps/agent/migrations/meta/_journal.json`. Hand-edit to add the new entry. Look at the most recent existing entry's shape and clone it, bumping `idx` and changing `tag` to `0016_session_b_model`.
+drizzle-kit's journal is at `apps/agent/migrations/meta/_journal.json`. Hand-edit to add the new
+entry. Look at the most recent existing entry's shape and clone it, bumping `idx` and changing `tag`
+to `0016_session_b_model`.
 
 ```bash
 cat apps/agent/migrations/meta/_journal.json | tail -20
@@ -330,7 +350,9 @@ Expected: "applied migration 0016_session_b_model" with no errors.
 infisical run --env=dev -- deno task --cwd apps/agent db:studio
 ```
 
-In the GUI: confirm `fixo_reports` and `fixo_message_events` tables exist; `fixo_sessions` has `title`, `last_message_at`, etc; no `status` / `result` / `completed_at` columns; `fixo_session_status` enum is gone.
+In the GUI: confirm `fixo_reports` and `fixo_message_events` tables exist; `fixo_sessions` has
+`title`, `last_message_at`, etc; no `status` / `result` / `completed_at` columns;
+`fixo_session_status` enum is gone.
 
 - [ ] **Step 5: Commit**
 
@@ -343,21 +365,25 @@ git commit -m "db(fixo): migration 0016 — sessions become conversations"
 
 ## Phase 1 — Agent context management
 
-Build the new `buildAgentContext` + summarizer. Phase ends with `runFixoAgent` accepting a pre-built systemPrompt; nothing in the gateway calls the new helpers yet (Phase 2 wires them).
+Build the new `buildAgentContext` + summarizer. Phase ends with `runFixoAgent` accepting a pre-built
+systemPrompt; nothing in the gateway calls the new helpers yet (Phase 2 wires them).
 
 ### Task 1.1: Token estimator
 
 **Files:**
+
 - Create: `apps/agent/src/fixo/token-estimate.ts`
 - Test: `apps/agent/src/fixo/token-estimate_test.ts`
 
-A shared, runtime-safe token estimator. Phase pick: just the chars/3.5 fallback for now — wire a real tokenizer in a follow-up if metrics show drift. The `fixo.compact.estimator.degraded` log will fire on every call for now so we know.
+A shared, runtime-safe token estimator. Phase pick: just the chars/3.5 fallback for now — wire a
+real tokenizer in a follow-up if metrics show drift. The `fixo.compact.estimator.degraded` log will
+fire on every call for now so we know.
 
 - [ ] **Step 1: Write the failing test**
 
 ```ts
 // apps/agent/src/fixo/token-estimate_test.ts
-import { assertEquals, assertAlmostEquals } from "@std/assert";
+import { assertAlmostEquals, assertEquals } from "@std/assert";
 import { estimateTokens } from "./token-estimate.ts";
 import type { ModelMessage } from "ai";
 
@@ -378,8 +404,8 @@ Deno.test("estimateTokens — multipart message", () => {
     {
       role: "assistant",
       content: [
-        { type: "text", text: "hi" },              // 2
-        { type: "text", text: "there" },           // 5
+        { type: "text", text: "hi" }, // 2
+        { type: "text", text: "there" }, // 5
       ],
     },
   ];
@@ -391,7 +417,12 @@ Deno.test("estimateTokens — tool result", () => {
     {
       role: "tool",
       content: [
-        { type: "tool-result", toolCallId: "t1", toolName: "x", output: { type: "text", value: "abcdefghij" } },
+        {
+          type: "tool-result",
+          toolCallId: "t1",
+          toolName: "x",
+          output: { type: "text", value: "abcdefghij" },
+        },
       ],
     },
   ];
@@ -470,9 +501,12 @@ git commit -m "feat(fixo-agent): chars/3.5 token estimator with multipart suppor
 ### Task 1.2: Summarizer
 
 **Files:**
+
 - Create: `apps/agent/src/fixo/summarizer.ts`
 
-The summarizer takes UIMessages-to-fold + a previous summary (possibly null), returns a new rolled-up text summary. We do NOT add a unit test that calls Gemini — that's an integration concern. Instead we test the prompt construction.
+The summarizer takes UIMessages-to-fold + a previous summary (possibly null), returns a new
+rolled-up text summary. We do NOT add a unit test that calls Gemini — that's an integration concern.
+Instead we test the prompt construction.
 
 - [ ] **Step 1: Implement**
 
@@ -548,7 +582,11 @@ export async function runSummarizer(
 function serializeForSummarizer(messages: UIMessage[]): string {
   const lines: string[] = [];
   for (const m of messages) {
-    const prefix = m.role === "user" ? "USER" : m.role === "assistant" ? "ASSISTANT" : m.role.toUpperCase();
+    const prefix = m.role === "user"
+      ? "USER"
+      : m.role === "assistant"
+      ? "ASSISTANT"
+      : m.role.toUpperCase();
     for (const part of m.parts) {
       if (part.type === "text") {
         lines.push(`${prefix}: ${part.text}`);
@@ -582,7 +620,8 @@ export { runSummarizer } from "./fixo/summarizer.ts";
 deno task check
 ```
 
-Expected: PASS for new file. (Other unrelated errors from Phase 0 dropped columns are still expected — note them.)
+Expected: PASS for new file. (Other unrelated errors from Phase 0 dropped columns are still expected
+— note them.)
 
 - [ ] **Step 4: Commit**
 
@@ -594,10 +633,12 @@ git commit -m "feat(fixo-agent): summarizer (Gemini 2.5 Flash) preserving media"
 ### Task 1.3: buildAgentContext
 
 **Files:**
+
 - Create: `apps/agent/src/fixo/build-context.ts`
 - Test: `apps/agent/src/fixo/build-context_test.ts`
 
-This is the heart of context management — the function that decides whether to summarize and assembles `(systemPrompt, modelMessages)`.
+This is the heart of context management — the function that decides whether to summarize and
+assembles `(systemPrompt, modelMessages)`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -802,9 +843,11 @@ git commit -m "feat(fixo-agent): buildAgentContext with FOR UPDATE summarization
 ### Task 1.4: runFixoAgent accepts pre-built systemPrompt
 
 **Files:**
+
 - Modify: `apps/agent/src/fixo/agent.ts:17-71`
 
-- [ ] **Step 1: Modify runFixoAgent signature** to take an optional `systemPrompt`. Replace the existing `RunFixoAgentOptions` interface and the `streamText` call:
+- [ ] **Step 1: Modify runFixoAgent signature** to take an optional `systemPrompt`. Replace the
+      existing `RunFixoAgentOptions` interface and the `streamText` call:
 
 ```ts
 export interface RunFixoAgentOptions {
@@ -887,9 +930,11 @@ git commit -m "refactor(fixo-agent): runFixoAgent accepts injected systemPrompt"
 ### Task 2.1: Rewrite tier middleware
 
 **Files:**
+
 - Modify: `apps/gateway/src/middleware/fixo/tier.ts` (full rewrite)
 
-The original `checkFreeTierLimit` conflated text-quota, media-quota, and the legacy "exclude-this-session-id" hack. Split into three orthogonal functions.
+The original `checkFreeTierLimit` conflated text-quota, media-quota, and the legacy
+"exclude-this-session-id" hack. Split into three orthogonal functions.
 
 - [ ] **Step 1: Replace the file content**
 
@@ -934,7 +979,8 @@ export async function requireTextQuota(auth: AuthContext): Promise<Response | nu
     return new Response(
       JSON.stringify({
         error: "limit_reached",
-        message: `Free plan limit reached (${FREE_LIMITS.userMessagesPerMonth} messages/month). Upgrade to Plus for unlimited chat.`,
+        message:
+          `Free plan limit reached (${FREE_LIMITS.userMessagesPerMonth} messages/month). Upgrade to Plus for unlimited chat.`,
         usage: { used: Number(value), limit: FREE_LIMITS.userMessagesPerMonth },
       }),
       { status: 403, headers: { "Content-Type": "application/json" } },
@@ -961,7 +1007,8 @@ export async function requireReportQuota(auth: AuthContext): Promise<Response | 
     return new Response(
       JSON.stringify({
         error: "limit_reached",
-        message: `Free plan limit reached (${FREE_LIMITS.reportsPerMonth} report/month). Upgrade to Plus for unlimited reports.`,
+        message:
+          `Free plan limit reached (${FREE_LIMITS.reportsPerMonth} report/month). Upgrade to Plus for unlimited reports.`,
         usage: { used: Number(value), limit: FREE_LIMITS.reportsPerMonth },
       }),
       { status: 403, headers: { "Content-Type": "application/json" } },
@@ -984,7 +1031,8 @@ export function requireMediaTier(auth: AuthContext): Response | null {
 
 - [ ] **Step 2: Update consumers (Phase 2 will keep doing this as we touch each route)**
 
-For now, leave existing call sites broken — they reference `checkFreeTierLimit`. The next tasks fix each call site. Typecheck will fail — that's expected.
+For now, leave existing call sites broken — they reference `checkFreeTierLimit`. The next tasks fix
+each call site. Typecheck will fail — that's expected.
 
 - [ ] **Step 3: Commit**
 
@@ -996,6 +1044,7 @@ git commit -m "refactor(fixo-gateway): split tier check into 3 orthogonal gates"
 ### Task 2.2: Rewrite POST /task — eager session, idempotent counter, buildAgentContext
 
 **Files:**
+
 - Modify: `apps/gateway/src/routes/fixo/chat.ts` (significant rewrite)
 
 The current chat.ts:
@@ -1195,13 +1244,17 @@ function maybeGenerateTitle(
   const assistantMsg = finalMessages.find((m) => m.role === "assistant");
   if (!userMsg || !assistantMsg) return;
 
-  const preview = (userMsg.parts.find((p) => p.type === "text") as { text?: string } | undefined)?.text;
+  const preview = (userMsg.parts.find((p) => p.type === "text") as { text?: string } | undefined)
+    ?.text;
   if (!preview) return;
 
   const google = createGoogleGenerativeAI({ apiKey });
   generateText({
     model: google("gemini-2.5-flash"),
-    prompt: `Summarize this car-diagnosis conversation as a 4-6 word title. No quotes, no period.\n\nConversation:\n${preview.slice(0, 500)}`,
+    prompt:
+      `Summarize this car-diagnosis conversation as a 4-6 word title. No quotes, no period.\n\nConversation:\n${
+        preview.slice(0, 500)
+      }`,
   })
     .then(({ text }) =>
       db.update(schema.fixoSessions)
@@ -1223,7 +1276,9 @@ export { chat };
 
 - [ ] **Step 2: Update existing tests**
 
-The existing `apps/gateway/src/routes/fixo/chat_test.ts` tests the previous reopen flow. Walk through it; remove tests that assert reopen behavior; keep / update tests that verify error paths and basic invocation.
+The existing `apps/gateway/src/routes/fixo/chat_test.ts` tests the previous reopen flow. Walk
+through it; remove tests that assert reopen behavior; keep / update tests that verify error paths
+and basic invocation.
 
 - [ ] **Step 3: Add new test**
 
@@ -1246,7 +1301,8 @@ Deno.test("POST /task — same user_message_id twice does not double-count", asy
 deno task check:gateway
 ```
 
-Some Phase 0 errors will still appear from other files. New errors specific to chat.ts should be zero.
+Some Phase 0 errors will still appear from other files. New errors specific to chat.ts should be
+zero.
 
 - [ ] **Step 5: Commit**
 
@@ -1258,8 +1314,10 @@ git commit -m "feat(fixo-gateway): /task with idempotent counter + buildAgentCon
 ### Task 2.3: Sessions CRUD — PATCH, DELETE, list filter, /reports, /compact
 
 **Files:**
+
 - Modify: `apps/gateway/src/routes/fixo/sessions.ts` (full rewrite)
-- Modify: `apps/gateway/src/routes/fixo/lib/hydrate-media.ts` — only if storage_key reference is wrong
+- Modify: `apps/gateway/src/routes/fixo/lib/hydrate-media.ts` — only if storage_key reference is
+  wrong
 
 - [ ] **Step 1: Rewrite sessions.ts**
 
@@ -1491,7 +1549,10 @@ sessions.post("/:id/compact", async (c) => {
     ? allMessages.findIndex((m) => m.id === session.lastSummarizedMessageId) + 1
     : 0;
   const unsummarized = allMessages.slice(Math.max(0, cursorIndex));
-  const messagesToFold = unsummarized.slice(0, Math.max(0, unsummarized.length - KEEP_RECENT_COUNT));
+  const messagesToFold = unsummarized.slice(
+    0,
+    Math.max(0, unsummarized.length - KEEP_RECENT_COUNT),
+  );
   if (messagesToFold.length === 0) {
     return c.json({ message: "nothing to compact", summary: session.summary });
   }
@@ -1519,7 +1580,9 @@ sessions.post("/:id/compact", async (c) => {
 export { sessions };
 ```
 
-(Note: this rewrite removes the `vehicleId` join into the list response; client-side grouping is fine because the sidebar already fetches the vehicles list separately. Confirm that pattern in Phase 3.)
+(Note: this rewrite removes the `vehicleId` join into the list response; client-side grouping is
+fine because the sidebar already fetches the vehicles list separately. Confirm that pattern in Phase
+3.)
 
 - [ ] **Step 2: Add `import { sql } from "drizzle-orm"`** at the top if not already present.
 
@@ -1541,6 +1604,7 @@ git commit -m "feat(fixo-gateway): sessions CRUD + /compact + /reports list"
 ### Task 2.4: complete.ts — write to fixo_reports with snapshots
 
 **Files:**
+
 - Modify: `apps/gateway/src/routes/fixo/complete.ts` (full rewrite)
 
 - [ ] **Step 1: Replace the file**
@@ -1677,7 +1741,8 @@ export { complete };
 grep -rn "summarizeFixoSession" apps/agent/src/ packages/shared/src/
 ```
 
-If exported, no change. If not, add to `apps/agent/src/mod.ts`. Existing code referenced it so it should already be exported.
+If exported, no change. If not, add to `apps/agent/src/mod.ts`. Existing code referenced it so it
+should already be exported.
 
 - [ ] **Step 3: Typecheck**
 
@@ -1697,9 +1762,11 @@ git commit -m "feat(fixo-gateway): /complete inserts fixo_reports w/ snapshots"
 ### Task 2.5: reports.ts — read snapshots from fixo_reports
 
 **Files:**
+
 - Modify: `apps/gateway/src/routes/fixo/reports.ts`
 
-The PDF route currently joins fixo_sessions + vehicles + fixo_media to render the report. Switch to reading the snapshot fields from fixo_reports.
+The PDF route currently joins fixo_sessions + vehicles + fixo_media to render the report. Switch to
+reading the snapshot fields from fixo_reports.
 
 - [ ] **Step 1: Read the existing reports.ts**
 
@@ -1707,9 +1774,12 @@ The PDF route currently joins fixo_sessions + vehicles + fixo_media to render th
 cat apps/gateway/src/routes/fixo/reports.ts
 ```
 
-Identify where `vehicle`, `media`, and `result` are fetched. Replace those reads with a single `fixoReports` query keyed by `:id` (UUID) instead of session id.
+Identify where `vehicle`, `media`, and `result` are fetched. Replace those reads with a single
+`fixoReports` query keyed by `:id` (UUID) instead of session id.
 
-- [ ] **Step 2: Update the route signature** from `/:id/report` (session-id-keyed) to `/:reportId/pdf` (report-id-keyed). The frontend call site in `apps/fixo-web/src/lib/download-report.ts` will be updated in Phase 3.
+- [ ] **Step 2: Update the route signature** from `/:id/report` (session-id-keyed) to
+      `/:reportId/pdf` (report-id-keyed). The frontend call site in
+      `apps/fixo-web/src/lib/download-report.ts` will be updated in Phase 3.
 
 ```ts
 reports.get("/:reportId/pdf", async (c) => {
@@ -1737,11 +1807,14 @@ reports.get("/:reportId/pdf", async (c) => {
 });
 ```
 
-- [ ] **Step 3: Adjust fixo-report.tsx props** if the PDF component still expects live `Vehicle` / `FixoMedia` types. Make the component accept the snapshot shape (raw jsonb already has the same fields, just from a frozen point in time).
+- [ ] **Step 3: Adjust fixo-report.tsx props** if the PDF component still expects live `Vehicle` /
+      `FixoMedia` types. Make the component accept the snapshot shape (raw jsonb already has the
+      same fields, just from a frozen point in time).
 
 - [ ] **Step 4: Mount the new route in hmls-app.ts**
 
-Find the existing `app.route("/sessions", ...)` block and verify the reports sub-route is mounted at `/reports/:reportId/pdf`. Adjust the mount path if needed.
+Find the existing `app.route("/sessions", ...)` block and verify the reports sub-route is mounted at
+`/reports/:reportId/pdf`. Adjust the mount path if needed.
 
 - [ ] **Step 5: Typecheck**
 
@@ -1759,6 +1832,7 @@ git commit -m "feat(fixo-gateway): PDF route reads snapshot from fixo_reports"
 ### Task 2.6: Delete session-lifecycle.ts and remove its callers
 
 **Files:**
+
 - Delete: `apps/gateway/src/routes/fixo/lib/session-lifecycle.ts`
 - Modify: any file that imported `reopenIfComplete` (already done in Task 2.2 chat.ts)
 
@@ -1768,7 +1842,8 @@ git commit -m "feat(fixo-gateway): PDF route reads snapshot from fixo_reports"
 grep -rn "session-lifecycle\|reopenIfComplete" apps/
 ```
 
-If chat.ts is the only place, delete the file. Otherwise update the remaining call site to be a no-op or simply remove the call.
+If chat.ts is the only place, delete the file. Otherwise update the remaining call site to be a
+no-op or simply remove the call.
 
 - [ ] **Step 2: Delete the file**
 
@@ -1793,9 +1868,11 @@ git commit -m "chore(fixo-gateway): drop session-lifecycle.ts (reopen no longer 
 ### Task 2.7: Update input.ts to use new tier middleware
 
 **Files:**
+
 - Modify: `apps/gateway/src/routes/fixo/input.ts`
 
-`input.ts` currently calls `checkFreeTierLimit(auth, mediaType)` for plus-only enforcement on photo/audio uploads. Switch to `requireMediaTier(auth)`.
+`input.ts` currently calls `checkFreeTierLimit(auth, mediaType)` for plus-only enforcement on
+photo/audio uploads. Switch to `requireMediaTier(auth)`.
 
 - [ ] **Step 1: Find the call site**
 
@@ -1825,6 +1902,7 @@ git commit -m "refactor(fixo-gateway): input.ts uses requireMediaTier"
 ### Task 2.8: Mount the new compact route + verify route table
 
 **Files:**
+
 - Modify: `apps/gateway/src/routes/fixo/hmls-app.ts` (or wherever fixo routes get mounted)
 
 The /compact route was added inline in sessions.ts. Confirm it's reachable.
@@ -1835,7 +1913,8 @@ The /compact route was added inline in sessions.ts. Confirm it's reachable.
 grep -rn "fixo/sessions\|sessions.ts\|chat.ts" apps/gateway/src/ | grep route
 ```
 
-- [ ] **Step 2: Manually test the route table** by running the dev server and hitting each new endpoint with curl. (Plan-phase placeholder; this is a smoke test only.)
+- [ ] **Step 2: Manually test the route table** by running the dev server and hitting each new
+      endpoint with curl. (Plan-phase placeholder; this is a smoke test only.)
 
 ```bash
 infisical run --env=dev -- deno task dev:api
@@ -1849,11 +1928,13 @@ curl -X POST http://fixo.localhost:8080/sessions -H "Authorization: Bearer $(cat
 
 ## Phase 3 — Frontend
 
-The frontend is the largest visible change. We replace the chat layout, add a sidebar with vehicle grouping, delete /history, and rewire the first-send flow.
+The frontend is the largest visible change. We replace the chat layout, add a sidebar with vehicle
+grouping, delete /history, and rewire the first-send flow.
 
 ### Task 3.1: Eager session creation in useAgentChat
 
 **Files:**
+
 - Modify: `apps/fixo-web/src/hooks/useAgentChat.ts` (around line 328 sendMessage)
 - Modify: `apps/fixo-web/src/lib/session.ts` (drop lazy-create)
 
@@ -1929,6 +2010,7 @@ git commit -m "feat(fixo-web): eager session create + history.replaceState first
 ### Task 3.2: New /chat/[id] client page
 
 **Files:**
+
 - Create: `apps/fixo-web/src/app/(app)/chat/[id]/page.tsx`
 - Modify: `apps/fixo-web/src/app/(app)/chat/page.tsx` (simplify to blank-state landing)
 
@@ -1939,7 +2021,7 @@ git commit -m "feat(fixo-web): eager session create + history.replaceState first
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, redirect } from "next/navigation";
+import { redirect, useParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { AGENT_URL } from "@/lib/config";
 import type { UIMessage } from "ai";
@@ -1986,7 +2068,9 @@ export default function ChatByIdPage() {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [sessionId, session.access_token]);
 
   if (error) return <ErrorState message={error} />;
@@ -2024,7 +2108,10 @@ function ErrorState({ message }: { message: string }) {
 
 - [ ] **Step 2: Extract `ChatPageInner` to a shared component**
 
-The current `apps/fixo-web/src/app/(app)/chat/page.tsx` defines `ChatPageInner` inline. Move it to `apps/fixo-web/src/components/chat/ChatPageInner.tsx` so both routes can import it. Update its props to accept `initialMessages` and `sessionId` from props (no more bootstrap fetch logic — that lives in the [id] page now).
+The current `apps/fixo-web/src/app/(app)/chat/page.tsx` defines `ChatPageInner` inline. Move it to
+`apps/fixo-web/src/components/chat/ChatPageInner.tsx` so both routes can import it. Update its props
+to accept `initialMessages` and `sessionId` from props (no more bootstrap fetch logic — that lives
+in the [id] page now).
 
 - [ ] **Step 3: Simplify /chat (no id) to blank state**
 
@@ -2061,7 +2148,9 @@ function Spinner() {
 }
 ```
 
-- [ ] **Step 4: Update `ChatPageInner` to take `sessionId: number | null`** and forward to `useAgentChat` with `sessionIdRef.current = sessionId`. The hook's existing eager-create logic kicks in on first send when sessionId is null.
+- [ ] **Step 4: Update `ChatPageInner` to take `sessionId: number | null`** and forward to
+      `useAgentChat` with `sessionIdRef.current = sessionId`. The hook's existing eager-create logic
+      kicks in on first send when sessionId is null.
 
 - [ ] **Step 5: Typecheck + commit**
 
@@ -2077,6 +2166,7 @@ git commit -m "feat(fixo-web): /chat blank-state + /chat/[id] resumed conversati
 ### Task 3.3: Sidebar with vehicle grouping
 
 **Files:**
+
 - Create: `apps/fixo-web/src/components/chat/ChatList.tsx`
 - Create: `apps/fixo-web/src/components/chat/ChatListItem.tsx`
 - Create: `apps/fixo-web/src/components/chat/VehicleGroupHeader.tsx`
@@ -2274,11 +2364,30 @@ export function ChatListItem({ session, onMutate }: Props) {
       </button>
       {menuOpen && (
         <div className="absolute right-2 top-full z-20 mt-1 rounded border border-border bg-popover shadow-md">
-          <button onClick={() => { setMenuOpen(false); setRenameOpen(true); }}>Rename</button>
-          <button onClick={() => { setMenuOpen(false); archive(); }}>
+          <button
+            onClick={() => {
+              setMenuOpen(false);
+              setRenameOpen(true);
+            }}
+          >
+            Rename
+          </button>
+          <button
+            onClick={() => {
+              setMenuOpen(false);
+              archive();
+            }}
+          >
             {session.archivedAt ? "Unarchive" : "Archive"}
           </button>
-          <button onClick={() => { setMenuOpen(false); setDeleteOpen(true); }}>Delete</button>
+          <button
+            onClick={() => {
+              setMenuOpen(false);
+              setDeleteOpen(true);
+            }}
+          >
+            Delete
+          </button>
         </div>
       )}
       <RenameDialog
@@ -2329,13 +2438,17 @@ export function VehicleGroupHeader(props: { label: string; children: ReactNode }
 
 - [ ] **Step 5: Create NewChatButton, RenameDialog, DeleteConfirmDialog**
 
-These are mechanical shadcn-flavored components. Write them following the patterns already used in fixo-web (look at `components/ui/dialog.tsx` if it exists for the import path). Keep dialogs minimal:
+These are mechanical shadcn-flavored components. Write them following the patterns already used in
+fixo-web (look at `components/ui/dialog.tsx` if it exists for the import path). Keep dialogs
+minimal:
 
 - `NewChatButton.tsx`: a button that calls `router.push('/chat')`.
 - `RenameDialog.tsx`: shadcn `Dialog` + input + Save button that PATCHes title.
-- `DeleteConfirmDialog.tsx`: shadcn `AlertDialog` with destructive button + warning copy "Reports and uploaded photos will be permanently deleted." Calls DELETE.
+- `DeleteConfirmDialog.tsx`: shadcn `AlertDialog` with destructive button + warning copy "Reports
+  and uploaded photos will be permanently deleted." Calls DELETE.
 
-(Code omitted — straight CRUD wrapped in shadcn primitives. If shadcn's AlertDialog is not yet installed, run `bunx shadcn@latest add alert-dialog`.)
+(Code omitted — straight CRUD wrapped in shadcn primitives. If shadcn's AlertDialog is not yet
+installed, run `bunx shadcn@latest add alert-dialog`.)
 
 - [ ] **Step 6: Wire ChatList into Sidebar**
 
@@ -2349,22 +2462,26 @@ import { NewChatButton } from "./chat/NewChatButton";
 // there with:
 <aside className="hidden lg:flex h-dvh w-64 flex-col border-r border-border bg-background">
   <div className="flex h-14 items-center justify-between px-3 border-b border-border">
-    <span className="text-sm font-semibold">Fixo<span className="text-accent">.</span></span>
+    <span className="text-sm font-semibold">
+      Fixo<span className="text-accent">.</span>
+    </span>
     <NewChatButton />
   </div>
   <div className="flex-1 overflow-y-auto">
     <ChatList />
   </div>
-</aside>
+</aside>;
 ```
 
-- [ ] **Step 7: Add a backend `GET /vehicles` route** if it doesn't exist yet. The ChatList relies on it.
+- [ ] **Step 7: Add a backend `GET /vehicles` route** if it doesn't exist yet. The ChatList relies
+      on it.
 
 ```bash
 grep -rn "GET .*\/vehicles\|/vehicles" apps/gateway/src/routes/fixo/
 ```
 
-If missing, add a minimal endpoint to `apps/gateway/src/routes/fixo/vehicles.ts` returning `{ vehicles: VehicleSummary[] }` for the authenticated user. Mount in `hmls-app.ts`.
+If missing, add a minimal endpoint to `apps/gateway/src/routes/fixo/vehicles.ts` returning
+`{ vehicles: VehicleSummary[] }` for the authenticated user. Mount in `hmls-app.ts`.
 
 - [ ] **Step 8: Typecheck + lint + commit**
 
@@ -2380,9 +2497,11 @@ git commit -m "feat(fixo-web): sidebar ChatList grouped by vehicle"
 ### Task 3.4: Mobile Chats sheet on BottomNav
 
 **Files:**
+
 - Modify: `apps/fixo-web/src/components/BottomNav.tsx`
 
-- [ ] **Step 1: Add a "Chats" tab** that opens a shadcn `Sheet` containing `<ChatList />`. Pattern follows existing BottomNav tabs (look at how /history was navigated to before — replace it).
+- [ ] **Step 1: Add a "Chats" tab** that opens a shadcn `Sheet` containing `<ChatList />`. Pattern
+      follows existing BottomNav tabs (look at how /history was navigated to before — replace it).
 
 - [ ] **Step 2: Run mobile dev locally + verify**
 
@@ -2401,6 +2520,7 @@ git commit -m "feat(fixo-web): mobile Chats tab via shadcn Sheet"
 ### Task 3.5: Compact button in chat header
 
 **Files:**
+
 - Modify: `apps/fixo-web/src/components/chat/ChatPageInner.tsx` (header section)
 
 - [ ] **Step 1: Add the button**
@@ -2430,8 +2550,10 @@ const handleCompact = async () => {
 // In the header, next to the Report button:
 <button onClick={handleCompact} disabled={isCompacting}>
   {isCompacting ? "Compacting…" : "Clean up context"}
-</button>
-{compactToast && <Toast>{compactToast}</Toast>}
+</button>;
+{
+  compactToast && <Toast>{compactToast}</Toast>;
+}
 ```
 
 - [ ] **Step 2: Commit**
@@ -2444,6 +2566,7 @@ git commit -m "feat(fixo-web): manual compact button in chat header"
 ### Task 3.6: Update download-report.ts for new report-id-keyed PDF route
 
 **Files:**
+
 - Modify: `apps/fixo-web/src/lib/download-report.ts`
 
 - [ ] **Step 1: Find the existing function**
@@ -2452,7 +2575,9 @@ git commit -m "feat(fixo-web): manual compact button in chat header"
 cat apps/fixo-web/src/lib/download-report.ts
 ```
 
-- [ ] **Step 2: Update signature** from `downloadReportPdf(sessionId, token)` to `downloadReportPdf(reportId: string, token: string)`. The call sites change too — Report flow now needs to:
+- [ ] **Step 2: Update signature** from `downloadReportPdf(sessionId, token)` to
+      `downloadReportPdf(reportId: string, token: string)`. The call sites change too — Report flow
+      now needs to:
   1. POST /sessions/:id/complete → get reportId back
   2. Call downloadReportPdf(reportId)
 
@@ -2478,6 +2603,7 @@ git commit -m "feat(fixo-web): downloadReportPdf takes reportId not sessionId"
 ### Task 3.7: Delete /history page
 
 **Files:**
+
 - Delete: `apps/fixo-web/src/app/(app)/history/page.tsx`
 - Modify: any nav link that points to /history
 
@@ -2529,10 +2655,12 @@ Walk through the QA checklist from spec §9.4:
 - [ ] "Show archived" toggle reveals greyed-out archived sessions
 - [ ] Rename dialog persists title; auto-titler does not overwrite
 - [ ] Archive then unarchive works
-- [ ] Delete: confirmation copy mentions reports + photos; row disappears; reports + media + obd_codes rows are gone in DB
+- [ ] Delete: confirmation copy mentions reports + photos; row disappears; reports + media +
+      obd_codes rows are gone in DB
 - [ ] Free-tier user: 5 messages permitted, 6th rejected; 1 report permitted, 2nd rejected
 - [ ] Same user_message_id POSTed twice does not double-count
-- [ ] Send 25 long messages on one session → "Compacted N messages" toast eventually appears OR manual compact button works
+- [ ] Send 25 long messages on one session → "Compacted N messages" toast eventually appears OR
+      manual compact button works
 - [ ] Mobile (DevTools Mobile emulation): "Chats" BottomNav tab opens Sheet with ChatList
 
 ### Task 4.2: Run full test suite + CI gates
@@ -2576,33 +2704,45 @@ git push -u origin spinsirr/happy-kapitsa-6f3fab
 I checked the plan against the spec and the brainstorming session output:
 
 - ✅ D1 (preserve media in summaries) → Task 1.2 SUMMARIZER_SYSTEM
-- ✅ D2 (drop legacy customer-only) → Task 0.2 step 1 INSERT WHERE clause; Task 2.4 explicit 403 for customer-only
+- ✅ D2 (drop legacy customer-only) → Task 0.2 step 1 INSERT WHERE clause; Task 2.4 explicit 403 for
+  customer-only
 - ✅ D3 (report snapshot vehicle + media) → Task 0.2 step 1 schema; Task 2.4 fills snapshot fields
 - ✅ T1 (vehicle grouping) → Task 3.3 ChatList groupByVehicle
 - ✅ Codex #1 (media after compact) → Task 1.2 prompt point 7
 - ✅ Codex #2 + #3 (concurrency + cursor) → Task 1.3 FOR UPDATE + last_summarized_message_id
-- ✅ Codex #4 (idempotent counter) → Task 0.1 step 4 (table) + Task 2.2 chat.ts (insert + rollback on quota miss)
+- ✅ Codex #4 (idempotent counter) → Task 0.1 step 4 (table) + Task 2.2 chat.ts (insert + rollback
+  on quota miss)
 - ✅ Codex #5 (first-send race) → Task 3.1 history.replaceState
 - ✅ Codex #6 (delete /history) → Task 3.7
 - ✅ Codex #7 (snapshot completeness) → Task 2.4 vehicle + media snapshot
 - ✅ Codex #8 (sort order) → Task 0.1 last_message_at index + Task 2.3 orderBy
 - ✅ Codex #9 (tier middleware factoring) → Task 2.1
 - ✅ Codex #10 (migration data shape) → Task 0.2 jsonb_array_elements WHERE type='text'
-- ✅ Codex #11 (token estimator) → Task 1.1 (fallback shipped now; real tokenizer is V2 / open-questions follow-up)
+- ✅ Codex #11 (token estimator) → Task 1.1 (fallback shipped now; real tokenizer is V2 /
+  open-questions follow-up)
 - ✅ Codex #12 (auto-archive removed) → Task 0.2 has no auto-archive step
-- ✅ My #4 (r2_key column name) → Task 2.3 uses Drizzle field name `storageKey` which maps to `r2_key`
+- ✅ My #4 (r2_key column name) → Task 2.3 uses Drizzle field name `storageKey` which maps to
+  `r2_key`
 - ✅ My #5 (counter FK) → Task 0.1 step 4 has `references(...)` with cascade
 - ✅ My #6 (title race) → Task 2.2 maybeGenerateTitle WHERE adds `isNull(title)`
 - ✅ My #7 (counter race window) → Task 2.2 idempotency model eliminates window
 
 **Placeholder scan:**
 
-- Task 2.5 step 2/3 reference "Existing PDF component lives in apps/agent/src/fixo/pdf/fixo-report.tsx — read it and adapt props". This is acceptable: the engineer reads the file and follows the existing render pattern; the type changes are minimal (FixoMedia → media-snapshot row shape with same fields).
-- Task 3.3 step 5 "Code omitted — straight CRUD wrapped in shadcn primitives". This is a known minor placeholder. The dialogs are 30-line standard shadcn patterns; the engineer can lean on existing Dialog usages elsewhere in the codebase. NOT a blocker.
+- Task 2.5 step 2/3 reference "Existing PDF component lives in
+  apps/agent/src/fixo/pdf/fixo-report.tsx — read it and adapt props". This is acceptable: the
+  engineer reads the file and follows the existing render pattern; the type changes are minimal
+  (FixoMedia → media-snapshot row shape with same fields).
+- Task 3.3 step 5 "Code omitted — straight CRUD wrapped in shadcn primitives". This is a known minor
+  placeholder. The dialogs are 30-line standard shadcn patterns; the engineer can lean on existing
+  Dialog usages elsewhere in the codebase. NOT a blocker.
 - Task 3.4 says "look at how /history was navigated to before — replace it" — clear enough.
 - Task 4.1 has `[ ]` checkboxes to indicate manual QA items, not implementation steps. Intentional.
 
-**Type consistency:** `lastSummarizedMessageId` (Drizzle field) ↔ `last_summarized_message_id` (SQL) is consistent; `userMessageId` ↔ `user_message_id` consistent. `findCursorIndex` and `buildAgentContext` references match. `requireTextQuota` / `requireMediaTier` / `requireReportQuota` used consistently across Phase 2 tasks.
+**Type consistency:** `lastSummarizedMessageId` (Drizzle field) ↔ `last_summarized_message_id` (SQL)
+is consistent; `userMessageId` ↔ `user_message_id` consistent. `findCursorIndex` and
+`buildAgentContext` references match. `requireTextQuota` / `requireMediaTier` / `requireReportQuota`
+used consistently across Phase 2 tasks.
 
 No issues found.
 
@@ -2610,10 +2750,14 @@ No issues found.
 
 ## Execution Handoff
 
-Plan complete and saved to [docs/superpowers/plans/2026-05-04-fixo-session-context-management.md](docs/superpowers/plans/2026-05-04-fixo-session-context-management.md). Two execution options:
+Plan complete and saved to
+[docs/superpowers/plans/2026-05-04-fixo-session-context-management.md](docs/superpowers/plans/2026-05-04-fixo-session-context-management.md).
+Two execution options:
 
-**1. Subagent-Driven (recommended)** — I dispatch a fresh subagent per task, review between tasks, fast iteration.
+**1. Subagent-Driven (recommended)** — I dispatch a fresh subagent per task, review between tasks,
+fast iteration.
 
-**2. Inline Execution** — Execute tasks in this session using executing-plans, batch execution with checkpoints.
+**2. Inline Execution** — Execute tasks in this session using executing-plans, batch execution with
+checkpoints.
 
 Which approach?
