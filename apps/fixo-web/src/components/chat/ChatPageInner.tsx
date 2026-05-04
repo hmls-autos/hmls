@@ -6,7 +6,7 @@ import {
   isToolOrDynamicToolUIPart,
   type UIMessage,
 } from "ai";
-import { Car, FileDown } from "lucide-react";
+import { Car, FileDown, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Conversation,
@@ -108,6 +108,31 @@ export function ChatPageInner({
 
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [isCompacting, setIsCompacting] = useState(false);
+  const [compactToast, setCompactToast] = useState<string | null>(null);
+
+  const handleCompact = useCallback(async () => {
+    if (!sessionIdRef.current) return;
+    setIsCompacting(true);
+    try {
+      const res = await fetch(
+        `${AGENT_URL}/sessions/${sessionIdRef.current}/compact`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        },
+      );
+      if (!res.ok) throw new Error(`${res.status}`);
+      const data = await res.json();
+      setCompactToast(`Compacted ${data.messagesFolded ?? 0} messages.`);
+      setTimeout(() => setCompactToast(null), 4000);
+    } catch (e) {
+      setCompactToast(e instanceof Error ? e.message : "Compact failed.");
+      setTimeout(() => setCompactToast(null), 4000);
+    } finally {
+      setIsCompacting(false);
+    }
+  }, [session.access_token]);
 
   const { handleAudioSend, handlePhotoCapture, handleFilePick } =
     useMediaUpload({
@@ -213,16 +238,30 @@ export function ChatPageInner({
           )}
         </h1>
         {renderable.length > 0 && !isLoading && (
-          <button
-            type="button"
-            disabled={isFinalizing}
-            onClick={handleDownloadReport}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
-            aria-label="Finish session and download report"
-          >
-            <FileDown className="h-3.5 w-3.5" />
-            {isFinalizing ? "Generating…" : "Report"}
-          </button>
+          <div className="flex items-center gap-2">
+            {sessionIdRef.current && (
+              <button
+                type="button"
+                disabled={isCompacting}
+                onClick={handleCompact}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                aria-label="Compact context"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {isCompacting ? "Compacting…" : "Clean up"}
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={isFinalizing}
+              onClick={handleDownloadReport}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label="Finish session and download report"
+            >
+              <FileDown className="h-3.5 w-3.5" />
+              {isFinalizing ? "Generating…" : "Report"}
+            </button>
+          </div>
         )}
       </header>
 
@@ -414,6 +453,13 @@ export function ChatPageInner({
           message={upgradeMessage}
           onClose={() => setUpgradeMessage(null)}
         />
+      )}
+
+      {/* Compact toast */}
+      {compactToast && (
+        <div className="fixed bottom-20 left-1/2 z-40 -translate-x-1/2 rounded-md border border-border bg-popover px-3 py-1.5 text-xs shadow-md">
+          {compactToast}
+        </div>
       )}
     </div>
   );
