@@ -22,6 +22,7 @@ import {
   clearStoredSessionId,
   createSessionEager,
   loadStoredSessionId,
+  persistSessionId,
 } from "@/lib/session";
 
 export interface FixoEstimateData {
@@ -357,6 +358,9 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
         try {
           const newId = await createSessionEager(accessToken);
           sessionIdRef.current = newId;
+          // Persist immediately so a hard refresh between this eager-create
+          // and onFinish doesn't orphan the session.
+          persistSessionId(newId, userId);
           if (typeof window !== "undefined") {
             window.history.replaceState(null, "", `/chat/${newId}`);
           }
@@ -369,7 +373,7 @@ export function useAgentChat(options: UseAgentChatOptions = {}) {
 
       chatSendMessage({ text: content });
     },
-    [chatSendMessage, chatMessages, accessToken, sessionIdRef],
+    [chatSendMessage, chatMessages, accessToken, sessionIdRef, userId],
   );
 
   const clearMessages = useCallback(() => {

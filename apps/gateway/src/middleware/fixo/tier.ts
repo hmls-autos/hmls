@@ -34,7 +34,7 @@ export async function requireTextQuota(auth: AuthContext): Promise<Response | nu
       ),
     );
 
-  if (Number(value) >= FREE_LIMITS.userMessagesPerMonth) {
+  if (Number(value) > FREE_LIMITS.userMessagesPerMonth) {
     return new Response(
       JSON.stringify({
         error: "limit_reached",

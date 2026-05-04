@@ -190,60 +190,78 @@ sessions.post("/:id/compact", async (c) => {
   const id = parseInt(c.req.param("id"));
   if (!Number.isInteger(id)) return c.json({ error: "bad id" }, 400);
 
-  const [session] = await db
-    .select({
-      messages: schema.fixoSessions.messages,
-      summary: schema.fixoSessions.summary,
-      lastSummarizedMessageId: schema.fixoSessions.lastSummarizedMessageId,
-      userId: schema.fixoSessions.userId,
-      customerId: schema.fixoSessions.customerId,
-    })
-    .from(schema.fixoSessions)
-    .where(eq(schema.fixoSessions.id, id))
-    .limit(1);
+  const result = await db.transaction(async (tx) => {
+    const [session] = await tx
+      .select({
+        messages: schema.fixoSessions.messages,
+        summary: schema.fixoSessions.summary,
+        lastSummarizedMessageId: schema.fixoSessions.lastSummarizedMessageId,
+        userId: schema.fixoSessions.userId,
+        customerId: schema.fixoSessions.customerId,
+      })
+      .from(schema.fixoSessions)
+      .where(eq(schema.fixoSessions.id, id))
+      .for("update")
+      .limit(1);
 
-  if (
-    !session ||
-    (session.userId !== auth.userId && session.customerId !== auth.customerId)
-  ) {
-    return c.json({ error: "Session not found" }, 404);
-  }
+    if (
+      !session ||
+      (session.userId !== auth.userId && session.customerId !== auth.customerId)
+    ) {
+      return { kind: "not_found" as const };
+    }
 
-  const allMessages = (session.messages ?? []) as Array<{ id: string }>;
-  if (allMessages.length === 0) {
-    return c.json({ error: "session has no messages to compact" }, 400);
-  }
+    const allMessages = (session.messages ?? []) as Array<{ id: string }>;
+    if (allMessages.length === 0) {
+      return { kind: "empty" as const };
+    }
 
-  const KEEP_RECENT_COUNT = 12;
-  const cursorIndex = session.lastSummarizedMessageId
-    ? allMessages.findIndex((m) => m.id === session.lastSummarizedMessageId) + 1
-    : 0;
-  const unsummarized = allMessages.slice(Math.max(0, cursorIndex));
-  const messagesToFold = unsummarized.slice(
-    0,
-    Math.max(0, unsummarized.length - KEEP_RECENT_COUNT),
-  );
-  if (messagesToFold.length === 0) {
-    return c.json({ message: "nothing to compact", summary: session.summary });
-  }
+    const KEEP_RECENT_COUNT = 12;
+    const cursorIndex = session.lastSummarizedMessageId
+      ? allMessages.findIndex((m) => m.id === session.lastSummarizedMessageId) + 1
+      : 0;
+    const unsummarized = allMessages.slice(Math.max(0, cursorIndex));
+    const messagesToFold = unsummarized.slice(
+      0,
+      Math.max(0, unsummarized.length - KEEP_RECENT_COUNT),
+    );
+    if (messagesToFold.length === 0) {
+      return { kind: "noop" as const, summary: session.summary };
+    }
 
-  const newSummary = await runSummarizer({
-    previousSummary: session.summary ?? null,
-    // deno-lint-ignore no-explicit-any
-    messagesToFold: messagesToFold as any,
+    const newSummary = await runSummarizer({
+      previousSummary: session.summary ?? null,
+      // deno-lint-ignore no-explicit-any
+      messagesToFold: messagesToFold as any,
+    });
+
+    await tx
+      .update(schema.fixoSessions)
+      .set({
+        summary: newSummary,
+        lastSummarizedMessageId: messagesToFold[messagesToFold.length - 1].id,
+      })
+      .where(eq(schema.fixoSessions.id, id));
+
+    return {
+      kind: "ok" as const,
+      summary: newSummary,
+      messagesFolded: messagesToFold.length,
+    };
   });
 
-  await db
-    .update(schema.fixoSessions)
-    .set({
-      summary: newSummary,
-      lastSummarizedMessageId: messagesToFold[messagesToFold.length - 1].id,
-    })
-    .where(eq(schema.fixoSessions.id, id));
-
+  if (result.kind === "not_found") {
+    return c.json({ error: "Session not found" }, 404);
+  }
+  if (result.kind === "empty") {
+    return c.json({ error: "session has no messages to compact" }, 400);
+  }
+  if (result.kind === "noop") {
+    return c.json({ message: "nothing to compact", summary: result.summary });
+  }
   return c.json({
-    summary: newSummary,
-    messagesFolded: messagesToFold.length,
+    summary: result.summary,
+    messagesFolded: result.messagesFolded,
   });
 });
 
