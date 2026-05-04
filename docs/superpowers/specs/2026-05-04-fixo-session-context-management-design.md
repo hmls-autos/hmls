@@ -407,7 +407,7 @@ Review distribution after one week to retune `COMPACT_THRESHOLD` if needed.
 
 ## 7. Migration
 
-Single migration `0015_session_b_model.sql`, executed in one transaction:
+Single migration `0016_session_b_model.sql`, executed in one transaction:
 
 ```sql
 BEGIN;
@@ -670,7 +670,7 @@ This replaces the original onFinish-based counter pattern, which codex review #4
 
 ### 9.3 Migration
 
-- Run `0015_session_b_model.sql` on staging clone of prod schema
+- Run `0016_session_b_model.sql` on staging clone of prod schema
 - Assert `count(fixo_reports) == count(fixo_sessions WHERE result IS NOT NULL AND user_id IS NOT NULL)`
 - Assert legacy `customer_id`-only sessions are NOT migrated to reports (their `result` column is lost — D2 explicit decision)
 - Assert `messages` column is intact (no rows lost)
