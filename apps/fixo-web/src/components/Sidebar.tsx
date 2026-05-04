@@ -1,6 +1,6 @@
 "use client";
 
-import { Car, Clock, LogOut, MessageSquare, Settings } from "lucide-react";
+import { Car, LogOut, MessageSquare, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
@@ -9,7 +9,6 @@ import { NewChatButton } from "@/components/chat/NewChatButton";
 
 const NAV_ITEMS = [
   { href: "/chat", label: "Chat", icon: MessageSquare },
-  { href: "/history", label: "History", icon: Clock },
   { href: "/vehicles", label: "Vehicles", icon: Car },
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;
