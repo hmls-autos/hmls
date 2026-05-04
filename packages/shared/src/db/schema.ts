@@ -326,7 +326,7 @@ export const fixoReports = pgTable(
       .references(() => userProfiles.id, { onDelete: "cascade" }),
     result: jsonb("result").notNull(),
     vehicleSnapshot: jsonb("vehicle_snapshot"),
-    mediaSnapshot: jsonb("media_snapshot").notNull().default(sql`'[]'::jsonb`),
+    mediaSnapshot: jsonb("media_snapshot").notNull().default([]),
     messageCount: integer("message_count").notNull(),
     generatedAt: timestamp("generated_at", { withTimezone: true })
       .notNull()
