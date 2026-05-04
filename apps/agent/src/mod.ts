@@ -9,6 +9,7 @@ export {
   type SummarizeFixoSessionOptions,
 } from "./fixo/summarize.ts";
 export { runSummarizer } from "./fixo/summarizer.ts";
+export { buildAgentContext } from "./fixo/build-context.ts";
 
 // Types
 export { formatUserContext, type UserContext } from "./types/user-context.ts";
