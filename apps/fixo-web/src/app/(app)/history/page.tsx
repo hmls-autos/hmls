@@ -118,6 +118,7 @@ export default function HistoryPage() {
       setDownloadError(null);
       setDownloading(sessionId);
       try {
+        // @ts-expect-error history page being deleted in Task 3.7
         await downloadReportPdf(sessionId, session.access_token);
       } catch (e) {
         setDownloadError(e instanceof Error ? e.message : String(e));

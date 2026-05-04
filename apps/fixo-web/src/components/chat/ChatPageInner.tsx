@@ -179,8 +179,9 @@ export function ChatPageInner({
           .catch(() => ({ error: completeRes.statusText }));
         throw new Error(detail.error ?? "Failed to finalize session");
       }
+      const { reportId } = (await completeRes.json()) as { reportId: string };
 
-      await downloadReportPdf(sid, session.access_token);
+      await downloadReportPdf(reportId, session.access_token);
     } catch (e) {
       setReportError(e instanceof Error ? e.message : String(e));
     } finally {
