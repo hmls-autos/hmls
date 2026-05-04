@@ -8,6 +8,7 @@ export {
   summarizeFixoSession,
   type SummarizeFixoSessionOptions,
 } from "./fixo/summarize.ts";
+export { runSummarizer } from "./fixo/summarizer.ts";
 
 // Types
 export { formatUserContext, type UserContext } from "./types/user-context.ts";
