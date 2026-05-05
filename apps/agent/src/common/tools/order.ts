@@ -71,18 +71,43 @@ type CustomerRecord = {
   address: string | null;
 };
 
+type CustomerInfoInput = {
+  name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+};
+
+/** Trim and normalize empty strings to undefined so we don't overwrite real data with "". */
+function clean(v: string | undefined): string | undefined {
+  if (v === undefined) return undefined;
+  const t = v.trim();
+  return t.length > 0 ? t : undefined;
+}
+
 /**
  * Resolve the customer for this order in priority order:
  *  1. Auth context (customer chat) — never overrideable by the model
  *  2. Explicit `customerId` (staff for known customer)
  *  3. `customerInfo` lookup-by-email or create-as-guest (staff walk-in)
  *  4. null (orphan order — staff can attach a customer later)
+ *
+ * Profile defaults: when `customerInfo` carries phone or address that the
+ * resolved customer record is missing, fill the blank on the customers row.
+ * Existing values are never overwritten — the customer profile is the
+ * stable default, while orders.contactPhone/contactAddress are the
+ * authoritative per-order snapshot (which may differ from the default).
  */
 async function resolveCustomer(
   ctxCustomerId: number | undefined,
   paramCustomerId: number | undefined,
-  customerInfo: { name?: string; email?: string; phone?: string } | undefined,
+  customerInfo: CustomerInfoInput | undefined,
 ): Promise<CustomerRecord | null> {
+  const phoneIn = clean(customerInfo?.phone);
+  const addressIn = clean(customerInfo?.address);
+  const nameIn = clean(customerInfo?.name);
+  const emailIn = clean(customerInfo?.email);
+
   const id = ctxCustomerId ?? paramCustomerId;
   if (id) {
     const [found] = await db
@@ -90,28 +115,53 @@ async function resolveCustomer(
       .from(schema.customers)
       .where(eq(schema.customers.id, id))
       .limit(1);
-    return found ?? null;
+    if (!found) return null;
+
+    const patch: Partial<typeof schema.customers.$inferInsert> = {};
+    if (phoneIn && !found.phone) patch.phone = phoneIn;
+    if (addressIn && !found.address) patch.address = addressIn;
+    if (Object.keys(patch).length > 0) {
+      const [updated] = await db
+        .update(schema.customers)
+        .set(patch)
+        .where(eq(schema.customers.id, id))
+        .returning();
+      return updated ?? found;
+    }
+    return found;
   }
 
-  if (!customerInfo) return null;
-  const { name, email, phone } = customerInfo;
-  if (!name && !email && !phone) return null;
+  if (!nameIn && !emailIn && !phoneIn && !addressIn) return null;
 
-  if (email) {
+  if (emailIn) {
     const [existing] = await db
       .select()
       .from(schema.customers)
-      .where(ilike(schema.customers.email, email))
+      .where(ilike(schema.customers.email, emailIn))
       .limit(1);
-    if (existing) return existing;
+    if (existing) {
+      const patch: Partial<typeof schema.customers.$inferInsert> = {};
+      if (phoneIn && !existing.phone) patch.phone = phoneIn;
+      if (addressIn && !existing.address) patch.address = addressIn;
+      if (Object.keys(patch).length > 0) {
+        const [updated] = await db
+          .update(schema.customers)
+          .set(patch)
+          .where(eq(schema.customers.id, existing.id))
+          .returning();
+        return updated ?? existing;
+      }
+      return existing;
+    }
   }
 
   const [created] = await db
     .insert(schema.customers)
     .values({
-      name: name ?? null,
-      email: email ?? null,
-      phone: phone ?? null,
+      name: nameIn ?? null,
+      email: emailIn ?? null,
+      phone: phoneIn ?? null,
+      address: addressIn ?? null,
     })
     .returning();
   return created ?? null;
@@ -249,10 +299,11 @@ export const createOrderTool = {
         name: z.string().optional(),
         email: z.string().optional(),
         phone: z.string().optional(),
+        address: z.string().optional(),
       })
       .optional()
       .describe(
-        "Staff walk-in fallback: name/email/phone to find-or-create a guest customer when no customerId is known.",
+        "Two roles: (a) Staff walk-in fallback — name/email/phone/address to find-or-create a guest customer when no customerId is known. (b) Customer chat — supply phone or address here whenever the customer mentions a fresh value or the profile is blank; phone/address backfill the customers row only when previously empty (existing profile values are NEVER overwritten), and ALWAYS take precedence on this order's contactPhone/contactAddress snapshot. Customer chat REQUIRES that, after fallback to the customer profile, both phone and address are resolvable — otherwise the call fails with missingFields.",
       ),
     vehicle: z
       .object({
@@ -306,6 +357,18 @@ export const createOrderTool = {
       .optional()
       .describe("Flat-rate items that bypass the labor/parts engine"),
     notes: z.string().optional().describe("Order notes"),
+    accessInstructions: z
+      .string()
+      .optional()
+      .describe(
+        "Mobile-mechanic access notes: gate code, parking spot, ring buzzer at unit X, dog in yard, etc. Customer-supplied. Pass null/omit if customer has nothing to add.",
+      ),
+    symptomDescription: z
+      .string()
+      .optional()
+      .describe(
+        "For repair/diagnostic services: the customer's description of how the problem manifests — duration, frequency, conditions ('grinding when braking from highway speed', 'starts only after sitting overnight'). Skip for routine maintenance (oil change, rotation). Pass null/omit if not applicable or customer didn't elaborate.",
+      ),
     validDays: z
       .number()
       .default(14)
@@ -330,11 +393,13 @@ export const createOrderTool = {
     params: {
       orderId?: number;
       customerId?: number;
-      customerInfo?: { name?: string; email?: string; phone?: string };
+      customerInfo?: CustomerInfoInput;
       vehicle: { year: number; make: string; model: string };
       services: ServiceInput[];
       customItems?: { name: string; description: string; price: number }[];
       notes?: string;
+      accessInstructions?: string;
+      symptomDescription?: string;
       validDays?: number;
       isRush?: boolean;
       isAfterHours?: boolean;
@@ -395,6 +460,12 @@ export const createOrderTool = {
           items,
           notes: params.notes ?? undefined,
           vehicleInfo,
+          accessInstructions: params.accessInstructions !== undefined
+            ? (clean(params.accessInstructions) ?? null)
+            : undefined,
+          symptomDescription: params.symptomDescription !== undefined
+            ? (clean(params.symptomDescription) ?? null)
+            : undefined,
         },
         actor,
         {
@@ -437,9 +508,45 @@ export const createOrderTool = {
       params.customerInfo,
     );
 
+    // Per-order contact snapshot — what THIS order will carry. The agent's
+    // freshly-supplied customerInfo wins (it's the most recent intent), and
+    // we fall back to the customer profile when the agent didn't pass a
+    // value. resolveCustomer has already backfilled blank profile fields
+    // from customerInfo, so customer.phone / customer.address reflect any
+    // newly-stored defaults.
+    const orderPhone = clean(params.customerInfo?.phone) ?? customer?.phone ?? null;
+    const orderAddress = clean(params.customerInfo?.address) ?? customer?.address ?? null;
+
+    // Customer-side requirement: after fallback to the profile, both phone
+    // and a service address must resolve. The agent must collect whatever
+    // is missing and pass via customerInfo. Staff side has no such
+    // restriction — walk-ins and orphan orders are still allowed.
+    if (isCustomerSide) {
+      const missing: string[] = [];
+      if (!orderPhone) missing.push("phone");
+      if (!orderAddress) missing.push("address");
+      if (missing.length > 0) {
+        const fieldList = missing.join(" and ");
+        const infoExample = missing
+          .map((f) => `${f}: "..."`)
+          .join(", ");
+        return toolResult({
+          success: false,
+          error: `Cannot create the order yet — missing ${fieldList}. ` +
+            `Ask the customer for their ${fieldList} (phone is how the shop reaches ` +
+            `them, address is the service location for this job), then call create_order ` +
+            `again with customerInfo: { ${infoExample} }.`,
+          missingFields: missing,
+        });
+      }
+    }
+
     const shareToken = nanoid(32);
     const validDays = params.validDays ?? 14;
     const expiresAt = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000);
+
+    const accessInstructions = clean(params.accessInstructions) ?? null;
+    const symptomDescription = clean(params.symptomDescription) ?? null;
 
     const [order] = await db
       .insert(schema.orders)
@@ -455,13 +562,15 @@ export const createOrderTool = {
         priceRangeLowCents: rangeLow,
         priceRangeHighCents: rangeHigh,
         vehicleInfo,
+        accessInstructions,
+        symptomDescription,
         shareToken,
         validDays,
         expiresAt,
         contactName: customer?.name ?? null,
         contactEmail: customer?.email ?? null,
-        contactPhone: customer?.phone ?? null,
-        contactAddress: customer?.address ?? null,
+        contactPhone: orderPhone,
+        contactAddress: orderAddress,
       })
       .returning();
 

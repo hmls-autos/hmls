@@ -223,6 +223,12 @@ export interface ItemsPatch {
    *  re-prices a quote for a corrected vehicle. Merged into the existing
    *  vehicleInfo shallowly. */
   vehicleInfo?: Record<string, unknown> | null;
+  /** Mobile-mechanic access notes (gate code, parking, etc.). Pass
+   *  `undefined` to leave unchanged, `null` to clear, a string to set. */
+  accessInstructions?: string | null;
+  /** Customer's symptom narrative for repair/diagnostic services. Same
+   *  null/undefined semantics as accessInstructions. */
+  symptomDescription?: string | null;
 }
 
 export interface PatchItemsOptions {
@@ -311,6 +317,12 @@ export async function patchItems(
       const existing = (current.vehicleInfo ?? {}) as Record<string, unknown>;
       updateFields.vehicleInfo = { ...existing, ...patch.vehicleInfo };
     }
+  }
+  if (patch.accessInstructions !== undefined) {
+    updateFields.accessInstructions = patch.accessInstructions;
+  }
+  if (patch.symptomDescription !== undefined) {
+    updateFields.symptomDescription = patch.symptomDescription;
   }
   if (willRevert) {
     updateFields.status = "revised";
