@@ -290,7 +290,6 @@ export default function AdminChatPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Create an order, check labor times..."
-              disabled={isLoading}
               className="flex-1 h-14 rounded-xl px-5 text-base"
             />
             <Button
