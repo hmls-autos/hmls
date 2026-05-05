@@ -150,17 +150,29 @@ const scheduleOrderTool = {
       hour12: true,
     });
 
+    // Wording follows the order's actual lifecycle status. Only `scheduled`
+    // means the booking is locked in (an `approved` order advanced via the
+    // harness). Drafts/estimated/revised orders are tentative — the shop
+    // still needs to review and confirm before this is a real booking. The
+    // tool MUST NOT claim "confirmed" before that.
+    const finalStatus = result.value.status;
+    const isLocked = finalStatus === "scheduled";
+    const message = isLocked
+      ? (dispatched.providerId
+        ? `Appointment confirmed for ${friendlyTime}. A mechanic has been assigned and will be in touch.`
+        : `Appointment set for ${friendlyTime}. We're finalizing the mechanic assignment — our team will confirm shortly.`)
+      : `Tentatively scheduled for ${friendlyTime}, pending shop confirmation. The shop will review the estimate and lock in the appointment shortly — you'll get a notification once it's confirmed.`;
+
     return toolResult({
       success: true,
       orderId: result.value.id,
-      newStatus: result.value.status,
+      newStatus: finalStatus,
+      pendingShopReview: !isLocked,
       appointmentStart: result.value.scheduledAt?.toISOString(),
       appointmentEnd: result.value.appointmentEnd?.toISOString(),
       durationMinutes,
       providerId: dispatched.providerId,
-      message: dispatched.providerId
-        ? `Appointment confirmed for ${friendlyTime}. A mechanic has been assigned and will be in touch.`
-        : `Appointment set for ${friendlyTime}. We're finalizing the mechanic assignment — our team will confirm shortly.`,
+      message,
     });
   },
 };
