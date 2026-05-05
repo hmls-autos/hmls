@@ -26,7 +26,7 @@ import {
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ReassignBookingDialog } from "@/components/admin/mechanics/ReassignBookingDialog";
@@ -59,6 +59,10 @@ import {
   type OrderContactPatch,
   useOrderMutations,
 } from "@/hooks/useOrderMutations";
+import {
+  getAdminOrdersListHref,
+  parseAdminOrdersFilter,
+} from "@/lib/admin-order-filters";
 import { AGENT_URL } from "@/lib/config";
 import { formatCents } from "@/lib/format";
 import {
@@ -626,6 +630,10 @@ function ActivityTimeline({ events }: { events: OrderEvent[] }) {
 export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const ordersHref = getAdminOrdersListHref(
+    parseAdminOrdersFilter(searchParams.get("fromStatus")),
+  );
   const orderId = params.id as string;
   const { data, isLoading, isError, mutate } = useAdminOrder(orderId);
 
@@ -692,7 +700,7 @@ export default function OrderDetailPage() {
       <div className="text-center py-20">
         <p className="text-muted-foreground">Order not found.</p>
         <Link
-          href="/admin/orders"
+          href={ordersHref}
           className="text-primary text-sm hover:underline mt-2 inline-block"
         >
           Back to orders
@@ -807,7 +815,7 @@ export default function OrderDetailPage() {
         <Button
           variant="ghost"
           size="xs"
-          onClick={() => router.push("/admin/orders")}
+          onClick={() => router.push(ordersHref)}
           className="text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
