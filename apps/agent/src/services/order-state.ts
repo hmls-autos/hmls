@@ -229,6 +229,12 @@ export interface ItemsPatch {
   /** Customer's symptom narrative for repair/diagnostic services. Same
    *  null/undefined semantics as accessInstructions. */
   symptomDescription?: string | null;
+  /** Per-order contact snapshot updates. Used when an agent revises an
+   *  order with corrected phone or service address — the snapshot on the
+   *  order row needs to follow, not just the customers profile. Same
+   *  null/undefined semantics as the fields above. */
+  contactPhone?: string | null;
+  contactAddress?: string | null;
 }
 
 export interface PatchItemsOptions {
@@ -323,6 +329,12 @@ export async function patchItems(
   }
   if (patch.symptomDescription !== undefined) {
     updateFields.symptomDescription = patch.symptomDescription;
+  }
+  if (patch.contactPhone !== undefined) {
+    updateFields.contactPhone = patch.contactPhone;
+  }
+  if (patch.contactAddress !== undefined) {
+    updateFields.contactAddress = patch.contactAddress;
   }
   if (willRevert) {
     updateFields.status = "revised";

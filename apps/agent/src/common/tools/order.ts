@@ -78,9 +78,12 @@ type CustomerInfoInput = {
   address?: string;
 };
 
-/** Trim and normalize empty strings to undefined so we don't overwrite real data with "". */
-function clean(v: string | undefined): string | undefined {
-  if (v === undefined) return undefined;
+/** Trim and normalize empty / null inputs to undefined so we don't overwrite
+ *  real data with "" or accidentally clear a column when the caller only
+ *  meant "no change". Callers that explicitly want to clear a column on
+ *  UPDATE should pass `null` directly to patchItems, not via clean(). */
+function clean(v: string | null | undefined): string | undefined {
+  if (v === undefined || v === null) return undefined;
   const t = v.trim();
   return t.length > 0 ? t : undefined;
 }
@@ -131,7 +134,11 @@ async function resolveCustomer(
     return found;
   }
 
-  if (!nameIn && !emailIn && !phoneIn && !addressIn) return null;
+  // Need at least one real identifier (name, email, OR phone) before
+  // creating a guest customer. Address alone isn't a dedup key — accepting
+  // address-only would fragment a customer's history into orphan records
+  // every time staff types just a service location for a walk-in.
+  if (!nameIn && !emailIn && !phoneIn) return null;
 
   if (emailIn) {
     const [existing] = await db
@@ -359,15 +366,15 @@ export const createOrderTool = {
     notes: z.string().optional().describe("Order notes"),
     accessInstructions: z
       .string()
-      .optional()
+      .nullish()
       .describe(
-        "Mobile-mechanic access notes: gate code, parking spot, ring buzzer at unit X, dog in yard, etc. Customer-supplied. Pass null/omit if customer has nothing to add.",
+        "Mobile-mechanic access notes: gate code, parking spot, ring buzzer at unit X, dog in yard, etc. Customer-supplied. Omit if customer has nothing to add. On UPDATE, pass null to clear an existing note.",
       ),
     symptomDescription: z
       .string()
-      .optional()
+      .nullish()
       .describe(
-        "For repair/diagnostic services: the customer's description of how the problem manifests — duration, frequency, conditions ('grinding when braking from highway speed', 'starts only after sitting overnight'). Skip for routine maintenance (oil change, rotation). Pass null/omit if not applicable or customer didn't elaborate.",
+        "For repair/diagnostic services: the customer's description of how the problem manifests — duration, frequency, conditions ('grinding when braking from highway speed', 'starts only after sitting overnight'). Skip for routine maintenance (oil change, rotation). Omit if not applicable. On UPDATE, pass null to clear an existing note.",
       ),
     validDays: z
       .number()
@@ -398,8 +405,8 @@ export const createOrderTool = {
       services: ServiceInput[];
       customItems?: { name: string; description: string; price: number }[];
       notes?: string;
-      accessInstructions?: string;
-      symptomDescription?: string;
+      accessInstructions?: string | null;
+      symptomDescription?: string | null;
       validDays?: number;
       isRush?: boolean;
       isAfterHours?: boolean;
@@ -451,9 +458,23 @@ export const createOrderTool = {
     // single source of truth. The pricing engine (priceServices above)
     // applies a minimum-service-fee floor that items.reduce() wouldn't
     // capture — pass subtotal as `subtotalCentsOverride` to preserve it.
+    //
+    // We also call resolveCustomer here even on UPDATE so the customers
+    // profile gets the same blank-only backfill behavior the INSERT path
+    // gives it (e.g. customer adds a phone mid-revision and we save it
+    // for next time). The freshly-supplied customerInfo also wins on the
+    // order's contact snapshot — if a customer corrects their phone or
+    // service address inside one chat, the order row needs to follow.
     // ─────────────────────────────────────────────────────────────────
     if (params.orderId !== undefined) {
       const actor = customerAgentActor(ctx) ?? staffAgentActor(ctx);
+      await resolveCustomer(
+        ctx?.customerId,
+        params.customerId,
+        params.customerInfo,
+      );
+      const phoneIn = clean(params.customerInfo?.phone);
+      const addressIn = clean(params.customerInfo?.address);
       const result = await patchItems(
         params.orderId,
         {
@@ -466,6 +487,11 @@ export const createOrderTool = {
           symptomDescription: params.symptomDescription !== undefined
             ? (clean(params.symptomDescription) ?? null)
             : undefined,
+          // Forward only when the agent supplied a non-empty value —
+          // undefined leaves the snapshot unchanged. We never overwrite
+          // an existing snapshot with a missing customerInfo field.
+          contactPhone: phoneIn,
+          contactAddress: addressIn,
         },
         actor,
         {

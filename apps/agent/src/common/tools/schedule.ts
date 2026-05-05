@@ -150,13 +150,16 @@ const scheduleOrderTool = {
       hour12: true,
     });
 
-    // Wording follows the order's actual lifecycle status. Only `scheduled`
-    // means the booking is locked in (an `approved` order advanced via the
-    // harness). Drafts/estimated/revised orders are tentative — the shop
-    // still needs to review and confirm before this is a real booking. The
-    // tool MUST NOT claim "confirmed" before that.
+    // Wording follows the order's actual lifecycle status. `scheduled` and
+    // `in_progress` are both locked: scheduled means the shop confirmed
+    // the appointment, in_progress means the mechanic is already on the
+    // job and this call is a pure reschedule (per attachSchedule's
+    // SCHEDULE_ATTACH_FROM allowlist). Drafts/estimated/revised orders
+    // are tentative — the shop still needs to review and confirm before
+    // it is a real booking, so the tool MUST NOT claim "confirmed" then.
     const finalStatus = result.value.status;
-    const isLocked = finalStatus === "scheduled";
+    const isLocked = finalStatus === "scheduled" ||
+      finalStatus === "in_progress";
     const message = isLocked
       ? (dispatched.providerId
         ? `Appointment confirmed for ${friendlyTime}. A mechanic has been assigned and will be in touch.`
