@@ -119,11 +119,12 @@ function CustomerPicker({
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const debouncedSearch = useDebouncedValue(search.trim(), 300);
+  const hasSearch = debouncedSearch.length > 0;
   const {
     customers,
     isLoading,
     mutate: mutateCustomers,
-  } = useAdminCustomers(debouncedSearch || undefined);
+  } = useAdminCustomers(debouncedSearch || undefined, hasSearch);
 
   useEffect(() => {
     if (!value) setSelected(null);
@@ -253,28 +254,30 @@ function CustomerPicker({
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search by name, phone, or email"
       />
-      <div className="max-h-44 overflow-y-auto rounded-md border border-border">
-        {isLoading ? (
-          <div className="px-3 py-2 text-xs text-muted-foreground">
-            Loading...
-          </div>
-        ) : customers.length === 0 ? (
-          <div className="px-3 py-2 text-xs text-muted-foreground">
-            {search.trim() ? "No customers match." : "No customers yet."}
-          </div>
-        ) : (
-          customers.map((customer) => (
-            <button
-              type="button"
-              key={customer.id}
-              onClick={() => selectCustomer(customer)}
-              className="block w-full text-left px-3 py-2 text-sm hover:bg-muted"
-            >
-              {customerLabel(customer)}
-            </button>
-          ))
-        )}
-      </div>
+      {hasSearch && (
+        <div className="max-h-44 overflow-y-auto rounded-md border border-border">
+          {isLoading ? (
+            <div className="px-3 py-2 text-xs text-muted-foreground">
+              Loading...
+            </div>
+          ) : customers.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-muted-foreground">
+              No customers match.
+            </div>
+          ) : (
+            customers.map((customer) => (
+              <button
+                type="button"
+                key={customer.id}
+                onClick={() => selectCustomer(customer)}
+                className="block w-full text-left px-3 py-2 text-sm hover:bg-muted"
+              >
+                {customerLabel(customer)}
+              </button>
+            ))
+          )}
+        </div>
+      )}
       <Button
         type="button"
         variant="ghost"
