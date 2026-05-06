@@ -1,6 +1,13 @@
 "use client";
 
-import { ChevronRight, ClipboardList, Plus, Save } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  ClipboardList,
+  Plus,
+  Save,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -120,8 +127,8 @@ function CustomerPicker({
   const [createError, setCreateError] = useState<string | null>(null);
   const debouncedSearch = useDebouncedValue(search.trim(), 300);
   const hasSearch = debouncedSearch.length > 0;
-  const [focused, setFocused] = useState(false);
-  const showList = hasSearch || focused;
+  const [browsing, setBrowsing] = useState(false);
+  const showList = hasSearch || browsing;
   const {
     customers,
     isLoading,
@@ -134,6 +141,7 @@ function CustomerPicker({
 
   const selectCustomer = (customer: Customer) => {
     setSelected(customer);
+    setBrowsing(false);
     onChange(String(customer.id));
   };
 
@@ -250,14 +258,29 @@ function CustomerPicker({
   return (
     <div className="space-y-1.5">
       <Label htmlFor="manual-order-customer-search">Customer</Label>
-      <Input
-        id="manual-order-customer-search"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        placeholder="Search or click to browse"
-      />
+      <div className="flex gap-2">
+        <Input
+          id="manual-order-customer-search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name, phone, or email"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={() => setBrowsing((b) => !b)}
+          title={browsing ? "Hide list" : "Browse customers"}
+          aria-label={browsing ? "Hide customer list" : "Browse customers"}
+          aria-expanded={browsing}
+        >
+          {browsing ? (
+            <ChevronUp className="w-4 h-4" />
+          ) : (
+            <ChevronDown className="w-4 h-4" />
+          )}
+        </Button>
+      </div>
       {showList && (
         <div className="max-h-44 overflow-y-auto rounded-md border border-border">
           {isLoading ? (
@@ -273,9 +296,6 @@ function CustomerPicker({
               <button
                 type="button"
                 key={customer.id}
-                // preventDefault on mousedown stops input blur so the click
-                // selects the customer before the panel collapses.
-                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => selectCustomer(customer)}
                 className="block w-full text-left px-3 py-2 text-sm hover:bg-muted"
               >
@@ -289,7 +309,6 @@ function CustomerPicker({
         type="button"
         variant="ghost"
         size="xs"
-        onMouseDown={(e) => e.preventDefault()}
         onClick={() => setMode("create")}
         className="self-start"
       >
