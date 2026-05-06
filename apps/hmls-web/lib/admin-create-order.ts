@@ -67,8 +67,15 @@ export function validateManualOrderForm(form: ManualOrderForm): string | null {
   ] as const) {
     const next = trimmed(value);
     if (next && (!Number.isFinite(Number(next)) || Number(next) < 0)) {
-      return `${label} must be a positive number.`;
+      return `${label} cannot be negative.`;
     }
+  }
+
+  if (
+    !trimmed(form.itemDescription) &&
+    (trimmed(form.laborHours) || trimmed(form.partsCost))
+  ) {
+    return "Add a service item description for the labor hours or parts cost you entered.";
   }
 
   return null;

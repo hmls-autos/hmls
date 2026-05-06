@@ -61,4 +61,66 @@ describe("manual admin order creation", () => {
       description: "Quick diagnostic",
     });
   });
+
+  test("rejects non-positive customer IDs", () => {
+    for (const customerId of ["0", "-3", "1.5", "abc"]) {
+      const form = { ...emptyManualOrderForm(), customerId };
+      expect(validateManualOrderForm(form)).toEqual(
+        "Choose a customer before creating the order.",
+      );
+    }
+  });
+
+  test("rejects non-integer vehicle years", () => {
+    const form = {
+      ...emptyManualOrderForm(),
+      customerId: "1",
+      description: "x",
+      vehicleYear: "2020.5",
+    };
+    expect(validateManualOrderForm(form)).toEqual(
+      "Vehicle year must be a whole number.",
+    );
+  });
+
+  test("rejects negative labor hours and parts cost", () => {
+    const baseForm = {
+      ...emptyManualOrderForm(),
+      customerId: "1",
+      description: "x",
+    };
+    expect(validateManualOrderForm({ ...baseForm, laborHours: "-1" })).toEqual(
+      "Labor hours cannot be negative.",
+    );
+    expect(
+      validateManualOrderForm({ ...baseForm, partsCost: "-0.01" }),
+    ).toEqual("Parts cost cannot be negative.");
+  });
+
+  test("allows zero labor hours and parts cost (free inspection)", () => {
+    const form = {
+      ...emptyManualOrderForm(),
+      customerId: "1",
+      itemDescription: "Free diagnostic",
+      laborHours: "0",
+      partsCost: "0",
+    };
+    expect(validateManualOrderForm(form)).toBeNull();
+  });
+
+  test("requires service item description when pricing is entered", () => {
+    const baseForm = {
+      ...emptyManualOrderForm(),
+      customerId: "1",
+      description: "Customer dropped off keys",
+    };
+    expect(validateManualOrderForm({ ...baseForm, laborHours: "1.5" })).toEqual(
+      "Add a service item description for the labor hours or parts cost you entered.",
+    );
+    expect(
+      validateManualOrderForm({ ...baseForm, partsCost: "29.99" }),
+    ).toEqual(
+      "Add a service item description for the labor hours or parts cost you entered.",
+    );
+  });
 });

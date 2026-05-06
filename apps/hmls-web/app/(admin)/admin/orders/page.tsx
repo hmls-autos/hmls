@@ -3,7 +3,7 @@
 import { ChevronRight, ClipboardList, Plus, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,13 +18,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -99,13 +92,93 @@ function customerLabel(customer: Customer) {
   );
 }
 
+// /api/admin/customers caps at 100 rows. Drive search through the endpoint's
+// query parameter so customers past the cap stay reachable.
+function CustomerPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<Customer | null>(null);
+  const { customers, isLoading } = useAdminCustomers(
+    search.trim() || undefined,
+  );
+
+  useEffect(() => {
+    if (!value) setSelected(null);
+  }, [value]);
+
+  if (selected) {
+    return (
+      <div className="space-y-1.5">
+        <Label>Customer</Label>
+        <div className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm">
+          <span className="truncate">{customerLabel(selected)}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={() => {
+              setSelected(null);
+              onChange("");
+              setSearch("");
+            }}
+          >
+            Change
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor="manual-order-customer-search">Customer</Label>
+      <Input
+        id="manual-order-customer-search"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search by name, phone, or email"
+      />
+      <div className="max-h-44 overflow-y-auto rounded-md border border-border">
+        {isLoading ? (
+          <div className="px-3 py-2 text-xs text-muted-foreground">
+            Loading...
+          </div>
+        ) : customers.length === 0 ? (
+          <div className="px-3 py-2 text-xs text-muted-foreground">
+            {search.trim()
+              ? "No customers match. Try a different search."
+              : "Add a customer first, then create an order from this page."}
+          </div>
+        ) : (
+          customers.map((customer) => (
+            <button
+              type="button"
+              key={customer.id}
+              onClick={() => {
+                setSelected(customer);
+                onChange(String(customer.id));
+              }}
+              className="block w-full text-left px-3 py-2 text-sm hover:bg-muted"
+            >
+              {customerLabel(customer)}
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ManualOrderFormFields({
   form,
-  customers,
   onChange,
 }: {
   form: ManualOrderForm;
-  customers: Customer[];
   onChange: (form: ManualOrderForm) => void;
 }) {
   const set = (key: keyof ManualOrderForm, value: string) =>
@@ -113,24 +186,10 @@ function ManualOrderFormFields({
 
   return (
     <div className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="manual-order-customer">Customer</Label>
-        <Select
-          value={form.customerId}
-          onValueChange={(value) => set("customerId", value)}
-        >
-          <SelectTrigger id="manual-order-customer" className="w-full">
-            <SelectValue placeholder="Choose an existing customer" />
-          </SelectTrigger>
-          <SelectContent>
-            {customers.map((customer) => (
-              <SelectItem key={customer.id} value={String(customer.id)}>
-                {customerLabel(customer)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <CustomerPicker
+        value={form.customerId}
+        onChange={(id) => set("customerId", id)}
+      />
 
       <div className="space-y-1.5">
         <Label htmlFor="manual-order-description">Order notes</Label>
@@ -194,12 +253,10 @@ function ManualOrderFormFields({
 
 function CreateOrderDialog({
   open,
-  customers,
   onOpenChange,
   onCreated,
 }: {
   open: boolean;
-  customers: Customer[];
   onOpenChange: (open: boolean) => void;
   onCreated: (id: number) => void;
 }) {
@@ -222,6 +279,7 @@ function CreateOrderDialog({
         adminPaths.orders(),
         buildCreateOrderPayload(form),
       );
+      setSaving(false);
       onCreated(order.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Create order failed");
@@ -234,7 +292,7 @@ function CreateOrderDialog({
       open={open}
       onOpenChange={(nextOpen) => {
         onOpenChange(nextOpen);
-        if (nextOpen) {
+        if (!nextOpen) {
           setForm(emptyManualOrderForm());
           setError(null);
           setSaving(false);
@@ -249,27 +307,15 @@ function CreateOrderDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ManualOrderFormFields
-          form={form}
-          customers={customers}
-          onChange={setForm}
-        />
+        <ManualOrderFormFields form={form} onChange={setForm} />
 
-        {customers.length === 0 && (
-          <p className="text-xs text-muted-foreground">
-            Add a customer first, then create an order from this page.
-          </p>
-        )}
         {error && <p className="text-xs text-destructive">{error}</p>}
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button
-            onClick={handleCreate}
-            disabled={saving || customers.length === 0}
-          >
+          <Button onClick={handleCreate} disabled={saving}>
             <Save className="w-3.5 h-3.5" />
             {saving ? "Creating..." : "Create Order"}
           </Button>
@@ -304,7 +350,6 @@ export default function OrdersPage() {
     isLoading,
     mutate: mutateOrders,
   } = useAdminOrders(filter || undefined);
-  const { customers } = useAdminCustomers();
   const { data: dashboard } = useAdminDashboard();
   const pendingReviewCount = dashboard?.stats.pendingReview ?? 0;
 
@@ -332,7 +377,6 @@ export default function OrdersPage() {
 
       <CreateOrderDialog
         open={showCreate}
-        customers={customers}
         onOpenChange={setShowCreate}
         onCreated={handleOrderCreated}
       />
