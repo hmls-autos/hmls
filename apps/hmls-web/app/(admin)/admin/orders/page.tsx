@@ -120,11 +120,13 @@ function CustomerPicker({
   const [createError, setCreateError] = useState<string | null>(null);
   const debouncedSearch = useDebouncedValue(search.trim(), 300);
   const hasSearch = debouncedSearch.length > 0;
+  const [focused, setFocused] = useState(false);
+  const showList = hasSearch || focused;
   const {
     customers,
     isLoading,
     mutate: mutateCustomers,
-  } = useAdminCustomers(debouncedSearch || undefined, hasSearch);
+  } = useAdminCustomers(debouncedSearch || undefined, showList);
 
   useEffect(() => {
     if (!value) setSelected(null);
@@ -252,9 +254,11 @@ function CustomerPicker({
         id="manual-order-customer-search"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search by name, phone, or email"
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        placeholder="Search or click to browse"
       />
-      {hasSearch && (
+      {showList && (
         <div className="max-h-44 overflow-y-auto rounded-md border border-border">
           {isLoading ? (
             <div className="px-3 py-2 text-xs text-muted-foreground">
@@ -262,13 +266,16 @@ function CustomerPicker({
             </div>
           ) : customers.length === 0 ? (
             <div className="px-3 py-2 text-xs text-muted-foreground">
-              No customers match.
+              {hasSearch ? "No customers match." : "No customers yet."}
             </div>
           ) : (
             customers.map((customer) => (
               <button
                 type="button"
                 key={customer.id}
+                // preventDefault on mousedown stops input blur so the click
+                // selects the customer before the panel collapses.
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => selectCustomer(customer)}
                 className="block w-full text-left px-3 py-2 text-sm hover:bg-muted"
               >
@@ -282,6 +289,7 @@ function CustomerPicker({
         type="button"
         variant="ghost"
         size="xs"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => setMode("create")}
         className="self-start"
       >
@@ -419,7 +427,14 @@ function CreateOrderDialog({
         }
       }}
     >
-      <DialogContent>
+      <DialogContent
+        onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !saving) {
+            e.preventDefault();
+            handleCreate();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="font-display">New Order</DialogTitle>
           <DialogDescription>
@@ -435,9 +450,12 @@ function CreateOrderDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleCreate} disabled={saving}>
+          <Button onClick={handleCreate} disabled={saving} title="⌘↵ to create">
             <Save className="w-3.5 h-3.5" />
             {saving ? "Creating..." : "Create Order"}
+            <kbd className="ml-1 hidden sm:inline-flex items-center gap-0.5 text-[10px] font-mono opacity-70">
+              ⌘↵
+            </kbd>
           </Button>
         </DialogFooter>
       </DialogContent>
