@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
   type Customer,
+  useAdminCustomer,
   useAdminCustomers,
   useAdminDashboard,
   useAdminOrders,
@@ -101,6 +102,26 @@ const emptyCustomerDraft = {
   address: "",
 };
 
+const ORDER_DRAFT_KEY = "admin-create-order-draft";
+
+function readOrderDraft(): ManualOrderForm {
+  if (typeof window === "undefined") return emptyManualOrderForm();
+  try {
+    const raw = sessionStorage.getItem(ORDER_DRAFT_KEY);
+    if (!raw) return emptyManualOrderForm();
+    const parsed = JSON.parse(raw) as Partial<ManualOrderForm>;
+    return { ...emptyManualOrderForm(), ...parsed };
+  } catch {
+    return emptyManualOrderForm();
+  }
+}
+
+function clearOrderDraft() {
+  if (typeof window !== "undefined") {
+    sessionStorage.removeItem(ORDER_DRAFT_KEY);
+  }
+}
+
 // /api/admin/customers caps at 100 rows. Drive search through the endpoint's
 // query parameter so customers past the cap stay reachable, and let the
 // admin create a new customer inline for walk-ins.
@@ -126,9 +147,26 @@ function CustomerPicker({
     mutate: mutateCustomers,
   } = useAdminCustomers(debouncedSearch || undefined, hasSearch);
 
+  // Hydrate `selected` when value comes back from a restored draft
+  // (sessionStorage holds the customerId only, not the customer object).
+  const numericValue = value ? Number(value) : Number.NaN;
+  const needsHydration =
+    Number.isInteger(numericValue) &&
+    numericValue > 0 &&
+    (!selected || selected.id !== numericValue);
+  const { data: hydrationData } = useAdminCustomer(
+    needsHydration ? numericValue : null,
+  );
+
   useEffect(() => {
-    if (!value) setSelected(null);
-  }, [value]);
+    if (!value) {
+      setSelected(null);
+      return;
+    }
+    if (hydrationData?.customer && hydrationData.customer.id === numericValue) {
+      setSelected(hydrationData.customer);
+    }
+  }, [value, numericValue, hydrationData]);
 
   const selectCustomer = (customer: Customer) => {
     setSelected(customer);
@@ -381,7 +419,10 @@ function CreateOrderDialog({
   onCreated: (id: number) => void;
 }) {
   const api = useApi();
-  const [form, setForm] = useState<ManualOrderForm>(emptyManualOrderForm);
+  // Lazy-init from sessionStorage so an accidental close (Esc, click outside,
+  // refresh) doesn't lose what the admin typed. Cancel and Create both
+  // clear the draft explicitly.
+  const [form, setForm] = useState<ManualOrderForm>(readOrderDraft);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Platform-specific hint. null on first render avoids hydration mismatch
@@ -394,6 +435,21 @@ function CreateOrderDialog({
         : "";
     setShortcutHint(/Mac|iPad|iPhone|iPod/.test(ua) ? "⌘↵" : "Ctrl+↵");
   }, []);
+
+  // Persist whenever form changes. Empty form still writes (cheap), and the
+  // explicit clear paths below remove the key.
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(ORDER_DRAFT_KEY, JSON.stringify(form));
+    }
+  }, [form]);
+
+  const resetForm = () => {
+    setForm(emptyManualOrderForm());
+    setError(null);
+    setSaving(false);
+    clearOrderDraft();
+  };
 
   const handleCreate = async () => {
     const validationError = validateManualOrderForm(form);
@@ -409,12 +465,17 @@ function CreateOrderDialog({
         adminPaths.orders(),
         buildCreateOrderPayload(form),
       );
-      setSaving(false);
+      resetForm();
       onCreated(order.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Create order failed");
       setSaving(false);
     }
+  };
+
+  const handleCancel = () => {
+    resetForm();
+    onOpenChange(false);
   };
 
   return (
@@ -423,7 +484,8 @@ function CreateOrderDialog({
       onOpenChange={(nextOpen) => {
         onOpenChange(nextOpen);
         if (!nextOpen) {
-          setForm(emptyManualOrderForm());
+          // Soft close (Esc, outside-click): preserve form, clear transient
+          // error/saving so the next open doesn't show a stale state.
           setError(null);
           setSaving(false);
         }
@@ -449,7 +511,7 @@ function CreateOrderDialog({
         {error && <p className="text-xs text-destructive">{error}</p>}
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button variant="ghost" onClick={handleCancel}>
             Cancel
           </Button>
           <Button
