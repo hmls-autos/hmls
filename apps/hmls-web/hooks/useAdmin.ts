@@ -46,11 +46,11 @@ export function useAdminDashboard() {
   return { data, isLoading, isError: !!error };
 }
 
-export function useAdminCustomers(search?: string) {
+export function useAdminCustomers(search?: string, enabled = true) {
   const api = useApi();
-  const { data, error, isLoading, mutate } = useSWR(
-    adminPaths.customers(search),
-    (p: string) => api.get<Customer[]>(p),
+  const key = enabled ? adminPaths.customers(search) : null;
+  const { data, error, isLoading, mutate } = useSWR(key, (p: string) =>
+    api.get<Customer[]>(p),
   );
   return {
     customers: useStableArray(data),
@@ -78,10 +78,10 @@ export function useAdminOrder(id: number | string | null) {
   return { data, isLoading, isError: !!error, mutate };
 }
 
-export function useAdminOrders(status?: string) {
+export function useAdminOrders(status?: string, search?: string) {
   const api = useApi();
   const { data, error, isLoading, mutate } = useSWR(
-    adminPaths.orders(status),
+    adminPaths.orders({ status, search }),
     (p: string) => api.get<AdminOrder[]>(p),
   );
   return { orders: useStableArray(data), isLoading, isError: !!error, mutate };
