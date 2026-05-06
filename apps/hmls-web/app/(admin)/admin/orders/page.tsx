@@ -103,6 +103,19 @@ const emptyCustomerDraft = {
 };
 
 const ORDER_DRAFT_KEY = "admin-create-order-draft";
+const PICKER_DRAFT_KEY = "admin-create-order-customer-picker";
+
+type PickerDraft = {
+  mode: "search" | "create";
+  search: string;
+  draft: typeof emptyCustomerDraft;
+};
+
+const emptyPickerDraft: PickerDraft = {
+  mode: "search",
+  search: "",
+  draft: emptyCustomerDraft,
+};
 
 function readOrderDraft(): ManualOrderForm {
   if (typeof window === "undefined") return emptyManualOrderForm();
@@ -116,9 +129,26 @@ function readOrderDraft(): ManualOrderForm {
   }
 }
 
+function readPickerDraft(): PickerDraft {
+  if (typeof window === "undefined") return emptyPickerDraft;
+  try {
+    const raw = sessionStorage.getItem(PICKER_DRAFT_KEY);
+    if (!raw) return emptyPickerDraft;
+    const parsed = JSON.parse(raw) as Partial<PickerDraft>;
+    return {
+      mode: parsed.mode === "create" ? "create" : "search",
+      search: typeof parsed.search === "string" ? parsed.search : "",
+      draft: { ...emptyCustomerDraft, ...(parsed.draft ?? {}) },
+    };
+  } catch {
+    return emptyPickerDraft;
+  }
+}
+
 function clearOrderDraft() {
   if (typeof window !== "undefined") {
     sessionStorage.removeItem(ORDER_DRAFT_KEY);
+    sessionStorage.removeItem(PICKER_DRAFT_KEY);
   }
 }
 
@@ -133,12 +163,25 @@ function CustomerPicker({
   onChange: (id: string) => void;
 }) {
   const api = useApi();
-  const [mode, setMode] = useState<"search" | "create">("search");
-  const [search, setSearch] = useState("");
+  // Lazy-init each piece from sessionStorage so an accidental dialog close
+  // doesn't lose a half-typed customer or in-flight search.
+  const initialPicker = readPickerDraft();
+  const [mode, setMode] = useState<"search" | "create">(initialPicker.mode);
+  const [search, setSearch] = useState(initialPicker.search);
   const [selected, setSelected] = useState<Customer | null>(null);
-  const [draft, setDraft] = useState(emptyCustomerDraft);
+  const [draft, setDraft] = useState(initialPicker.draft);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  // Persist whenever any of these change. The order draft hits its own
+  // useEffect in CreateOrderDialog; this covers picker-local state.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    sessionStorage.setItem(
+      PICKER_DRAFT_KEY,
+      JSON.stringify({ mode, search, draft }),
+    );
+  }, [mode, search, draft]);
   const debouncedSearch = useDebouncedValue(search.trim(), 300);
   const hasSearch = debouncedSearch.length > 0;
   const {
