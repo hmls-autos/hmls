@@ -46,6 +46,28 @@ chat.post("/", async (c) => {
     return c.json({ error: "no user message in payload" }, 400);
   }
 
+  // F7: Session ownership check. Without this, any authenticated user can
+  // pass any sessionId and the agent will inject that session's
+  // diagnostic_state + summary into the system prompt — cross-tenant data
+  // leak via guessable IDs. Enforce ownership BEFORE running the agent or
+  // touching the credit ledger.
+  const [sessionOwnership] = await db
+    .select({
+      userId: schema.fixoSessions.userId,
+      customerId: schema.fixoSessions.customerId,
+    })
+    .from(schema.fixoSessions)
+    .where(eq(schema.fixoSessions.id, parsedSessionId))
+    .limit(1);
+  if (
+    !sessionOwnership ||
+    (sessionOwnership.userId !== auth.userId &&
+      (auth.customerId === undefined ||
+        sessionOwnership.customerId !== auth.customerId))
+  ) {
+    return c.json({ error: "Session not found" }, 404);
+  }
+
   // 1. Idempotent counter insert + per-user replay detection.
   //
   //    fixo_message_events PK is the client-supplied user_message_id
