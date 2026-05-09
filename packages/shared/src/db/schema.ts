@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   bigserial,
   boolean,
   check,
@@ -397,6 +398,57 @@ export const creditLedger = pgTable(
   ],
 );
 
+// --- Promo codes (bonus credits, non-monetary) ---
+//
+// Stripe coupons can only do $/% discounts. Codes that grant credits
+// without a monetary discount (influencer codes, beta rewards, referrals)
+// live here.
+
+export const promoCodes = pgTable(
+  "promo_codes",
+  {
+    code: text("code").primaryKey(),
+    credits: integer("credits").notNull(),
+    maxUses: integer("max_uses").notNull().default(1),
+    uses: integer("uses").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check("promo_codes_credits_positive", sql`${table.credits} > 0`),
+    check("promo_codes_max_uses_positive", sql`${table.maxUses} > 0`),
+    check("promo_codes_uses_nonneg", sql`${table.uses} >= 0`),
+    check("promo_codes_uses_le_max", sql`${table.uses} <= ${table.maxUses}`),
+  ],
+);
+
+export const promoRedemptions = pgTable(
+  "promo_redemptions",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    code: text("code")
+      .notNull()
+      .references(() => promoCodes.code, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    redeemedAt: timestamp("redeemed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    ledgerId: bigint("ledger_id", { mode: "number" }),
+  },
+  (table) => [
+    unique("promo_redemptions_code_user_unique").on(table.code, table.userId),
+    index("idx_promo_redemptions_user").on(
+      table.userId,
+      table.redeemedAt.desc(),
+    ),
+  ],
+);
+
 export const vehicles = pgTable(
   "vehicles",
   {
@@ -642,6 +694,10 @@ export type UserProfile = typeof userProfiles.$inferSelect;
 export type NewUserProfile = typeof userProfiles.$inferInsert;
 export type CreditLedgerEntry = typeof creditLedger.$inferSelect;
 export type NewCreditLedgerEntry = typeof creditLedger.$inferInsert;
+export type PromoCode = typeof promoCodes.$inferSelect;
+export type NewPromoCode = typeof promoCodes.$inferInsert;
+export type PromoRedemption = typeof promoRedemptions.$inferSelect;
+export type NewPromoRedemption = typeof promoRedemptions.$inferInsert;
 export type Vehicle = typeof vehicles.$inferSelect;
 export type NewVehicle = typeof vehicles.$inferInsert;
 export type FixoSession = typeof fixoSessions.$inferSelect;

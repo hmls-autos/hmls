@@ -12,6 +12,8 @@ import {
   getCreditHistory,
   getUsageStats,
   handleSubscriptionWebhook,
+  PromoRedemptionError,
+  redeemPromoCode,
   stripe,
   SUGGESTED_TOPUPS_USD,
   TOPUP_CENTS_PER_CREDIT,
@@ -226,6 +228,45 @@ billing.get("/usage", async (c) => {
   }
   const stats = await getUsageStats({ userId: auth.userId, since });
   return c.json(stats);
+});
+
+// POST /billing/redeem — redeem a bonus-credits promo code.
+// Body: { code: string }. Idempotent on (code, userId): same user
+// submitting twice gets 409 already_redeemed.
+billing.post("/redeem", async (c) => {
+  const auth = c.get("auth");
+  const block = rejectLegacyCustomer(auth);
+  if (block) return block;
+
+  let body: { code?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  const code = typeof body.code === "string" ? body.code.trim() : "";
+  if (!code || code.length > 64) {
+    return c.json({ error: "code is required (string ≤ 64 chars)" }, 400);
+  }
+
+  try {
+    const result = await redeemPromoCode({ userId: auth.userId, code });
+    return c.json({
+      ok: true,
+      credits: result.credits,
+      balance: result.balanceAfter,
+    });
+  } catch (err) {
+    if (err instanceof PromoRedemptionError) {
+      const status = err.code === "already_redeemed" ? 409 : 404;
+      return c.json({ error: err.code, message: err.message }, status);
+    }
+    logger.error("Redeem error", {
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    return c.json({ error: "Failed to redeem code" }, 500);
+  }
 });
 
 // GET /billing/portal — redirect to Stripe Customer Portal

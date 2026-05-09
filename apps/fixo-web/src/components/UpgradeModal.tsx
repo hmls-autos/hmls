@@ -19,8 +19,13 @@ const MAX_USD = 200;
 
 export function UpgradeModal({ message, onClose }: UpgradeModalProps) {
   const { session } = useAuth();
-  const [busy, setBusy] = useState<"plus" | "topup" | null>(null);
+  const [busy, setBusy] = useState<"plus" | "topup" | "redeem" | null>(null);
   const [customUsd, setCustomUsd] = useState<string>("");
+  const [promoCode, setPromoCode] = useState<string>("");
+  const [redeemMessage, setRedeemMessage] = useState<{
+    kind: "success" | "error";
+    text: string;
+  } | null>(null);
 
   const handleUpgrade = async () => {
     if (!session || busy) return;
@@ -83,6 +88,40 @@ export function UpgradeModal({ message, onClose }: UpgradeModalProps) {
     Number.isInteger(customDollars) &&
     customDollars >= MIN_USD &&
     customDollars <= MAX_USD;
+
+  const handleRedeem = async () => {
+    if (!session || busy) return;
+    const code = promoCode.trim();
+    if (!code) return;
+    setBusy("redeem");
+    setRedeemMessage(null);
+    try {
+      const res = await fetch(`${AGENT_URL}/billing/redeem`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ code }),
+      });
+      const data = await res.json();
+      if (res.ok && data.credits) {
+        setRedeemMessage({
+          kind: "success",
+          text: `+${data.credits.toLocaleString()} credits added to your account`,
+        });
+        setPromoCode("");
+      } else {
+        setRedeemMessage({
+          kind: "error",
+          text: data.message ?? "Code couldn't be redeemed",
+        });
+      }
+    } catch {
+      setRedeemMessage({ kind: "error", text: "Network error — try again" });
+    }
+    setBusy(null);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -185,6 +224,46 @@ export function UpgradeModal({ message, onClose }: UpgradeModalProps) {
               ? `${(customDollars * CREDITS_PER_DOLLAR).toLocaleString()} credits`
               : "Buy"}
           </button>
+        </div>
+
+        {/* Promo code input */}
+        <div className="mt-4 border-t border-border pt-4">
+          <p className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+            Have a code?
+          </p>
+          <div className="flex items-stretch gap-2">
+            <input
+              type="text"
+              value={promoCode}
+              onChange={(e) => {
+                setPromoCode(e.target.value.toUpperCase());
+                setRedeemMessage(null);
+              }}
+              placeholder="WELCOME50"
+              maxLength={64}
+              disabled={busy !== null}
+              className="h-full flex-1 rounded-md border border-border bg-card px-3 py-2 font-mono text-sm uppercase tracking-wider focus:border-primary focus:outline-none disabled:opacity-50"
+            />
+            <button
+              type="button"
+              onClick={handleRedeem}
+              disabled={busy !== null || promoCode.trim().length === 0}
+              className="rounded-md border border-border bg-card px-3 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-50"
+            >
+              {busy === "redeem" ? "Redeeming…" : "Redeem"}
+            </button>
+          </div>
+          {redeemMessage && (
+            <p
+              className={`mt-2 text-[11px] ${
+                redeemMessage.kind === "success"
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : "text-red-600 dark:text-red-400"
+              }`}
+            >
+              {redeemMessage.text}
+            </p>
+          )}
         </div>
 
         <button
