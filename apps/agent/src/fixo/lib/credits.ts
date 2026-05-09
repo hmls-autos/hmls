@@ -12,7 +12,7 @@
 // Consumption deducts monthly first, falls through to topup. The DB has
 // CHECK constraints preventing either bucket from going negative.
 
-import { eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql, sum } from "drizzle-orm";
 import { db, schema } from "../../db/client.ts";
 
 const { userProfiles, creditLedger } = schema;
@@ -384,6 +384,144 @@ export async function refundCredits(opts: {
       metadata: { ...opts.metadata, originalReason: opts.reason ?? null },
     });
   });
+}
+
+// --- Usage audit (read-only views over credit_ledger) ---
+
+export interface UsageStats {
+  /** Sum of |delta| for consumption rows in window. */
+  totalSpent: number;
+  /** Most recent monthly grant amount (the user's "this period quota"). */
+  grantedThisPeriod: number;
+  /** When the current monthly window started. Null if user has never been
+   * granted (impossible after auto-provision). */
+  monthlyPeriodStart: Date | null;
+  /** Predicted next refresh date for free tier (period_start + 30d). Null
+   * for Plus/Pro (Stripe-driven, unpredictable in code). */
+  nextFreeRefreshAt: Date | null;
+  /** Spend grouped by input_type. */
+  byInputType: Record<string, number>;
+  /** ISO bounds of the window summarized. */
+  period: { from: string; to: string };
+}
+
+/**
+ * Read recent ledger entries for a user. Default 50 rows, newest first.
+ * Pagination via `before` (created_at cursor) returning hasMore so the
+ * client can render an infinite-scroll-style history.
+ */
+export async function getCreditHistory(opts: {
+  userId: string;
+  limit?: number;
+  before?: Date;
+}): Promise<{
+  entries: typeof creditLedger.$inferSelect[];
+  hasMore: boolean;
+}> {
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+  const conditions = [eq(creditLedger.userId, opts.userId)];
+  if (opts.before) {
+    conditions.push(lt(creditLedger.createdAt, opts.before));
+  }
+  // Fetch one extra row to detect hasMore without a separate COUNT.
+  const rows = await db
+    .select()
+    .from(creditLedger)
+    .where(and(...conditions))
+    .orderBy(desc(creditLedger.createdAt))
+    .limit(limit + 1);
+  const hasMore = rows.length > limit;
+  return { entries: hasMore ? rows.slice(0, limit) : rows, hasMore };
+}
+
+/**
+ * Aggregate usage for a user over a window (default: since their current
+ * monthly period started). Returns spend total, group-by-input-type
+ * breakdown, and the predicted next-refresh date for Free users.
+ */
+export async function getUsageStats(opts: {
+  userId: string;
+  since?: Date;
+}): Promise<UsageStats> {
+  // Pull the user's tier + period_start to anchor the default window and
+  // compute next-refresh. Single query.
+  const [profile] = await db
+    .select({
+      tier: userProfiles.tier,
+      periodStart: userProfiles.monthlyGrantPeriodStart,
+    })
+    .from(userProfiles)
+    .where(eq(userProfiles.id, opts.userId))
+    .limit(1);
+
+  const monthlyPeriodStart = profile?.periodStart ?? null;
+  const since = opts.since ?? monthlyPeriodStart ?? new Date(0);
+  const now = new Date();
+
+  // Total spent in window: sum of -delta on consumption rows (delta is
+  // negative for consumption so we negate to get a positive "spent"
+  // number). We use sum() and coerce to number client-side because
+  // Drizzle returns decimal as string.
+  const consumptionConditions = [
+    eq(creditLedger.userId, opts.userId),
+    eq(creditLedger.reason, "consumption"),
+    gte(creditLedger.createdAt, since),
+  ];
+
+  const [totalRow] = await db
+    .select({
+      total: sum(sql<number>`-${creditLedger.delta}`),
+    })
+    .from(creditLedger)
+    .where(and(...consumptionConditions));
+
+  const byTypeRows = await db
+    .select({
+      inputType: creditLedger.inputType,
+      total: sum(sql<number>`-${creditLedger.delta}`),
+    })
+    .from(creditLedger)
+    .where(and(...consumptionConditions))
+    .groupBy(creditLedger.inputType);
+
+  const byInputType: Record<string, number> = {};
+  for (const row of byTypeRows) {
+    if (row.inputType) byInputType[row.inputType] = Number(row.total ?? 0);
+  }
+
+  // Most recent grant (any monthly grant — covers subscription_grant,
+  // free_monthly_grant, legacy_migration).
+  const [latestGrant] = await db
+    .select({ delta: creditLedger.delta })
+    .from(creditLedger)
+    .where(
+      and(
+        eq(creditLedger.userId, opts.userId),
+        eq(creditLedger.bucket, "monthly"),
+      ),
+    )
+    .orderBy(desc(creditLedger.createdAt))
+    .limit(1);
+
+  // Next refresh: only meaningful for Free users (Plus/Pro is Stripe-driven).
+  let nextFreeRefreshAt: Date | null = null;
+  if (profile?.tier === "free" && monthlyPeriodStart) {
+    nextFreeRefreshAt = new Date(
+      monthlyPeriodStart.getTime() + 30 * 24 * 60 * 60 * 1000,
+    );
+  }
+
+  return {
+    totalSpent: Number(totalRow?.total ?? 0),
+    grantedThisPeriod: latestGrant?.delta ?? 0,
+    monthlyPeriodStart,
+    nextFreeRefreshAt,
+    byInputType,
+    period: {
+      from: since.toISOString(),
+      to: now.toISOString(),
+    },
+  };
 }
 
 /**

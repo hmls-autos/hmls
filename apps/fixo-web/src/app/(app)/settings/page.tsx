@@ -29,25 +29,105 @@ interface BalanceResponse {
   tier: "free" | "plus" | "pro";
 }
 
+interface LedgerEntry {
+  id: number;
+  delta: number;
+  bucket: "monthly" | "topup";
+  reason: string;
+  inputType: string | null;
+  sessionId: number | null;
+  createdAt: string;
+}
+
+interface UsageStats {
+  totalSpent: number;
+  grantedThisPeriod: number;
+  monthlyPeriodStart: string | null;
+  nextFreeRefreshAt: string | null;
+  byInputType: Record<string, number>;
+  unlimited?: boolean;
+}
+
+const REASON_LABELS: Record<string, string> = {
+  subscription_grant: "Subscription credit",
+  free_monthly_grant: "Free monthly refresh",
+  topup_purchase: "Top-up purchase",
+  consumption: "Used",
+  refund: "Refund",
+  admin_adjustment: "Admin adjustment",
+  legacy_migration: "Initial setup",
+};
+
+const INPUT_LABELS: Record<string, string> = {
+  text: "chat",
+  obd: "OBD lookup",
+  photo: "photo",
+  audio: "audio",
+  video: "video",
+  report: "report",
+};
+
+function formatLedgerLabel(entry: LedgerEntry): string {
+  if (entry.reason === "consumption" && entry.inputType) {
+    return INPUT_LABELS[entry.inputType] ?? entry.inputType;
+  }
+  return REASON_LABELS[entry.reason] ?? entry.reason;
+}
+
+function formatRelativeDate(iso: string): string {
+  const d = new Date(iso);
+  const days = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+  if (days === 0) {
+    const hours = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60));
+    if (hours === 0) return "just now";
+    return `${hours}h ago`;
+  }
+  if (days === 1) return "yesterday";
+  if (days < 30) return `${days}d ago`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function formatRefreshDate(iso: string): string {
+  const d = new Date(iso);
+  const days = Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  if (days <= 0) return "any moment now";
+  if (days === 1) return "tomorrow";
+  if (days < 7) return `in ${days} days`;
+  return `on ${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+}
+
 export default function SettingsPage() {
   const { user, session, supabase } = useAuth();
   const { theme, setTheme } = useTheme();
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
+  const [history, setHistory] = useState<LedgerEntry[] | null>(null);
+  const [usage, setUsage] = useState<UsageStats | null>(null);
   const [showTopup, setShowTopup] = useState(false);
 
   useEffect(() => {
     if (!session?.access_token) return;
+    const auth = `Bearer ${session.access_token}`;
     let cancelled = false;
-    fetch(`${AGENT_URL}/billing/balance`, {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: BalanceResponse | null) => {
-        if (!cancelled) setBalance(data);
+    Promise.all([
+      fetch(`${AGENT_URL}/billing/balance`, {
+        headers: { Authorization: auth },
       })
-      .catch(() => {
-        /* leave balance null — UI shows skeleton */
-      });
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+      fetch(`${AGENT_URL}/billing/history?limit=10`, {
+        headers: { Authorization: auth },
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+      fetch(`${AGENT_URL}/billing/usage`, { headers: { Authorization: auth } })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+    ]).then(([b, h, u]) => {
+      if (cancelled) return;
+      setBalance(b);
+      setHistory(h?.entries ?? []);
+      setUsage(u);
+    });
     return () => {
       cancelled = true;
     };
@@ -166,8 +246,58 @@ export default function SettingsPage() {
                   <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                 </button>
               )}
+              {/* Next refresh hint (Free tier only — Plus/Pro is Stripe-driven) */}
+              {!balance?.unlimited &&
+                usage?.nextFreeRefreshAt &&
+                balance?.tier === "free" && (
+                  <div className="px-4 py-2.5 text-[11px] text-muted-foreground">
+                    Monthly credits refresh{" "}
+                    {formatRefreshDate(usage.nextFreeRefreshAt)} — unused
+                    monthly credits are reset.
+                  </div>
+                )}
             </div>
           </section>
+
+          {/* Recent activity */}
+          {!balance?.unlimited && history && history.length > 0 && (
+            <section>
+              <h2 className="mb-2.5 px-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Recent activity
+              </h2>
+              <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
+                {history.map((entry) => {
+                  const isCharge = entry.delta < 0;
+                  return (
+                    <div
+                      key={entry.id}
+                      className="flex items-center justify-between px-4 py-2.5"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm">
+                          {formatLedgerLabel(entry)}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          {formatRelativeDate(entry.createdAt)} ·{" "}
+                          <span className="font-mono">{entry.bucket}</span>
+                        </p>
+                      </div>
+                      <span
+                        className={`font-mono text-sm tabular-nums ${
+                          isCharge
+                            ? "text-muted-foreground"
+                            : "text-emerald-600 dark:text-emerald-400"
+                        }`}
+                      >
+                        {isCharge ? "" : "+"}
+                        {entry.delta.toLocaleString()}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
           {/* Subscription */}
           <section>

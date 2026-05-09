@@ -23,6 +23,8 @@ export {
   creditsForUsd,
   ensureFreshMonthlyGrant,
   getBalance,
+  getCreditHistory,
+  getUsageStats,
   grantMonthly,
   grantTopup,
   type InputKind,
@@ -34,6 +36,7 @@ export {
   TOPUP_CENTS_PER_CREDIT,
   TOPUP_MAX_USD,
   TOPUP_MIN_USD,
+  type UsageStats,
 } from "./fixo/lib/credits.ts";
 export {
   createCheckoutSession,

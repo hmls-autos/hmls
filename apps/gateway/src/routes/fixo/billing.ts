@@ -9,6 +9,8 @@ import {
   CREDIT_COSTS,
   creditsForUsd,
   getBalance,
+  getCreditHistory,
+  getUsageStats,
   handleSubscriptionWebhook,
   stripe,
   SUGGESTED_TOPUPS_USD,
@@ -170,6 +172,60 @@ billing.get("/balance", async (c) => {
     tier: auth.tier,
     ...pricing,
   });
+});
+
+// GET /billing/history — paginated credit_ledger entries for the auth'd user.
+// Query params:
+//   limit (default 50, max 200)
+//   before (ISO datetime cursor; rows returned have created_at < before)
+billing.get("/history", async (c) => {
+  const auth = c.get("auth");
+  // Legacy customers don't have ledger entries — return empty.
+  if (auth.customerId) {
+    return c.json({ entries: [], hasMore: false });
+  }
+  const url = new URL(c.req.url);
+  const limitParam = url.searchParams.get("limit");
+  const beforeParam = url.searchParams.get("before");
+  const limit = limitParam ? Number.parseInt(limitParam, 10) : undefined;
+  let before: Date | undefined;
+  if (beforeParam) {
+    const d = new Date(beforeParam);
+    if (!Number.isNaN(d.getTime())) before = d;
+  }
+  const result = await getCreditHistory({
+    userId: auth.userId,
+    limit,
+    before,
+  });
+  return c.json(result);
+});
+
+// GET /billing/usage — aggregate usage stats for the auth'd user.
+// Query params:
+//   since (ISO datetime; default = current monthly period start)
+billing.get("/usage", async (c) => {
+  const auth = c.get("auth");
+  if (auth.customerId) {
+    return c.json({
+      totalSpent: 0,
+      grantedThisPeriod: 0,
+      monthlyPeriodStart: null,
+      nextFreeRefreshAt: null,
+      byInputType: {},
+      period: { from: null, to: null },
+      unlimited: true,
+    });
+  }
+  const url = new URL(c.req.url);
+  const sinceParam = url.searchParams.get("since");
+  let since: Date | undefined;
+  if (sinceParam) {
+    const d = new Date(sinceParam);
+    if (!Number.isNaN(d.getTime())) since = d;
+  }
+  const stats = await getUsageStats({ userId: auth.userId, since });
+  return c.json(stats);
 });
 
 // GET /billing/portal — redirect to Stripe Customer Portal
