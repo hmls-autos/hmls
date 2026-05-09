@@ -63,6 +63,18 @@ export async function authenticateRequest(
     .limit(1);
 
   if (customer) {
+    // Legacy customers stay outside the credit system (chargeForInput
+    // bypasses them via auth.customerId !== undefined), but fixo_sessions,
+    // fixo_reports, etc. all FK their user_id → user_profiles.id. Without
+    // a profile row, the very first POST /sessions 500s on FK violation,
+    // which the chat client masks as "sessionId is required" on the next
+    // /task call. Provision an empty profile so those FKs resolve; do NOT
+    // grantMonthly — we don't want legacy customers metered.
+    await db
+      .insert(schema.userProfiles)
+      .values({ id: authUser.id })
+      .onConflictDoNothing();
+
     return {
       userId: authUser.id,
       email: authUser.email,
