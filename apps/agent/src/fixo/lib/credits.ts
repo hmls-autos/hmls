@@ -488,6 +488,85 @@ export async function redeemPromoCode(opts: {
 }
 
 /**
+ * Revoke credits granted by a top-up that's been refunded externally
+ * (Stripe Dashboard refund or `charge.refunded` webhook). Subtracts from
+ * the topup bucket, capped at 0 — if the user already spent some of the
+ * topup, we eat the loss rather than letting the balance go negative.
+ *
+ * Writes a NEGATIVE-delta ledger row with reason='refund'. Idempotent on
+ * `stripeEvent`. Returns `{revoked: false}` if the ledger row already
+ * exists.
+ */
+export async function revokeTopupCredits(opts: {
+  userId: string;
+  amount: number;
+  sessionId?: number | null;
+  stripeEvent?: string;
+  metadata?: Record<string, unknown>;
+}): Promise<{ revoked: boolean; deducted: number }> {
+  if (opts.amount <= 0) return { revoked: false, deducted: 0 };
+  return await db.transaction(async (tx) => {
+    if (opts.stripeEvent) {
+      const [existing] = await tx
+        .select({ id: creditLedger.id })
+        .from(creditLedger)
+        .where(eq(creditLedger.stripeEvent, opts.stripeEvent))
+        .limit(1);
+      if (existing) return { revoked: false, deducted: 0 };
+    }
+    // Lock + read current topup so we know how much we can actually
+    // deduct (cap at current balance — user may have spent some).
+    const [profile] = await tx
+      .select({ topup: userProfiles.creditsTopupRemaining })
+      .from(userProfiles)
+      .where(eq(userProfiles.id, opts.userId))
+      .for("update")
+      .limit(1);
+    if (!profile) return { revoked: false, deducted: 0 };
+    const deducted = Math.min(profile.topup, opts.amount);
+    if (deducted === 0) {
+      // User already at 0 — nothing to revoke. Still record the event
+      // for audit so we don't try again.
+      await tx.insert(creditLedger).values({
+        userId: opts.userId,
+        delta: 0,
+        bucket: "topup",
+        reason: "refund",
+        sessionId: opts.sessionId ?? null,
+        stripeEvent: opts.stripeEvent ?? null,
+        metadata: {
+          ...opts.metadata,
+          requested_revoke: opts.amount,
+          actual_deducted: 0,
+          note: "user balance already 0 — refund recorded but no deduction",
+        },
+      });
+      return { revoked: true, deducted: 0 };
+    }
+    await tx
+      .update(userProfiles)
+      .set({
+        creditsTopupRemaining: sql`${userProfiles.creditsTopupRemaining} - ${deducted}`,
+      })
+      .where(eq(userProfiles.id, opts.userId));
+    await tx.insert(creditLedger).values({
+      userId: opts.userId,
+      delta: -deducted,
+      bucket: "topup",
+      reason: "refund",
+      sessionId: opts.sessionId ?? null,
+      stripeEvent: opts.stripeEvent ?? null,
+      metadata: {
+        ...opts.metadata,
+        requested_revoke: opts.amount,
+        actual_deducted: deducted,
+      },
+    });
+    return { revoked: true, deducted };
+  });
+}
+
+/**
  * Refund credits previously consumed (e.g. when an LLM call charged but
  * then failed). Adds the refund to the topup bucket so it doesn't expire
  * with the next monthly grant — the user paid for it (or earned it via

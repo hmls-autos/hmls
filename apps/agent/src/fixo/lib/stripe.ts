@@ -24,7 +24,7 @@ import {
   grantMonthly,
   grantTopup,
   MONTHLY_GRANT,
-  refundCredits,
+  revokeTopupCredits,
   type Tier,
   TOPUP_MAX_USD,
   TOPUP_MIN_USD,
@@ -582,26 +582,28 @@ export async function handleSubscriptionWebhook(
       const refundAmount = Math.floor(original.delta * fraction);
       if (refundAmount <= 0) break;
 
-      // refundCredits idempotently checks event.id against the ledger
-      // stripeEvent UNIQUE index — Stripe retries are safe.
-      const result = await refundCredits({
+      // revokeTopupCredits subtracts from the topup bucket (capped at 0
+      // — if the user already spent some, we eat the loss). Idempotent
+      // on event.id via the credit_ledger UNIQUE index.
+      const result = await revokeTopupCredits({
         userId: original.userId,
         amount: refundAmount,
         sessionId: original.sessionId,
-        reason: "stripe_refund",
         stripeEvent: event.id,
         metadata: {
           charge_id: charge.id,
           payment_intent: paymentIntentId,
           original_ledger_id: original.id,
           refund_fraction: fraction,
+          stripe_refund_amount_cents: charge.amount_refunded,
         },
       });
-      if (result.refunded) {
+      if (result.revoked) {
         console.info("[stripe-webhook] charge.refunded processed", {
           eventId: event.id,
           userId: original.userId,
-          refundAmount,
+          requestedRevoke: refundAmount,
+          actuallyDeducted: result.deducted,
           fraction,
         });
       }

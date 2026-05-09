@@ -33,6 +33,7 @@ export {
   PromoRedemptionError,
   redeemPromoCode,
   refundCredits,
+  revokeTopupCredits,
   SUGGESTED_TOPUPS_USD,
   type Tier,
   TOPUP_CENTS_PER_CREDIT,
