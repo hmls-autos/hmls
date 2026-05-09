@@ -30,6 +30,8 @@ export {
   type InputKind,
   InsufficientCreditsError,
   MONTHLY_GRANT,
+  PromoRedemptionError,
+  redeemPromoCode,
   refundCredits,
   SUGGESTED_TOPUPS_USD,
   type Tier,
@@ -56,7 +58,7 @@ export {
 } from "./fixo/lib/storage.ts";
 
 // Notifications
-export { notifyOrderStatusChange } from "./lib/notifications.ts";
+export { notifyOrderStatusChange, notifyPaymentFailed } from "./lib/notifications.ts";
 
 // PDF components (for gateway rendering)
 export { EstimatePdf } from "./hmls/pdf/EstimatePdf.tsx";
