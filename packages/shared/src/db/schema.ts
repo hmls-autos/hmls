@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import {
+  bigserial,
   boolean,
+  check,
   customType,
   date,
   index,
@@ -13,6 +15,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -293,7 +296,11 @@ export const olpLaborTimes = pgTable("olp_labor_times", {
 
 // --- Fixo tables ---
 
-export const userTierEnum = pgEnum("user_tier", ["free", "plus"]);
+// 'pro' is a future-ready extension point — no Stripe Product/Price exists
+// yet. Webhook tier resolution (tierFromPriceId) returns null for unknown
+// price IDs, so adding Pro is a Dashboard + env var change with no code/
+// migration work.
+export const userTierEnum = pgEnum("user_tier", ["free", "plus", "pro"]);
 
 export const userProfiles = pgTable(
   "user_profiles",
@@ -302,11 +309,92 @@ export const userProfiles = pgTable(
     stripeCustomerId: text("stripe_customer_id"),
     stripeSubscriptionId: text("stripe_subscription_id"),
     tier: userTierEnum("tier").default("free").notNull(),
+    // Credits granted on subscription period (Plus = 2000, Pro = 6000) or
+    // free monthly refresh (Free = 200). Reset to the new grant on each
+    // period boundary (overwrite, not add — this is the expiry mechanism).
+    creditsMonthlyRemaining: integer("credits_monthly_remaining")
+      .notNull()
+      .default(0),
+    // Credits bought via one-time top-up. Never expire. Consumed only
+    // after monthly bucket is empty.
+    creditsTopupRemaining: integer("credits_topup_remaining")
+      .notNull()
+      .default(0),
+    // When the current monthly grant period started. Used by the lazy
+    // refresh path to decide if a new free grant is due (rolling 30-day
+    // window). Plus users get refreshed by Stripe `invoice.payment_succeeded`
+    // — we still update this field for symmetry.
+    monthlyGrantPeriodStart: timestamp("monthly_grant_period_start", {
+      withTimezone: true,
+    }),
+    // Out-of-order webhook protection. Subscription.* handlers only apply
+    // an event if its event.created is newer than this column. Stripe
+    // doesn't guarantee delivery order; without this guard, a stale
+    // `subscription.deleted` arriving after a fresh `subscription.created`
+    // would flip the user back to free.
+    lastSubscriptionEventAt: timestamp("last_subscription_event_at", {
+      withTimezone: true,
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
   },
-  (table) => [index("idx_user_profiles_stripe").on(table.stripeCustomerId)],
+  (table) => [
+    index("idx_user_profiles_stripe").on(table.stripeCustomerId),
+    check(
+      "user_profiles_credits_monthly_nonneg",
+      sql`${table.creditsMonthlyRemaining} >= 0`,
+    ),
+    check(
+      "user_profiles_credits_topup_nonneg",
+      sql`${table.creditsTopupRemaining} >= 0`,
+    ),
+  ],
+);
+
+// --- Credit ledger (audit trail) ---
+
+export const creditLedger = pgTable(
+  "credit_ledger",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    // Positive = grant or top-up purchase or refund. Negative = consumption.
+    delta: integer("delta").notNull(),
+    // Which bucket this row touched: 'monthly' or 'topup'.
+    bucket: text("bucket").notNull(),
+    // 'subscription_grant' | 'free_monthly_grant' | 'topup_purchase' |
+    // 'consumption' | 'refund' | 'admin_adjustment' | 'legacy_migration'
+    reason: text("reason").notNull(),
+    // For 'consumption' rows: the session that triggered the charge.
+    sessionId: integer("session_id").references(() => fixoSessions.id, {
+      onDelete: "set null",
+    }),
+    // For 'consumption' rows: which kind of input (text/photo/audio/...).
+    inputType: text("input_type"),
+    // For Stripe-driven rows: the event.id, used as an idempotency key
+    // against retries. Unique partial index enforces this.
+    stripeEvent: text("stripe_event"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("idx_credit_ledger_user").on(
+      table.userId,
+      table.createdAt.desc(),
+    ),
+    uniqueIndex("idx_credit_ledger_stripe_event")
+      .on(table.stripeEvent)
+      .where(sql`stripe_event IS NOT NULL`),
+    check(
+      "credit_ledger_bucket_valid",
+      sql`${table.bucket} IN ('monthly', 'topup')`,
+    ),
+  ],
 );
 
 export const vehicles = pgTable(
@@ -552,6 +640,8 @@ export const fixoEstimates = pgTable(
 // Fixo types
 export type UserProfile = typeof userProfiles.$inferSelect;
 export type NewUserProfile = typeof userProfiles.$inferInsert;
+export type CreditLedgerEntry = typeof creditLedger.$inferSelect;
+export type NewCreditLedgerEntry = typeof creditLedger.$inferInsert;
 export type Vehicle = typeof vehicles.$inferSelect;
 export type NewVehicle = typeof vehicles.$inferInsert;
 export type FixoSession = typeof fixoSessions.$inferSelect;
