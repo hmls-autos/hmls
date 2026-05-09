@@ -17,19 +17,20 @@
 // `2026-02-25.clover`. SDK upgrade is tracked as a follow-up.
 
 import Stripe from "stripe";
-import { and, eq, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, lt, or, sql } from "drizzle-orm";
 import { db, schema } from "../../db/client.ts";
 import {
   creditsForUsd,
   grantMonthly,
   grantTopup,
   MONTHLY_GRANT,
+  refundCredits,
   type Tier,
   TOPUP_MAX_USD,
   TOPUP_MIN_USD,
 } from "./credits.ts";
 
-const { userProfiles } = schema;
+const { userProfiles, creditLedger } = schema;
 
 // --- Stripe client (lazy singleton) ---
 
@@ -389,7 +390,32 @@ export async function handleSubscriptionWebhook(
       // No credit mutation — Stripe retries automatically via dunning. If
       // all retries fail, customer.subscription.deleted will eventually
       // fire and our handler above will flip tier=free.
-      // TODO: send "your card failed" email here once mailer is wired.
+      //
+      // Notify the user via email so they can update their card before
+      // dunning gives up. Lazy import notifications to avoid pulling
+      // mailer setup into webhook hot path when not used.
+      const email = invoice.customer_email;
+      if (email) {
+        try {
+          const { notifyPaymentFailed } = await import(
+            "../../lib/notifications.ts"
+          );
+          const nextRetry = invoice.next_payment_attempt
+            ? new Date(invoice.next_payment_attempt * 1000)
+            : null;
+          await notifyPaymentFailed({
+            toEmail: email,
+            attempt: invoice.attempt_count ?? 1,
+            nextRetryAt: nextRetry,
+            manageBillingUrl: "https://fixo.hmls.autos/settings",
+          });
+        } catch (err) {
+          console.error("[stripe-webhook] payment_failed email error", {
+            eventId: event.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
       break;
     }
     case "checkout.session.completed":
@@ -431,6 +457,78 @@ export async function handleSubscriptionWebhook(
       });
       // No grant happened (payment never cleared) so nothing to refund.
       // TODO: notify user their bank transfer failed.
+      break;
+    }
+    case "charge.refunded": {
+      // Stripe refund (Dashboard or API). Reverse the credit grant.
+      // Strategy: look up the credit_ledger row for the topup_purchase
+      // tied to this charge's PaymentIntent (we stored payment_intent in
+      // the grant's metadata). Refund proportionally for partial refunds.
+      // Idempotent on event.id via creditLedger.stripeEvent UNIQUE.
+      const charge = event.data.object as Stripe.Charge;
+      const paymentIntentId = typeof charge.payment_intent === "string"
+        ? charge.payment_intent
+        : charge.payment_intent?.id ?? null;
+      if (!paymentIntentId) break;
+
+      // Find the original topup grant ledger entry (newest matching).
+      // Drizzle doesn't natively support jsonb path operators in select
+      // builder, so we use sql template for the WHERE.
+      const [original] = await db
+        .select({
+          id: creditLedger.id,
+          userId: creditLedger.userId,
+          delta: creditLedger.delta,
+          sessionId: creditLedger.sessionId,
+        })
+        .from(creditLedger)
+        .where(
+          and(
+            eq(creditLedger.reason, "topup_purchase"),
+            sql`${creditLedger.metadata}->>'payment_intent' = ${paymentIntentId}`,
+          ),
+        )
+        .orderBy(desc(creditLedger.createdAt))
+        .limit(1);
+
+      if (!original) {
+        console.warn(
+          "[stripe-webhook] charge.refunded but no matching topup ledger",
+          { eventId: event.id, paymentIntentId },
+        );
+        break;
+      }
+
+      // Compute refund credit amount proportionally (partial refund safe).
+      // amount_refunded is in cents; if we charged $20 and refunded $10,
+      // we refund half the credits.
+      const fraction = charge.amount > 0 ? charge.amount_refunded / charge.amount : 1;
+      const refundAmount = Math.floor(original.delta * fraction);
+      if (refundAmount <= 0) break;
+
+      // refundCredits idempotently checks event.id against the ledger
+      // stripeEvent UNIQUE index — Stripe retries are safe.
+      const result = await refundCredits({
+        userId: original.userId,
+        amount: refundAmount,
+        sessionId: original.sessionId,
+        reason: "stripe_refund",
+        stripeEvent: event.id,
+        metadata: {
+          charge_id: charge.id,
+          payment_intent: paymentIntentId,
+          original_ledger_id: original.id,
+          refund_fraction: fraction,
+        },
+      });
+      if (result.refunded) {
+        console.info("[stripe-webhook] charge.refunded processed", {
+          eventId: event.id,
+          userId: original.userId,
+          refundAmount,
+          fraction,
+        });
+      }
       break;
     }
   }

@@ -15,7 +15,7 @@
 import { and, desc, eq, gte, lt, sql, sum } from "drizzle-orm";
 import { db, schema } from "../../db/client.ts";
 
-const { userProfiles, creditLedger } = schema;
+const { userProfiles, creditLedger, promoCodes, promoRedemptions } = schema;
 
 // --- Pricing ---
 
@@ -350,25 +350,174 @@ export async function grantTopup(opts: {
   });
 }
 
+// --- Promo codes (bonus credits, non-monetary) ---
+
+export class PromoRedemptionError extends Error {
+  override readonly name = "PromoRedemptionError";
+  constructor(
+    public readonly code:
+      | "not_found"
+      | "expired"
+      | "exhausted"
+      | "already_redeemed",
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Redeem a promo code for the user. Atomic: if anyone of the checks
+ * fails, no credits are granted and no row is written.
+ *
+ * Idempotency on (code, user_id) via the UNIQUE constraint — if the same
+ * user submits the same code twice, second redemption errors with
+ * `already_redeemed`. The grantTopup call also uses
+ * `stripeEvent="promo:CODE:userId"` so credit_ledger guards against any
+ * accidental double-write.
+ */
+export async function redeemPromoCode(opts: {
+  userId: string;
+  code: string;
+}): Promise<{ credits: number; balanceAfter: CreditBalance }> {
+  const code = opts.code.trim().toUpperCase();
+  if (!code) {
+    throw new PromoRedemptionError("not_found", "Code is required");
+  }
+
+  return await db.transaction(async (tx) => {
+    // Lock the promo_code row so concurrent redemptions don't race past
+    // max_uses.
+    const [promo] = await tx
+      .select({
+        code: promoCodes.code,
+        credits: promoCodes.credits,
+        maxUses: promoCodes.maxUses,
+        uses: promoCodes.uses,
+        expiresAt: promoCodes.expiresAt,
+      })
+      .from(promoCodes)
+      .where(eq(promoCodes.code, code))
+      .for("update")
+      .limit(1);
+
+    if (!promo) {
+      throw new PromoRedemptionError("not_found", "Code not found");
+    }
+    if (promo.expiresAt && promo.expiresAt.getTime() < Date.now()) {
+      throw new PromoRedemptionError("expired", "Code has expired");
+    }
+    if (promo.uses >= promo.maxUses) {
+      throw new PromoRedemptionError(
+        "exhausted",
+        "Code has been fully redeemed",
+      );
+    }
+
+    // Per-user guard: same user can't redeem same code twice.
+    const [existing] = await tx
+      .select({ id: promoRedemptions.id })
+      .from(promoRedemptions)
+      .where(
+        and(
+          eq(promoRedemptions.code, code),
+          eq(promoRedemptions.userId, opts.userId),
+        ),
+      )
+      .limit(1);
+    if (existing) {
+      throw new PromoRedemptionError(
+        "already_redeemed",
+        "You've already redeemed this code",
+      );
+    }
+
+    // Bump promo_codes.uses + insert ledger row + insert redemption.
+    // Inline rather than calling grantTopup so we can chain the ledger
+    // INSERT into the same tx and capture the ledger_id.
+    const stripeEvent = `promo:${code}:${opts.userId}`;
+    await tx
+      .update(userProfiles)
+      .set({
+        creditsTopupRemaining: sql`${userProfiles.creditsTopupRemaining} + ${promo.credits}`,
+      })
+      .where(eq(userProfiles.id, opts.userId));
+
+    const [ledgerRow] = await tx
+      .insert(creditLedger)
+      .values({
+        userId: opts.userId,
+        delta: promo.credits,
+        bucket: "topup",
+        reason: "topup_purchase",
+        stripeEvent,
+        metadata: { promoCode: code },
+      })
+      .returning({ id: creditLedger.id });
+
+    await tx
+      .update(promoCodes)
+      .set({ uses: promo.uses + 1 })
+      .where(eq(promoCodes.code, code));
+
+    await tx.insert(promoRedemptions).values({
+      code,
+      userId: opts.userId,
+      ledgerId: ledgerRow.id,
+    });
+
+    // Re-read balance for the caller's UI.
+    const [profile] = await tx
+      .select({
+        monthly: userProfiles.creditsMonthlyRemaining,
+        topup: userProfiles.creditsTopupRemaining,
+      })
+      .from(userProfiles)
+      .where(eq(userProfiles.id, opts.userId))
+      .limit(1);
+
+    return {
+      credits: promo.credits,
+      balanceAfter: {
+        monthly: profile?.monthly ?? 0,
+        topup: profile?.topup ?? 0,
+        total: (profile?.monthly ?? 0) + (profile?.topup ?? 0),
+      },
+    };
+  });
+}
+
 /**
  * Refund credits previously consumed (e.g. when an LLM call charged but
  * then failed). Adds the refund to the topup bucket so it doesn't expire
  * with the next monthly grant — the user paid for it (or earned it via
  * Free grant) and a failure on our side shouldn't cost them.
  *
- * Writes a positive-delta ledger row with reason='refund'. Idempotency
- * is the caller's responsibility — pass an idempotency key in metadata
- * if you need it (we don't UNIQUE it because refunds are rare).
+ * Writes a positive-delta ledger row with reason='refund'. When
+ * `stripeEvent` is provided, idempotent against that event.id via the
+ * credit_ledger UNIQUE index — webhook retries are safe.
+ *
+ * Returns `{ refunded: false }` when a row with the same stripeEvent
+ * already exists (no-op).
  */
 export async function refundCredits(opts: {
   userId: string;
   amount: number;
   sessionId?: number | null;
   reason?: string;
+  stripeEvent?: string;
   metadata?: Record<string, unknown>;
-}): Promise<void> {
-  if (opts.amount <= 0) return;
-  await db.transaction(async (tx) => {
+}): Promise<{ refunded: boolean }> {
+  if (opts.amount <= 0) return { refunded: false };
+  return await db.transaction(async (tx) => {
+    if (opts.stripeEvent) {
+      const [existing] = await tx
+        .select({ id: creditLedger.id })
+        .from(creditLedger)
+        .where(eq(creditLedger.stripeEvent, opts.stripeEvent))
+        .limit(1);
+      if (existing) return { refunded: false };
+    }
     await tx
       .update(userProfiles)
       .set({
@@ -381,8 +530,10 @@ export async function refundCredits(opts: {
       bucket: "topup",
       reason: "refund",
       sessionId: opts.sessionId ?? null,
+      stripeEvent: opts.stripeEvent ?? null,
       metadata: { ...opts.metadata, originalReason: opts.reason ?? null },
     });
+    return { refunded: true };
   });
 }
 
