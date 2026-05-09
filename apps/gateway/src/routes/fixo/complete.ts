@@ -2,7 +2,7 @@
 import { Hono } from "hono";
 import { convertToModelMessages, type UIMessage } from "ai";
 import { db, schema } from "@hmls/agent/db";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { summarizeFixoSession } from "@hmls/agent";
 import { getLogger } from "@logtape/logtape";
 import type { AuthContext } from "../../middleware/fixo/auth.ts";
@@ -83,6 +83,29 @@ complete.post("/:id/complete", async (c) => {
     createdAt: m.createdAt,
   }));
 
+  // Snapshot the most-recent estimate the agent produced for this session.
+  // PDF renders tier-grouped line items from this. NULL when the agent never
+  // called create_estimate (e.g. customer asked a quick question, no pricing).
+  const [latestEstimate] = await db
+    .select({
+      id: schema.fixoEstimates.id,
+      vehicleInfo: schema.fixoEstimates.vehicleInfo,
+      items: schema.fixoEstimates.items,
+      subtotalCents: schema.fixoEstimates.subtotalCents,
+      priceRangeLowCents: schema.fixoEstimates.priceRangeLowCents,
+      priceRangeHighCents: schema.fixoEstimates.priceRangeHighCents,
+      shareToken: schema.fixoEstimates.shareToken,
+      validDays: schema.fixoEstimates.validDays,
+      expiresAt: schema.fixoEstimates.expiresAt,
+      notes: schema.fixoEstimates.notes,
+      createdAt: schema.fixoEstimates.createdAt,
+    })
+    .from(schema.fixoEstimates)
+    .where(eq(schema.fixoEstimates.sessionId, sessionId))
+    .orderBy(desc(schema.fixoEstimates.createdAt))
+    .limit(1);
+  const estimateSnapshot: unknown = latestEstimate ?? null;
+
   // Re-attach evidence to messages so the summarizer sees photos and codes
   const attachedMedia = await prependSessionEvidence(
     messages,
@@ -105,6 +128,7 @@ complete.post("/:id/complete", async (c) => {
       result,
       vehicleSnapshot,
       mediaSnapshot,
+      estimateSnapshot,
       messageCount: messages.length,
     })
     .returning();

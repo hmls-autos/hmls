@@ -45,6 +45,26 @@ type MediaSnapshotShape = Array<{
   createdAt: string | Date;
 }>;
 
+// Mirrors the snapshot complete.ts writes from a fixo_estimates row. NULL when
+// the session never produced an estimate. Validated at render time, not the DB
+// boundary (jsonb).
+type EstimateSnapshotShape = {
+  items?: Array<{
+    name: string;
+    description?: string;
+    quantity: number;
+    unitPriceCents: number;
+    totalCents: number;
+    category: "labor" | "parts" | "fee" | "discount" | "tax";
+    tier?: "required" | "recommended" | "maintenance" | "optional";
+  }>;
+  subtotalCents?: number;
+  priceRangeLowCents?: number;
+  priceRangeHighCents?: number;
+  validDays?: number;
+  expiresAt?: string | Date;
+} | null;
+
 // GET /reports/:reportId/pdf — render PDF from a frozen report snapshot
 reports.get("/:reportId/pdf", async (c) => {
   const auth = c.get("auth");
@@ -75,6 +95,18 @@ reports.get("/:reportId/pdf", async (c) => {
   };
   const vehicle = report.vehicleSnapshot as VehicleSnapshotShape;
   const media = (report.mediaSnapshot ?? []) as MediaSnapshotShape;
+  const rawEstimate = report.estimateSnapshot as EstimateSnapshotShape;
+  // PDF expects items[] to exist; treat snapshots missing items as no-estimate.
+  const estimate = rawEstimate && rawEstimate.items && rawEstimate.items.length > 0
+    ? {
+      items: rawEstimate.items,
+      subtotalCents: rawEstimate.subtotalCents ?? 0,
+      priceRangeLowCents: rawEstimate.priceRangeLowCents ?? 0,
+      priceRangeHighCents: rawEstimate.priceRangeHighCents ?? 0,
+      validDays: rawEstimate.validDays,
+      expiresAt: rawEstimate.expiresAt,
+    }
+    : null;
 
   try {
     const pdfStream = await renderToStream(
@@ -84,6 +116,7 @@ reports.get("/:reportId/pdf", async (c) => {
         vehicle,
         media,
         result,
+        estimate,
       }),
     );
 

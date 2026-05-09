@@ -450,6 +450,7 @@ export const fixoReports = pgTable(
     result: jsonb("result").notNull(),
     vehicleSnapshot: jsonb("vehicle_snapshot"),
     mediaSnapshot: jsonb("media_snapshot").notNull().default([]),
+    estimateSnapshot: jsonb("estimate_snapshot"),
     messageCount: integer("message_count").notNull(),
     generatedAt: timestamp("generated_at", { withTimezone: true })
       .notNull()
