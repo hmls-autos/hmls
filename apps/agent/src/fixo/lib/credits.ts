@@ -1,0 +1,415 @@
+// Local DB-backed credit accounting for Fixo.
+//
+// Replaces the previous Stripe-balance round-trip path. Hot reads/writes
+// touch only user_profiles + credit_ledger. Stripe is referenced only when
+// a paid event lands (subscription renewal, top-up purchase) via webhook.
+//
+// Two buckets per user:
+//   - monthly: granted on subscription period (Plus = 2000, Pro = 6000) or
+//     rolling 30-day window (Free = 200). Resets on each grant — unused
+//     expires.
+//   - topup: bought via one-time Stripe Checkout. Never expires.
+// Consumption deducts monthly first, falls through to topup. The DB has
+// CHECK constraints preventing either bucket from going negative.
+
+import { eq, sql } from "drizzle-orm";
+import { db, schema } from "../../db/client.ts";
+
+const { userProfiles, creditLedger } = schema;
+
+// --- Pricing ---
+
+/**
+ * Credit cost per input action. Audio/video are charged per 30-second
+ * block, rounded up (a 31s clip = 2 blocks).
+ *
+ * Calibration:
+ *   - photo (30) is the baseline. Real Gemini 2.5 Flash cost ~ $0.0002/photo.
+ *   - text/obd (10) is light: a single short-context turn.
+ *   - audio (40 / 30s) reflects spectrogram preprocessing + acoustic
+ *     reasoning overhead on top of raw token cost.
+ *   - video (80 / 30s) reflects frame extraction + temporal reasoning
+ *     (~3-4x photo per real cost).
+ *   - report (100) is the priciest single action: long-context
+ *     summarization + PDF generation.
+ *
+ * Free tier (200/mo) covers ~1 full diagnostic. Plus tier (2000/mo)
+ * covers ~8-10 full diagnostics. Heavy users top up.
+ */
+export const CREDIT_COSTS = {
+  text: 10,
+  obd: 10,
+  photo: 30,
+  audio: 40, // per 30s
+  video: 80, // per 30s
+  report: 100,
+} as const;
+
+export type InputKind = keyof typeof CREDIT_COSTS;
+
+/**
+ * Compute the credit cost for a given action. Audio/video round up to the
+ * next 30-second block; everything else is flat.
+ */
+export function calculateCost(
+  kind: InputKind,
+  durationSeconds?: number,
+): number {
+  if (kind === "audio" || kind === "video") {
+    const blocks = Math.max(1, Math.ceil((durationSeconds ?? 30) / 30));
+    return blocks * CREDIT_COSTS[kind];
+  }
+  return CREDIT_COSTS[kind];
+}
+
+// --- Grant amounts ---
+
+/**
+ * Monthly grant per tier. Pro (6000) is a forward-compatible placeholder
+ * — when Stripe Pro Product launches, this value may be tuned. No code
+ * change required; webhook resolves tier via tierFromPriceId.
+ */
+export const MONTHLY_GRANT = {
+  free: 200,
+  plus: 2000,
+  pro: 6000,
+} as const;
+
+export type Tier = keyof typeof MONTHLY_GRANT;
+
+// --- Top-up rate ---
+
+/**
+ * Top-up rate: a flat $1 buys 100 credits, same per-credit price as the
+ * Plus monthly grant ($19.90 / 2000cr ≈ $0.01/cr). No volume discount —
+ * flat pricing is easier to communicate and keeps Plus's value prop as
+ * "auto-renew + don't think about it" rather than a discount.
+ *
+ * Stored as cents-per-credit because it lines up with Stripe's
+ * unit_amount (cents) and avoids floating-point math in the hot path.
+ */
+export const TOPUP_CENTS_PER_CREDIT = 1;
+
+/** UI preset amounts (dollars). Modal renders these as quick buttons; a
+ * custom input handles arbitrary amounts. Server caps the dollars range
+ * for abuse prevention. */
+export const SUGGESTED_TOPUPS_USD = [5, 20, 50] as const;
+
+/** Min/max dollar amount accepted by the topup endpoint. Cap is purely a
+ * safety guard against fat-finger / abuse — raise or remove if you want
+ * to support enterprise top-ups. */
+export const TOPUP_MIN_USD = 1;
+export const TOPUP_MAX_USD = 200;
+
+/** Convert a dollar amount to credits at the flat rate. Integer math. */
+export function creditsForUsd(dollars: number): number {
+  return Math.floor((dollars * 100) / TOPUP_CENTS_PER_CREDIT);
+}
+
+/** Free users get a fresh grant if their period_start is older than this. */
+const FREE_REFRESH_INTERVAL_MS = 30 * 24 * 60 * 60 * 1000;
+
+// --- Read ---
+
+export interface CreditBalance {
+  monthly: number;
+  topup: number;
+  total: number;
+}
+
+/**
+ * Read the user's current balance. Lazily refreshes the free-tier monthly
+ * grant if the rolling 30-day window has elapsed (no-op for Plus/Pro).
+ */
+export async function getBalance(userId: string): Promise<CreditBalance> {
+  await ensureFreshMonthlyGrant(userId);
+  const [profile] = await db
+    .select({
+      monthly: userProfiles.creditsMonthlyRemaining,
+      topup: userProfiles.creditsTopupRemaining,
+    })
+    .from(userProfiles)
+    .where(eq(userProfiles.id, userId))
+    .limit(1);
+  const m = profile?.monthly ?? 0;
+  const t = profile?.topup ?? 0;
+  return { monthly: m, topup: t, total: m + t };
+}
+
+// --- Consume ---
+
+export class InsufficientCreditsError extends Error {
+  override readonly name = "InsufficientCreditsError";
+  constructor(
+    public readonly balance: number,
+    public readonly required: number,
+  ) {
+    super(`Insufficient credits: have ${balance}, need ${required}`);
+  }
+}
+
+/**
+ * Atomically deduct `cost` credits. Spends the monthly bucket first, then
+ * falls through to topup. Records one ledger row per bucket touched.
+ *
+ * Throws InsufficientCreditsError if combined balance < cost. The DB
+ * CHECK constraints are a defense-in-depth backstop.
+ */
+export async function consumeCredits(opts: {
+  userId: string;
+  cost: number;
+  sessionId?: number | null;
+  inputType?: InputKind | null;
+  metadata?: Record<string, unknown>;
+}): Promise<{
+  fromMonthly: number;
+  fromTopup: number;
+  balanceAfter: CreditBalance;
+}> {
+  return await db.transaction(async (tx) => {
+    const [profile] = await tx
+      .select({
+        monthly: userProfiles.creditsMonthlyRemaining,
+        topup: userProfiles.creditsTopupRemaining,
+      })
+      .from(userProfiles)
+      .where(eq(userProfiles.id, opts.userId))
+      .for("update")
+      .limit(1);
+
+    if (!profile) {
+      throw new Error(
+        `consumeCredits: user_profile ${opts.userId} not found`,
+      );
+    }
+
+    const total = profile.monthly + profile.topup;
+    if (total < opts.cost) {
+      throw new InsufficientCreditsError(total, opts.cost);
+    }
+
+    const fromMonthly = Math.min(profile.monthly, opts.cost);
+    const fromTopup = opts.cost - fromMonthly;
+
+    await tx
+      .update(userProfiles)
+      .set({
+        creditsMonthlyRemaining: profile.monthly - fromMonthly,
+        creditsTopupRemaining: profile.topup - fromTopup,
+      })
+      .where(eq(userProfiles.id, opts.userId));
+
+    const rows: typeof creditLedger.$inferInsert[] = [];
+    if (fromMonthly > 0) {
+      rows.push({
+        userId: opts.userId,
+        delta: -fromMonthly,
+        bucket: "monthly",
+        reason: "consumption",
+        sessionId: opts.sessionId ?? null,
+        inputType: opts.inputType ?? null,
+        metadata: opts.metadata ?? null,
+      });
+    }
+    if (fromTopup > 0) {
+      rows.push({
+        userId: opts.userId,
+        delta: -fromTopup,
+        bucket: "topup",
+        reason: "consumption",
+        sessionId: opts.sessionId ?? null,
+        inputType: opts.inputType ?? null,
+        metadata: opts.metadata ?? null,
+      });
+    }
+    if (rows.length > 0) {
+      await tx.insert(creditLedger).values(rows);
+    }
+
+    return {
+      fromMonthly,
+      fromTopup,
+      balanceAfter: {
+        monthly: profile.monthly - fromMonthly,
+        topup: profile.topup - fromTopup,
+        total: total - opts.cost,
+      },
+    };
+  });
+}
+
+// --- Grants ---
+
+/**
+ * Grant the monthly bucket. RESETS unused credits — this is the expiry
+ * mechanism. Used by both subscription renewals (via Stripe webhook) and
+ * Free monthly refreshes (lazy on read or future cron).
+ *
+ * Idempotency:
+ *   - subscription_grant: keyed on `stripeEvent` via the credit_ledger
+ *     UNIQUE index. Stripe retries the same event.id — UNIQUE blocks dupes.
+ *   - free_monthly_grant: no Stripe event, so we lock the user_profiles
+ *     row and re-check `monthlyGrantPeriodStart` inside the tx. Two
+ *     concurrent lazy refreshes can both pass the outer 30-day check; the
+ *     inner re-check ensures only one wins. Without this, a spend landing
+ *     between the two grants gets refunded by the second's overwrite.
+ */
+export async function grantMonthly(opts: {
+  userId: string;
+  amount: number;
+  reason: "subscription_grant" | "free_monthly_grant";
+  stripeEvent?: string;
+  metadata?: Record<string, unknown>;
+}): Promise<{ granted: boolean }> {
+  return await db.transaction(async (tx) => {
+    if (opts.stripeEvent) {
+      const [existing] = await tx
+        .select({ id: creditLedger.id })
+        .from(creditLedger)
+        .where(eq(creditLedger.stripeEvent, opts.stripeEvent))
+        .limit(1);
+      if (existing) return { granted: false };
+    }
+
+    // Lock the row and re-check period for free grants. Plus/Pro grants
+    // are protected by the stripeEvent UNIQUE index so the re-check is
+    // a no-op for them, but locking is cheap and serializes against
+    // concurrent consumeCredits.
+    const [current] = await tx
+      .select({ periodStart: userProfiles.monthlyGrantPeriodStart })
+      .from(userProfiles)
+      .where(eq(userProfiles.id, opts.userId))
+      .for("update")
+      .limit(1);
+
+    if (!current) {
+      // user_profiles row vanished between caller and tx start (deleted
+      // user). Skip silently.
+      return { granted: false };
+    }
+
+    if (opts.reason === "free_monthly_grant") {
+      const since = current.periodStart?.getTime() ?? 0;
+      if (Date.now() - since < FREE_REFRESH_INTERVAL_MS) {
+        // Another concurrent caller already granted this period. Skip.
+        return { granted: false };
+      }
+    }
+
+    await tx
+      .update(userProfiles)
+      .set({
+        creditsMonthlyRemaining: opts.amount,
+        monthlyGrantPeriodStart: new Date(),
+      })
+      .where(eq(userProfiles.id, opts.userId));
+    await tx.insert(creditLedger).values({
+      userId: opts.userId,
+      delta: opts.amount,
+      bucket: "monthly",
+      reason: opts.reason,
+      stripeEvent: opts.stripeEvent ?? null,
+      metadata: opts.metadata ?? null,
+    });
+    return { granted: true };
+  });
+}
+
+/**
+ * Add to the top-up bucket. Idempotent on stripeEvent. Top-up credits are
+ * additive (do not reset existing balance) and never expire.
+ */
+export async function grantTopup(opts: {
+  userId: string;
+  amount: number;
+  stripeEvent: string;
+  metadata?: Record<string, unknown>;
+}): Promise<{ granted: boolean }> {
+  return await db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({ id: creditLedger.id })
+      .from(creditLedger)
+      .where(eq(creditLedger.stripeEvent, opts.stripeEvent))
+      .limit(1);
+    if (existing) return { granted: false };
+    await tx
+      .update(userProfiles)
+      .set({
+        creditsTopupRemaining: sql`${userProfiles.creditsTopupRemaining} + ${opts.amount}`,
+      })
+      .where(eq(userProfiles.id, opts.userId));
+    await tx.insert(creditLedger).values({
+      userId: opts.userId,
+      delta: opts.amount,
+      bucket: "topup",
+      reason: "topup_purchase",
+      stripeEvent: opts.stripeEvent,
+      metadata: opts.metadata ?? null,
+    });
+    return { granted: true };
+  });
+}
+
+/**
+ * Refund credits previously consumed (e.g. when an LLM call charged but
+ * then failed). Adds the refund to the topup bucket so it doesn't expire
+ * with the next monthly grant — the user paid for it (or earned it via
+ * Free grant) and a failure on our side shouldn't cost them.
+ *
+ * Writes a positive-delta ledger row with reason='refund'. Idempotency
+ * is the caller's responsibility — pass an idempotency key in metadata
+ * if you need it (we don't UNIQUE it because refunds are rare).
+ */
+export async function refundCredits(opts: {
+  userId: string;
+  amount: number;
+  sessionId?: number | null;
+  reason?: string;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  if (opts.amount <= 0) return;
+  await db.transaction(async (tx) => {
+    await tx
+      .update(userProfiles)
+      .set({
+        creditsTopupRemaining: sql`${userProfiles.creditsTopupRemaining} + ${opts.amount}`,
+      })
+      .where(eq(userProfiles.id, opts.userId));
+    await tx.insert(creditLedger).values({
+      userId: opts.userId,
+      delta: opts.amount,
+      bucket: "topup",
+      reason: "refund",
+      sessionId: opts.sessionId ?? null,
+      metadata: { ...opts.metadata, originalReason: opts.reason ?? null },
+    });
+  });
+}
+
+/**
+ * If the user is on the free tier and their monthly grant is older than
+ * the refresh window, top up to MONTHLY_GRANT.free. No-op for Plus/Pro
+ * users (they're refreshed by Stripe `invoice.payment_succeeded` webhook).
+ *
+ * Called from getBalance() and from the credits middleware before any
+ * consumption check, so a free user who hasn't logged in for a month gets
+ * their grant on next request.
+ */
+export async function ensureFreshMonthlyGrant(userId: string): Promise<void> {
+  const [profile] = await db
+    .select({
+      tier: userProfiles.tier,
+      periodStart: userProfiles.monthlyGrantPeriodStart,
+    })
+    .from(userProfiles)
+    .where(eq(userProfiles.id, userId))
+    .limit(1);
+  if (!profile || profile.tier !== "free") return;
+  const since = profile.periodStart?.getTime() ?? 0;
+  if (Date.now() - since < FREE_REFRESH_INTERVAL_MS) return;
+  await grantMonthly({
+    userId,
+    amount: MONTHLY_GRANT.free,
+    reason: "free_monthly_grant",
+  });
+}
