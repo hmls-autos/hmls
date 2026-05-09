@@ -1,9 +1,8 @@
 import { Hono } from "hono";
 import { db, schema } from "@hmls/agent/db";
 import { eq } from "drizzle-orm";
-import { type InputType, uploadMedia } from "@hmls/agent";
-import { processCredits } from "../../middleware/fixo/credits.ts";
-import { requireMediaTier } from "../../middleware/fixo/tier.ts";
+import { type InputKind, uploadMedia } from "@hmls/agent";
+import { chargeForInput } from "../../middleware/fixo/credits.ts";
 import type { AuthContext } from "../../middleware/fixo/auth.ts";
 
 type Variables = { auth: AuthContext };
@@ -80,26 +79,20 @@ input.post("/:id/input", async (c) => {
     return c.json({ error: "Session not found" }, 404);
   }
 
-  // Check free tier limits for SaaS users (non-legacy)
-  if (!auth.customerId) {
-    const tierBlock = requireMediaTier(auth);
-    if (tierBlock) return tierBlock;
+  // Charge credits for this input. Legacy HMLS customers (auth.customerId
+  // set) and DEV_MODE auto-bypass inside chargeForInput. Charge BEFORE
+  // persisting the media so a 402 user doesn't fill up storage with
+  // rejected uploads.
+  const charge = await chargeForInput({
+    auth,
+    kind: type as InputKind,
+    sessionId,
+    durationSeconds,
+  });
+  if (charge instanceof Response) {
+    return charge;
   }
-
-  // Check and deduct credits (only for legacy customers with Stripe)
-  let creditCharged = 0;
-  if (auth.stripeCustomerId && auth.customerId) {
-    const creditResult = await processCredits(
-      auth.stripeCustomerId,
-      type as InputType,
-      sessionId,
-      durationSeconds,
-    );
-    if (creditResult instanceof Response) {
-      return creditResult;
-    }
-    creditCharged = creditResult.charged;
-  }
+  const creditCharged = charge.charged;
 
   // Bump session credit counter.
   await db
