@@ -62,23 +62,94 @@ export const stripe = new Proxy({} as Stripe, {
   },
 });
 
-// --- Tier resolution (single extension point) ---
+// --- Tier resolution via Stripe Price lookup_key ---
 
 /**
- * Resolve a Stripe Price ID to our internal tier. Returns null for
- * unknown price IDs (e.g. legacy / removed prices) — caller should treat
- * as "no tier change".
+ * Map of internal tier name → Stripe Price `lookup_key`. The lookup_key is
+ * a stable, human-readable handle Stripe lets you set on a Price object
+ * (Dashboard or API). Using lookup_keys instead of raw Price IDs means:
  *
- * **Adding Pro is a config change, not a code change:** create a Pro
- * Product + recurring Price in Stripe Dashboard, set `STRIPE_PRO_PRICE_ID`
- * env var, done. No deploy.
+ *  - Pricing changes don't require a deploy. Old Price archived → new
+ *    Price gets the same lookup_key (Stripe enforces uniqueness via
+ *    `transfer_lookup_key: true`). Code resolves the new Price
+ *    automatically.
+ *  - Same code works in test + live (separate Stripe accounts can each
+ *    have a Price with the same lookup_key).
+ *  - One less env var to forget setting.
+ *
+ * Adding Pro is a Stripe Dashboard change only: create the Product,
+ * create a recurring Price, set its lookup_key to `fixo_pro_monthly`.
+ * No code change, no env var, no deploy.
  */
-export function tierFromPriceId(priceId: string): Tier | null {
-  const plus = Deno.env.get("STRIPE_PLUS_PRICE_ID");
-  const pro = Deno.env.get("STRIPE_PRO_PRICE_ID");
-  if (plus && priceId === plus) return "plus";
-  if (pro && priceId === pro) return "pro";
-  return null;
+const TIER_LOOKUP_KEYS = {
+  plus: "fixo_plus_monthly",
+  pro: "fixo_pro_monthly",
+} as const;
+
+// Two-way cache. Hit on every webhook + every checkout, miss only on
+// process startup / when Stripe rotates a Price under a lookup_key.
+const tierToPriceCache = new Map<Tier, string>();
+const priceToTierCache = new Map<string, Tier>();
+
+/**
+ * Look up the active Stripe Price ID for a given tier via its lookup_key.
+ * Throws if the lookup_key has no active Price (i.e. you forgot to set
+ * one up in Stripe — fail-fast at checkout creation rather than 30 days
+ * later when nobody can renew).
+ */
+export async function getPriceIdForTier(
+  tier: "plus" | "pro",
+): Promise<string> {
+  const cached = tierToPriceCache.get(tier);
+  if (cached) return cached;
+  const lookupKey = TIER_LOOKUP_KEYS[tier];
+  const { data } = await stripe.prices.list({
+    lookup_keys: [lookupKey],
+    active: true,
+    limit: 1,
+  });
+  const priceId = data[0]?.id;
+  if (!priceId) {
+    throw new Error(
+      `No active Stripe Price found for lookup_key="${lookupKey}". ` +
+        `Create the Price in Stripe Dashboard with this lookup_key.`,
+    );
+  }
+  tierToPriceCache.set(tier, priceId);
+  priceToTierCache.set(priceId, tier);
+  return priceId;
+}
+
+/**
+ * Resolve a Stripe Price ID to our internal tier by reading its
+ * lookup_key. Returns null for unknown price IDs (e.g. legacy / archived
+ * prices) — caller treats as "no tier change".
+ *
+ * Caches both directions so subsequent calls in the same process avoid
+ * round-trips.
+ */
+export async function tierFromPriceId(priceId: string): Promise<Tier | null> {
+  const cached = priceToTierCache.get(priceId);
+  if (cached) return cached;
+  let lookupKey: string | null = null;
+  try {
+    const price = await stripe.prices.retrieve(priceId);
+    lookupKey = price.lookup_key ?? null;
+  } catch (err) {
+    // Price was deleted / inaccessible. Treat as unknown.
+    console.warn("[stripe] tierFromPriceId: failed to retrieve price", {
+      priceId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+  if (!lookupKey) return null;
+  const matchedTier = (Object.entries(TIER_LOOKUP_KEYS) as [Tier, string][])
+    .find(([, k]) => k === lookupKey)?.[0];
+  if (!matchedTier || matchedTier === "free") return null;
+  priceToTierCache.set(priceId, matchedTier);
+  tierToPriceCache.set(matchedTier, priceId);
+  return matchedTier;
 }
 
 // --- Customer lookup / provisioning ---
@@ -130,10 +201,9 @@ export async function createCheckoutSession(
   cancelUrl: string,
 ): Promise<string> {
   const stripeCustomerId = await ensureStripeCustomer(userId, email);
-  const priceId = Deno.env.get("STRIPE_PLUS_PRICE_ID");
-  if (!priceId) {
-    throw new Error("STRIPE_PLUS_PRICE_ID is required");
-  }
+  // Resolves the active Plus Price via lookup_key — see TIER_LOOKUP_KEYS.
+  // No env var needed; pricing changes flow through Stripe Dashboard.
+  const priceId = await getPriceIdForTier("plus");
   const session = await stripe.checkout.sessions.create({
     customer: stripeCustomerId,
     mode: "subscription",
@@ -248,11 +318,17 @@ function subscriptionIdFromInvoice(invoice: Stripe.Invoice): string | null {
  * Resolve the tier for a subscription by reading its first line item's
  * price ID. Subscriptions can technically have multiple items but Fixo
  * subscriptions always have one (Plus or Pro).
+ *
+ * Async because tierFromPriceId calls Stripe to read the Price's
+ * lookup_key. Result is cached per process so repeated subscription
+ * events for the same Price are O(1).
  */
-function tierFromSubscription(sub: Stripe.Subscription): Tier | null {
+async function tierFromSubscription(
+  sub: Stripe.Subscription,
+): Promise<Tier | null> {
   const priceId = sub.items.data[0]?.price?.id;
   if (!priceId) return null;
-  return tierFromPriceId(priceId);
+  return await tierFromPriceId(priceId);
 }
 
 /**
@@ -301,7 +377,7 @@ export async function handleSubscriptionWebhook(
     case "customer.subscription.updated": {
       const sub = event.data.object as Stripe.Subscription;
       const active = sub.status === "active" || sub.status === "trialing";
-      const resolvedTier = tierFromSubscription(sub);
+      const resolvedTier = await tierFromSubscription(sub);
       const newTier: Tier = active && resolvedTier ? resolvedTier : "free";
       await db
         .update(userProfiles)
