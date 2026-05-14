@@ -689,6 +689,41 @@ export const fixoEstimates = pgTable(
   ],
 );
 
+// Channel attribution + funnel telemetry for fixo推广 (CEO plan 2026-05-14).
+// Powers D5 kill criteria SQL queries (per-channel CTR, channel → paid
+// conversion). Distinct from fixo_message_events (which is credit-billing
+// per-AI-call). event_name + channel are free-form text, not enums — the
+// fixo推广 wedge may switch over the next 90 days, and we want to add new
+// channels (e.g. tiktok_creator_X) or events (e.g. quote_verifier_view)
+// without a migration each time.
+export const funnelEvents = pgTable(
+  "fixo_funnel_events",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    eventName: text("event_name").notNull(),
+    channel: text("channel").notNull(),
+    channelDetail: text("channel_detail"),
+    userId: uuid("user_id").references(() => userProfiles.id, {
+      onDelete: "set null",
+    }),
+    sessionId: integer("session_id").references(() => fixoSessions.id, {
+      onDelete: "set null",
+    }),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("idx_fixo_funnel_channel_event").on(
+      table.channel,
+      table.eventName,
+      table.createdAt,
+    ),
+    index("idx_fixo_funnel_user").on(table.userId, table.createdAt),
+  ],
+);
+
 // Fixo types
 export type UserProfile = typeof userProfiles.$inferSelect;
 export type NewUserProfile = typeof userProfiles.$inferInsert;
@@ -712,3 +747,5 @@ export type FixoReport = typeof fixoReports.$inferSelect;
 export type NewFixoReport = typeof fixoReports.$inferInsert;
 export type FixoMessageEvent = typeof fixoMessageEvents.$inferSelect;
 export type NewFixoMessageEvent = typeof fixoMessageEvents.$inferInsert;
+export type FunnelEvent = typeof funnelEvents.$inferSelect;
+export type NewFunnelEvent = typeof funnelEvents.$inferInsert;
