@@ -27,6 +27,7 @@
     "db:push": "deno run -A --node-modules-dir=auto npm:drizzle-kit push",
     "db:studio": "deno run -A --node-modules-dir=auto npm:drizzle-kit studio",
     "db:scrape-olp": "deno run --env=../../.env.local --allow-net --allow-env --allow-read src/scripts/scrape-olp.ts",
-    "db:seed-providers": "deno run --env=../../.env.local --allow-net --allow-env --allow-read src/scripts/seed-providers.ts"
+    "db:seed-providers": "deno run --env=../../.env.local --allow-net --allow-env --allow-read src/scripts/seed-providers.ts",
+    "kill-criteria:check": "deno run --env=../../.env.local --allow-net --allow-env --allow-read src/scripts/check-kill-criteria.ts"
   }
 }

@@ -64,6 +64,18 @@ export { notifyOrderStatusChange, notifyPaymentFailed } from "./lib/notification
 // Funnel telemetry (channel attribution for fixo推广 plan)
 export { type FunnelEventInput, insertFunnelEvent, recordFunnelEvent } from "./lib/funnel.ts";
 
+// Kill-criteria signals (Lane A S6 — D5 kill criteria from CEO plan)
+export {
+  type ChannelClick,
+  computeKillSignals,
+  type KillCriteriaSignals,
+  renderKillSignalsForSlack,
+  type SeoPageView,
+} from "./lib/kill-criteria.ts";
+
+// Slack webhook helper (used by kill-criteria check + future ops alerts)
+export { postSlackMessage, type SlackMessageOptions } from "./lib/slack.ts";
+
 // PDF components (for gateway rendering)
 export { EstimatePdf } from "./hmls/pdf/EstimatePdf.tsx";
 export { DiagnosticReportPdf } from "./fixo/pdf/fixo-report.tsx";
