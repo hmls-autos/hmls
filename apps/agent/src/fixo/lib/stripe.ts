@@ -19,6 +19,7 @@
 import Stripe from "stripe";
 import { and, desc, eq, lt, or, sql } from "drizzle-orm";
 import { db, schema } from "../../db/client.ts";
+import { recordFunnelEvent } from "../../lib/funnel.ts";
 import {
   creditsForUsd,
   grantMonthly,
@@ -520,6 +521,23 @@ export async function handleSubscriptionWebhook(
           session_id: session.id,
           payment_intent: session.payment_intent,
           dollars: meta.dollars,
+        },
+      });
+      // Funnel: record paid_top_up so the推广 plan's D5 kill criteria
+      // queries can compute per-channel conversion. We don't know the
+      // origin channel here (Stripe doesn't carry our UTM); attribution
+      // happens at query time by joining to the user's most recent
+      // fixo_funnel_events entry with a non-direct channel within a
+      // 30-day window.
+      await recordFunnelEvent({
+        eventName: "paid_top_up",
+        channel: "direct",
+        userId,
+        metadata: {
+          stripe_event: event.id,
+          stripe_session: session.id,
+          credits,
+          dollars: meta.dollars ?? null,
         },
       });
       break;
