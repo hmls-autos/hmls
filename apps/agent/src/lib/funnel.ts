@@ -55,21 +55,45 @@ export interface FunnelEventInput {
 }
 
 /**
- * Record a funnel event. Never throws — failures are logged but the
- * originating request continues. Idempotency is intentionally NOT enforced
- * (we want every click counted; analytical deduplication happens at query
- * time via DISTINCT on (user_id, event_name, time-bucket) when needed).
+ * Insert a funnel event. THROWS on DB failure — use this when the
+ * funnel write IS the operation (e.g., the public POST /funnel/track
+ * beacon, where the client needs to know whether to retry).
+ *
+ * For backend insert points where the funnel write is a side effect of
+ * a more important request (Stripe webhook, chat turn), use
+ * `recordFunnelEvent` instead — it logs and swallows errors so the
+ * originating request continues uninterrupted.
+ *
+ * Idempotency is intentionally NOT enforced here. Analytical
+ * deduplication happens at query time via DISTINCT on (user_id,
+ * event_name, time-bucket) when needed. Call sites that need
+ * idempotency (e.g., Stripe webhook retries) gate the call themselves
+ * with their own dedup key.
+ */
+export async function insertFunnelEvent(input: FunnelEventInput): Promise<void> {
+  await db.insert(schema.funnelEvents).values({
+    eventName: input.eventName,
+    channel: input.channel,
+    channelDetail: input.channelDetail ?? null,
+    userId: input.userId ?? null,
+    sessionId: input.sessionId ?? null,
+    metadata: input.metadata ?? null,
+  });
+}
+
+/**
+ * Record a funnel event from a backend insert point. Never throws —
+ * failures are logged but the originating request continues. Use this
+ * inside Stripe webhooks, chat handlers, or any other path where the
+ * funnel write is a side effect that must never fail the parent
+ * request.
+ *
+ * If the funnel write IS the operation (public beacon endpoint), use
+ * `insertFunnelEvent` instead — it surfaces errors to the client.
  */
 export async function recordFunnelEvent(input: FunnelEventInput): Promise<void> {
   try {
-    await db.insert(schema.funnelEvents).values({
-      eventName: input.eventName,
-      channel: input.channel,
-      channelDetail: input.channelDetail ?? null,
-      userId: input.userId ?? null,
-      sessionId: input.sessionId ?? null,
-      metadata: input.metadata ?? null,
-    });
+    await insertFunnelEvent(input);
   } catch (err) {
     logger.error("funnel event insert failed", {
       eventName: input.eventName,

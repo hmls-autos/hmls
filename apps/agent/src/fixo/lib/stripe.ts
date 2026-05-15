@@ -513,7 +513,7 @@ export async function handleSubscriptionWebhook(
         );
         break;
       }
-      await grantTopup({
+      const grantResult = await grantTopup({
         userId,
         amount: credits,
         stripeEvent: event.id,
@@ -529,17 +529,25 @@ export async function handleSubscriptionWebhook(
       // happens at query time by joining to the user's most recent
       // fixo_funnel_events entry with a non-direct channel within a
       // 30-day window.
-      await recordFunnelEvent({
-        eventName: "paid_top_up",
-        channel: "direct",
-        userId,
-        metadata: {
-          stripe_event: event.id,
-          stripe_session: session.id,
-          credits,
-          dollars: meta.dollars ?? null,
-        },
-      });
+      //
+      // Idempotency: only fire on the first delivery of this stripe
+      // event. grantTopup returns {granted: false} for retries/replays
+      // (creditLedger UNIQUE on stripeEvent). Without this guard,
+      // Stripe's at-least-once delivery + Dashboard replays would
+      // overcount paid conversions.
+      if (grantResult.granted) {
+        await recordFunnelEvent({
+          eventName: "paid_top_up",
+          channel: "direct",
+          userId,
+          metadata: {
+            stripe_event: event.id,
+            stripe_session: session.id,
+            credits,
+            dollars: meta.dollars ?? null,
+          },
+        });
+      }
       break;
     }
     case "checkout.session.async_payment_failed": {

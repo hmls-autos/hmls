@@ -1,22 +1,23 @@
 // Public funnel-event beacon endpoint for fixo推广 channel attribution.
 //
-// Called by:
-//   - /obd/[code] SEO landing pages (client-side fetch on page mount)
-//   - HMLS rejection emails (redirect through this endpoint, then 302
-//     onward to fixo.ink, so we capture the click before the user arrives)
-//   - TikTok creator deep links (UTM params → POST → redirect)
+// Today: POST /track only. Callers fetch from the browser (SEO landing
+// pages fire a fetch() on mount; TikTok bio links land on fixo.ink which
+// fires fetch() during page render). GET-redirect handlers (for email
+// CTAs that want to capture the click before redirecting to fixo.ink)
+// are NOT implemented yet — Lane D will add `GET /track?event=...&to=...`
+// when the HMLS rejection email integration ships.
 //
-// Public on purpose — no auth required because SEO and email-CTA hits
-// happen before sign-in. The endpoint validates the event_name and
-// channel are sane (whitelist), rejects oversized metadata, and ignores
-// any user_id the client supplies (server-side auth context wins if
-// present; otherwise userId stays null and gets back-filled later by
-// joining on the most recent fingerprint or device cookie).
+// Public on purpose — no auth required because SEO hits happen before
+// sign-in. The endpoint validates event_name and channel against a
+// strict regex (lowercase alphanumeric + underscore), caps metadata at
+// 4KB, and ignores any user_id the client supplies (server-side auth
+// context wins; otherwise userId stays null and gets back-filled later
+// by joining on the most recent fingerprint or device cookie).
 
 import { Hono } from "hono";
 import { z } from "zod";
 import { getLogger } from "@logtape/logtape";
-import { recordFunnelEvent } from "@hmls/agent";
+import { insertFunnelEvent } from "@hmls/agent";
 import type { AuthContext } from "../../middleware/fixo/auth.ts";
 import { authenticateRequest } from "../../middleware/fixo/auth.ts";
 
@@ -72,14 +73,31 @@ funnel.post("/track", async (c) => {
     );
   }
 
-  await recordFunnelEvent({
-    eventName: parsed.data.event_name,
-    channel: parsed.data.channel,
-    channelDetail: parsed.data.channel_detail,
-    userId,
-    sessionId: parsed.data.session_id,
-    metadata: parsed.data.metadata,
-  });
+  // Strict mode: /funnel/track exists to write the event. Surface DB
+  // failures (connection pool exhausted, stale FK, etc.) so the client
+  // can decide to retry. recordFunnelEvent's swallowed-error mode is
+  // for backend insert points where the funnel write is a side effect
+  // of a more important request — not the case here.
+  try {
+    await insertFunnelEvent({
+      eventName: parsed.data.event_name,
+      channel: parsed.data.channel,
+      channelDetail: parsed.data.channel_detail,
+      userId,
+      sessionId: parsed.data.session_id,
+      metadata: parsed.data.metadata,
+    });
+  } catch (err) {
+    logger.error("funnel event persist failed", {
+      eventName: parsed.data.event_name,
+      channel: parsed.data.channel,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return c.json(
+      { error: "Failed to record event", code: "funnel_persist_failed" },
+      502,
+    );
+  }
 
   return c.json({ recorded: true }, 202);
 });
