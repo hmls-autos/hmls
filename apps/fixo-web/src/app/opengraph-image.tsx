@@ -154,7 +154,7 @@ export default async function Image() {
         }}
       >
         <div style={{ display: "flex" }}>FREE TO START · NO CREDIT CARD</div>
-        <div style={{ display: "flex", color: "#3b82f6" }}>fixo.hmls.autos</div>
+        <div style={{ display: "flex", color: "#3b82f6" }}>fixo.ink</div>
       </div>
     </div>,
     {

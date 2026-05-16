@@ -1,6 +1,5 @@
 import type { MetadataRoute } from "next";
-
-const SITE_URL = "https://fixo.hmls.autos";
+import { SITE_URL } from "@/lib/seo-config";
 
 export default function robots(): MetadataRoute.Robots {
   return {

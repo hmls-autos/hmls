@@ -1,10 +1,10 @@
 import type { MetadataRoute } from "next";
-
-const SITE_URL = "https://fixo.hmls.autos";
+import { OBD_SEO_CODES_LIST } from "@/data/obd-seed";
+import { SITE_URL } from "@/lib/seo-config";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
-  return [
+  const staticPages: MetadataRoute.Sitemap = [
     {
       url: SITE_URL,
       lastModified: now,
@@ -24,4 +24,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.5,
     },
   ];
+
+  // SEO landing pages — one entry per OBD-II code in OBD_SEO_CODES_LIST.
+  // High priority because these are the search-volume targets for the
+  // fixo Speed Wedge推广 plan.
+  const obdPages: MetadataRoute.Sitemap = OBD_SEO_CODES_LIST.map((entry) => ({
+    url: `${SITE_URL}/obd/${entry.code}`,
+    lastModified: now,
+    changeFrequency: "monthly",
+    priority: 0.8,
+  }));
+
+  return [...staticPages, ...obdPages];
 }
