@@ -1,6 +1,5 @@
+import { SITE_URL } from "@/lib/seo-config";
 import { LANDING_FAQS } from "./faqs";
-
-const SITE_URL = "https://fixo.hmls.autos";
 
 /**
  * Public social profiles for the Knowledge Graph `sameAs` claim. Add a URL

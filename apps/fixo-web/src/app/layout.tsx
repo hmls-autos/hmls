@@ -4,6 +4,7 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/components/AuthProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
+import { SITE_URL } from "@/lib/seo-config";
 import { cn } from "@/lib/utils";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
@@ -14,8 +15,6 @@ const inter = Inter({
 });
 
 export const dynamic = "force-dynamic";
-
-const SITE_URL = "https://fixo.hmls.autos";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
