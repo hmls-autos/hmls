@@ -7,15 +7,13 @@
 // per-page crawl frequency and helps Google understand the relationship
 // between the codes (they're a topical cluster, not orphaned pages).
 //
-// Layout: simple card grid. Each card answers "what is this code" + "can
-// I drive" in two lines — the same answer the panic-user is searching
-// for, surfaced before they have to click.
-//
-// SSG: same force-static + dynamicParams=false posture as /obd/[code].
-// The hub re-renders only when the OBD_SEO_CODES_LIST changes.
+// The card grid + search input is delegated to the ObdCodeSearch
+// client component so user input filters the visible cards without a
+// page reload. The page itself stays SSG (server-side render at build).
 
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ObdCodeSearch } from "@/components/seo/ObdCodeSearch";
 import { OBD_SEO_CODES_LIST } from "@/data/obd-seed";
 import { SITE_URL } from "@/lib/seo-config";
 
@@ -35,21 +33,6 @@ export const metadata: Metadata = {
   },
 };
 
-const TIER_LABEL: Record<string, { label: string; classes: string }> = {
-  ok_to_drive: {
-    label: "Safe to drive",
-    classes: "text-emerald-700 dark:text-emerald-400",
-  },
-  drive_cautiously: {
-    label: "Drive cautiously",
-    classes: "text-amber-700 dark:text-amber-400",
-  },
-  do_not_drive: {
-    label: "Don't drive",
-    classes: "text-red-700 dark:text-red-400",
-  },
-};
-
 export default function ObdHubPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 sm:py-14">
@@ -64,41 +47,14 @@ export default function ObdHubPage() {
         </p>
       </header>
 
-      <ul className="grid gap-4 sm:grid-cols-2">
-        {OBD_SEO_CODES_LIST.map((entry) => {
-          const tier = TIER_LABEL[entry.driveSafetyTier];
-          return (
-            <li key={entry.code}>
-              <Link
-                href={`/obd/${entry.code}`}
-                className="block rounded-lg border border-border bg-surface p-5 transition hover:border-border-hover hover:bg-surface-hover"
-              >
-                <p className="m-0 font-mono text-xs uppercase tracking-widest text-text-secondary">
-                  {entry.code} · {entry.system}
-                </p>
-                <h2 className="mt-1 mb-2 text-lg font-semibold leading-snug text-text">
-                  {entry.headline}
-                </h2>
-                <p
-                  className={`m-0 text-xs font-semibold uppercase tracking-wider ${tier.classes}`}
-                >
-                  {tier.label}
-                </p>
-                <p className="mt-2 mb-0 text-sm leading-relaxed text-text-secondary">
-                  {entry.oneLineVerdict}
-                </p>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+      <ObdCodeSearch codes={OBD_SEO_CODES_LIST} />
 
       <section className="mt-10 rounded-lg bg-surface-alt p-6 text-center">
         <h2 className="m-0 mb-2 text-lg font-semibold text-text">
-          Don't see your code?
+          Don&apos;t see your code?
         </h2>
         <p className="m-0 mb-4 text-sm text-text-secondary">
-          Fixo's AI knows every standard OBD-II code — paste yours into the
+          Fixo&apos;s AI knows every standard OBD-II code — paste yours into the
           diagnostic chat and get a car-specific answer in 90 seconds.
         </p>
         <Link
