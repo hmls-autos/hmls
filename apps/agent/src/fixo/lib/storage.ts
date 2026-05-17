@@ -44,6 +44,54 @@ export async function uploadMedia(
   return { key };
 }
 
+export interface SignedUpload {
+  key: string;
+  signedUrl: string;
+  token: string;
+}
+
+/**
+ * Mint a one-shot URL the client can PUT a raw file body to directly,
+ * bypassing the gateway entirely. The gateway issues this URL only after
+ * auth + credit checks; /complete finalizes the fixoMedia row once the
+ * upload lands. Default Supabase TTL (~2h) is fine — the client starts the
+ * PUT immediately and the bucket-side cap (file_size_limit) is the real
+ * abuse ceiling.
+ */
+export async function createSignedUploadUrl(
+  key: string,
+): Promise<SignedUpload> {
+  const { data, error } = await getStorageClient().storage
+    .from(BUCKET)
+    .createSignedUploadUrl(key);
+  if (error || !data) {
+    throw new Error(
+      `[storage] createSignedUploadUrl failed for ${key}: ${error?.message ?? "no data"}`,
+    );
+  }
+  return { key, signedUrl: data.signedUrl, token: data.token };
+}
+
+/**
+ * Look up an uploaded object's actual size + content type. /complete uses
+ * this to verify the client wrote what they said they would in /init —
+ * guards against a client lying about size to underpay credits, or against
+ * a silently-failed upload being marked complete. Returns null when the
+ * object is missing (upload never finished, or a fabricated mediaId).
+ */
+export async function getObjectInfo(
+  key: string,
+): Promise<{ size: number; contentType: string } | null> {
+  const { data, error } = await getStorageClient().storage
+    .from(BUCKET)
+    .info(key);
+  if (error || !data) return null;
+  return {
+    size: data.size ?? 0,
+    contentType: data.contentType ?? "application/octet-stream",
+  };
+}
+
 export async function getMedia(key: string): Promise<Uint8Array> {
   const { data, error } = await getStorageClient().storage
     .from(BUCKET)

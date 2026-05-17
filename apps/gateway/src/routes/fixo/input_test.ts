@@ -145,3 +145,131 @@ Deno.test("input: rejects obd with empty code", async () => {
   const body = await res.json();
   assertEquals(body.error, "OBD code is required");
 });
+
+// /input/init validation surface — these all fail before DB/storage so
+// they can run without infra. Happy-path init+complete is covered by the
+// fixo smoke test.
+
+Deno.test("input/init: rejects non-photo type (audio)", async () => {
+  const app = buildTestApp(PLUS_AUTH);
+  const res = await app.request("/sessions/1/input/init", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      type: "audio",
+      filename: "x.webm",
+      contentType: "audio/webm",
+      sizeBytes: 1024,
+    }),
+  });
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(
+    body.error,
+    "Invalid input type — /input/init only accepts photo",
+  );
+});
+
+Deno.test("input/init: rejects non-photo type (video)", async () => {
+  const app = buildTestApp(PLUS_AUTH);
+  const res = await app.request("/sessions/1/input/init", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      type: "video",
+      filename: "x.mp4",
+      contentType: "video/mp4",
+      sizeBytes: 1024,
+    }),
+  });
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(
+    body.error,
+    "Invalid input type — /input/init only accepts photo",
+  );
+});
+
+Deno.test("input/init: rejects missing filename", async () => {
+  const app = buildTestApp(PLUS_AUTH);
+  const res = await app.request("/sessions/1/input/init", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      type: "photo",
+      contentType: "image/jpeg",
+      sizeBytes: 1024,
+    }),
+  });
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(body.error, "filename is required");
+});
+
+Deno.test("input/init: rejects mismatched contentType", async () => {
+  const app = buildTestApp(PLUS_AUTH);
+  const res = await app.request("/sessions/1/input/init", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      type: "photo",
+      filename: "x.jpg",
+      contentType: "audio/webm",
+      sizeBytes: 1024,
+    }),
+  });
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(
+    body.error,
+    "contentType audio/webm does not match input type photo",
+  );
+});
+
+Deno.test("input/init: rejects non-integer sizeBytes", async () => {
+  const app = buildTestApp(PLUS_AUTH);
+  const res = await app.request("/sessions/1/input/init", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      type: "photo",
+      filename: "x.jpg",
+      contentType: "image/jpeg",
+      sizeBytes: 1024.5,
+    }),
+  });
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(
+    body.error,
+    "sizeBytes is required and must be a positive integer",
+  );
+});
+
+Deno.test("input/init: rejects oversize media (413)", async () => {
+  const app = buildTestApp(PLUS_AUTH);
+  const res = await app.request("/sessions/1/input/init", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      type: "photo",
+      filename: "x.jpg",
+      contentType: "image/jpeg",
+      sizeBytes: 100 * 1024 * 1024,
+    }),
+  });
+  assertEquals(res.status, 413);
+  const body = await res.json();
+  assertEquals(body.error, "Media content too large");
+});
+
+Deno.test("input/complete: rejects invalid media id", async () => {
+  const app = buildTestApp(PLUS_AUTH);
+  const res = await app.request("/sessions/1/input/abc/complete", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(body.error, "Invalid media id");
+});

@@ -17,12 +17,17 @@ interface UseMediaUploadOptions {
   onUpgradeRequired?: (message: string) => void;
 }
 
-async function uploadMedia(
+// Matches MAX_RAW_BYTES on the gateway. Kept in sync manually because
+// crossing the Deno↔Bun runtime boundary for a single int isn't worth the
+// shared-package overhead.
+const MAX_RAW_BYTES = 37 * 1024 * 1024;
+
+async function postJson(
   accessToken: string,
-  sessionId: number,
+  url: string,
   body: Record<string, unknown>,
 ): Promise<Response> {
-  return fetch(`${AGENT_URL}/sessions/${sessionId}/input`, {
+  return fetch(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -32,10 +37,10 @@ async function uploadMedia(
   });
 }
 
-/** When a media upload is blocked by credits (402 insufficient_credits,
- * or the legacy 403 upgrade_required / limit_reached during rollout),
- * route the error message to the upgrade/top-up modal. Returns true if
- * handled so the caller skips the generic failure toast. */
+/** When an upload is blocked by credits (402 insufficient_credits, or the
+ * legacy 403 upgrade_required / limit_reached during rollout), route the
+ * error message to the upgrade/top-up modal. Returns true if handled so
+ * the caller skips the generic failure toast. */
 async function tryHandleTierBlock(
   res: Response,
   onUpgradeRequired: ((message: string) => void) | undefined,
@@ -61,6 +66,72 @@ async function tryHandleTierBlock(
   return false;
 }
 
+interface DirectUploadInput {
+  accessToken: string;
+  sessionId: number;
+  blob: Blob;
+  filename: string;
+  contentType: string;
+  type: "photo";
+}
+
+/** Three-step direct-to-Supabase upload: /input/init → PUT to signed URL →
+ * /input/:mediaId/complete. Returns { ok: true } on success, or { ok: false,
+ * tierBlocked } when the failure was already surfaced via the upgrade modal
+ * so the caller knows to skip its generic toast. */
+async function uploadDirect(
+  input: DirectUploadInput,
+  onUpgradeRequired: ((message: string) => void) | undefined,
+): Promise<{ ok: true } | { ok: false; tierBlocked: boolean }> {
+  const initRes = await postJson(
+    input.accessToken,
+    `${AGENT_URL}/sessions/${input.sessionId}/input/init`,
+    {
+      type: input.type,
+      filename: input.filename,
+      contentType: input.contentType,
+      sizeBytes: input.blob.size,
+    },
+  );
+  if (!initRes.ok) {
+    const tierBlocked = await tryHandleTierBlock(initRes, onUpgradeRequired);
+    return { ok: false, tierBlocked };
+  }
+  const init = (await initRes.json()) as { mediaId: number; uploadUrl: string };
+
+  // PUT raw bytes directly to Supabase — gateway never sees the body.
+  const putRes = await fetch(init.uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": input.contentType },
+    body: input.blob,
+  });
+  if (!putRes.ok) {
+    return { ok: false, tierBlocked: false };
+  }
+
+  const completeRes = await postJson(
+    input.accessToken,
+    `${AGENT_URL}/sessions/${input.sessionId}/input/${init.mediaId}/complete`,
+    {},
+  );
+  if (!completeRes.ok) {
+    return { ok: false, tierBlocked: false };
+  }
+  return { ok: true };
+}
+
+async function uploadAudioInline(
+  accessToken: string,
+  sessionId: number,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  return postJson(
+    accessToken,
+    `${AGENT_URL}/sessions/${sessionId}/input`,
+    body,
+  );
+}
+
 export function useMediaUpload({
   accessToken,
   sessionIdRef,
@@ -82,7 +153,10 @@ export function useMediaUpload({
         return;
       }
 
-      const res = await uploadMedia(accessToken, sessionId, {
+      // Audio stays on the inline endpoint: it's small (a 60s webm is ~1MB)
+      // and the client-generated spectrogram PNG ships in the same request
+      // so the agent gets both rows as one atomic write.
+      const res = await uploadAudioInline(accessToken, sessionId, {
         type: "audio",
         content: recording.base64,
         spectrogramBase64: recording.spectrogramBase64,
@@ -109,79 +183,100 @@ export function useMediaUpload({
     async (dataUrl: string) => {
       if (!accessToken) return;
 
-      const base64 = dataUrl.split(",")[1];
       const sessionId = await ensureSession(accessToken, sessionIdRef, userId);
       if (!sessionId) {
         sendMessage("[Photo upload failed]");
         return;
       }
 
-      const res = await uploadMedia(accessToken, sessionId, {
-        type: "photo",
-        content: base64,
-        filename: `photo-${Date.now()}.jpg`,
-        contentType: "image/jpeg",
-      });
+      // dataUrl → Blob via fetch() is the cheapest cross-browser path and
+      // avoids the ~33% base64 inflation of the old JSON-body approach.
+      const blob = await (await fetch(dataUrl)).blob();
+      const result = await uploadDirect(
+        {
+          accessToken,
+          sessionId,
+          blob,
+          filename: `photo-${Date.now()}.jpg`,
+          contentType: blob.type || "image/jpeg",
+          type: "photo",
+        },
+        onUpgradeRequired,
+      );
 
-      if (res.ok) {
-        // Server hydrates the photo into the next /task turn as a FileUIPart.
-        // imageUrl is preserved so MessageBubble can render the local
-        // preview without waiting on a round-trip to the signed URL.
+      if (result.ok) {
+        // imageUrl preserves the local preview so MessageBubble can render
+        // immediately without waiting on a signed read URL round-trip.
         sendMessage("Analyze this photo for vehicle diagnostics.", {
           imageUrl: dataUrl,
         });
         return;
       }
-      if (await tryHandleTierBlock(res, onUpgradeRequired)) return;
+      if (result.tierBlocked) return;
       sendMessage("[Photo upload failed — please try again]");
     },
     [accessToken, sessionIdRef, sendMessage, userId, onUpgradeRequired],
   );
 
   const handleFilePick = useCallback(
-    (file: File) => {
+    async (file: File) => {
       if (!accessToken) return;
 
-      if (file.size > 10 * 1024 * 1024) {
-        sendMessage("[Photo too large — maximum 10MB]");
+      // Reject obvious non-images, but accept files with empty mime type —
+      // macOS HEIC/AVIF photos picked through `accept="image/*"` often
+      // arrive with `file.type === ""`, and the OS-level filter already
+      // gated against non-images. Empty type falls back to image/jpeg in
+      // the upload metadata; the model handles the actual decoding.
+      if (file.type && !file.type.startsWith("image/")) {
+        sendMessage("[Unsupported file type — pick an image]");
+        return;
+      }
+      if (file.size > MAX_RAW_BYTES) {
+        const mb = Math.floor(MAX_RAW_BYTES / (1024 * 1024));
+        sendMessage(`[Photo too large — maximum ${mb}MB]`);
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const dataUrl = reader.result as string;
-        const base64 = dataUrl.split(",")[1];
+      const sessionId = await ensureSession(accessToken, sessionIdRef, userId);
+      if (!sessionId) {
+        sendMessage("[Photo upload failed]");
+        return;
+      }
 
-        const sessionId = await ensureSession(
+      const previewUrl = await readAsDataUrl(file);
+
+      const result = await uploadDirect(
+        {
           accessToken,
-          sessionIdRef,
-          userId,
-        );
-        if (!sessionId) {
-          sendMessage("[Photo upload failed]");
-          return;
-        }
-
-        const res = await uploadMedia(accessToken, sessionId, {
-          type: "photo",
-          content: base64,
+          sessionId,
+          blob: file,
           filename: file.name,
           contentType: file.type || "image/jpeg",
-        });
+          type: "photo",
+        },
+        onUpgradeRequired,
+      );
 
-        if (res.ok) {
-          sendMessage("Analyze this photo for vehicle diagnostics.", {
-            imageUrl: dataUrl,
-          });
-          return;
-        }
-        if (await tryHandleTierBlock(res, onUpgradeRequired)) return;
-        sendMessage("[Photo upload failed — please try again]");
-      };
-      reader.readAsDataURL(file);
+      if (result.ok) {
+        sendMessage("Analyze this photo for vehicle diagnostics.", {
+          imageUrl: previewUrl,
+        });
+        return;
+      }
+      if (result.tierBlocked) return;
+      sendMessage("[Photo upload failed — please try again]");
     },
     [accessToken, sessionIdRef, sendMessage, userId, onUpgradeRequired],
   );
 
   return { handleAudioSend, handlePhotoCapture, handleFilePick };
+}
+
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 }

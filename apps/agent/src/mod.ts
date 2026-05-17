@@ -52,8 +52,11 @@ export {
 } from "./fixo/lib/stripe.ts";
 export {
   createSignedReadUrl,
+  createSignedUploadUrl,
   deleteMedia,
   getMedia,
+  getObjectInfo,
+  type SignedUpload,
   uploadMedia,
   type UploadResult,
 } from "./fixo/lib/storage.ts";
