@@ -19,7 +19,11 @@
 import { ImageResponse } from "next/og";
 import { OBD_SEO_CODES, OBD_SEO_CODES_LIST } from "@/data/obd-seed";
 
-export const runtime = "edge";
+// No `runtime = "edge"` here: Next.js 16 disallows the edge runtime when a
+// route also exports `generateImageMetadata` (or `generateStaticParams`),
+// since those run at build time. Default Node.js runtime supports both
+// ImageResponse and the build-time metadata enumeration. The root
+// opengraph-image.tsx keeps edge runtime — it has no generateImageMetadata.
 export const alt = "Fixo OBD-II code explainer";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
