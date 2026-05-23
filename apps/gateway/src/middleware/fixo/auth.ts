@@ -1,11 +1,12 @@
 import { verifyToken } from "../../lib/supabase.ts";
 import { db, schema } from "@hmls/agent/db";
+import { grantMonthly, MONTHLY_GRANT, type Tier } from "@hmls/agent";
 import { eq } from "drizzle-orm";
 
 export interface AuthContext {
   userId: string; // Supabase auth.users.id
   email: string;
-  tier: "free" | "plus";
+  tier: Tier;
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
   // Legacy support for existing HMLS customers
@@ -62,6 +63,18 @@ export async function authenticateRequest(
     .limit(1);
 
   if (customer) {
+    // Legacy customers stay outside the credit system (chargeForInput
+    // bypasses them via auth.customerId !== undefined), but fixo_sessions,
+    // fixo_reports, etc. all FK their user_id → user_profiles.id. Without
+    // a profile row, the very first POST /sessions 500s on FK violation,
+    // which the chat client masks as "sessionId is required" on the next
+    // /task call. Provision an empty profile so those FKs resolve; do NOT
+    // grantMonthly — we don't want legacy customers metered.
+    await db
+      .insert(schema.userProfiles)
+      .values({ id: authUser.id })
+      .onConflictDoNothing();
+
     return {
       userId: authUser.id,
       email: authUser.email,
@@ -72,11 +85,20 @@ export async function authenticateRequest(
     };
   }
 
-  // Auto-create user_profiles for new SaaS users
+  // Auto-create user_profiles for new SaaS users + grant initial free
+  // credits. grantMonthly writes both the balance and the ledger row, so
+  // the new user shows up in /balance and the audit trail starts from
+  // creation.
   const [newProfile] = await db
     .insert(schema.userProfiles)
     .values({ id: authUser.id })
     .returning();
+  await grantMonthly({
+    userId: newProfile.id,
+    amount: MONTHLY_GRANT.free,
+    reason: "free_monthly_grant",
+    metadata: { source: "auto_provision_on_first_login" },
+  });
 
   return {
     userId: newProfile.id,

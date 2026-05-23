@@ -1,6 +1,9 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
+  bigserial,
   boolean,
+  check,
   customType,
   date,
   index,
@@ -13,6 +16,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -36,6 +40,8 @@ export const shops = pgTable("shops", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
+export const userRoleEnum = pgEnum("user_role", ["customer", "admin", "mechanic"]);
+
 export const customers = pgTable("customers", {
   id: serial("id").primaryKey(),
   shopId: uuid("shop_id").references(() => shops.id),
@@ -46,7 +52,7 @@ export const customers = pgTable("customers", {
   vehicleInfo: jsonb("vehicle_info").$type<VehicleInfo | null>(),
   stripeCustomerId: varchar("stripe_customer_id", { length: 100 }),
   authUserId: varchar("auth_user_id", { length: 255 }).unique(),
-  role: varchar("role", { length: 20 }).notNull().default("customer"),
+  role: userRoleEnum("role").notNull().default("customer"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -56,11 +62,7 @@ export const providers = pgTable("providers", {
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }),
   phone: varchar("phone", { length: 20 }),
-  specialties: jsonb("specialties").$type<string[] | null>(),
   isActive: boolean("is_active").notNull().default(true),
-  serviceRadiusMiles: integer("service_radius_miles").default(30),
-  homeBaseLat: numeric("home_base_lat", { precision: 10, scale: 7 }),
-  homeBaseLng: numeric("home_base_lng", { precision: 10, scale: 7 }),
   timezone: varchar("timezone", { length: 50 }).notNull().default("America/Los_Angeles"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
     .notNull(),
@@ -95,6 +97,14 @@ export const pricingConfig = pgTable("pricing_config", {
 
 // --- OrderItem type (unified item model) ---
 
+/**
+ * Repair urgency tier — surfaces severity in the estimate so customers can
+ * triage. Required = safety-critical / vehicle inoperable; recommended =
+ * fix soon, not urgent; maintenance = routine service interval; optional =
+ * cosmetic / nice-to-have.
+ */
+export type ItemTier = "required" | "recommended" | "maintenance" | "optional";
+
 export interface OrderItem {
   id: string;
   category: "labor" | "parts" | "fee" | "discount";
@@ -106,6 +116,11 @@ export interface OrderItem {
   laborHours?: number;
   partNumber?: string;
   taxable: boolean;
+  // Soft reference back to OLP labor reference data (for analytics + future
+  // bulk-reprice). No FK constraint — OLP rows are immutable history once
+  // priced into an order, but the id lets us aggregate "most-ordered jobs".
+  olpLaborTimeId?: number;
+  tier?: ItemTier;
 }
 
 // --- jsonb shapes (declared once so Drizzle $inferSelect knows them) ---
@@ -128,11 +143,33 @@ export interface OrderStatusHistoryEntry {
 
 // --- Orders (central entity — single source of truth for lifecycle) ---
 
+export const orderStatusEnum = pgEnum("order_status", [
+  "draft",
+  "estimated",
+  "revised",
+  "approved",
+  "declined",
+  "scheduled",
+  "in_progress",
+  "completed",
+  "cancelled",
+]);
+
+export const paymentMethodEnum = pgEnum("payment_method", [
+  "cash",
+  "card",
+  "check",
+  "venmo",
+  "zelle",
+  "stripe",
+  "other",
+]);
+
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   shopId: uuid("shop_id").references(() => shops.id),
-  customerId: integer("customer_id").references(() => customers.id),
-  status: varchar("status", { length: 30 }).notNull().default("draft"),
+  customerId: integer("customer_id").references(() => customers.id).notNull(),
+  status: orderStatusEnum("status").notNull().default("draft"),
   statusHistory: jsonb("status_history").$type<OrderStatusHistoryEntry[]>().notNull().default(
     [],
   ),
@@ -144,12 +181,14 @@ export const orders = pgTable("orders", {
   vehicleInfo: jsonb("vehicle_info").$type<VehicleInfo | null>(),
   validDays: integer("valid_days").default(30),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
-  shareToken: varchar("share_token", { length: 64 }),
+  shareToken: varchar("share_token", { length: 64 }).unique(),
   revisionNumber: integer("revision_number").notNull().default(1),
-  capturedAmountCents: integer("captured_amount_cents"),
-  // Payment tracking (manual). Set when admin records payment on a completed job.
+  // Actual amount paid by the customer (renamed from capturedAmountCents
+  // — Stripe "captured" semantics no longer apply now that payment is
+  // recorded manually). Falls back to subtotalCents in revenue rollups.
+  paidAmountCents: integer("paid_amount_cents"),
   paidAt: timestamp("paid_at", { withTimezone: true }),
-  paymentMethod: varchar("payment_method", { length: 30 }),
+  paymentMethod: paymentMethodEnum("payment_method"),
   paymentReference: varchar("payment_reference", { length: 255 }),
   adminNotes: text("admin_notes"),
   cancellationReason: text("cancellation_reason"),
@@ -167,28 +206,55 @@ export const orders = pgTable("orders", {
   locationLat: numeric("location_lat", { precision: 10, scale: 7 }),
   locationLng: numeric("location_lng", { precision: 10, scale: 7 }),
   accessInstructions: text("access_instructions"),
-  symptomDescription: text("symptom_description"),
-  photoUrls: jsonb("photo_urls").$type<string[] | null>(),
-  customerNotes: text("customer_notes"),
   blockedRange: tstzrange("blocked_range"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
     .notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
     .notNull(),
 }, (table) => ({
-  shareTokenIdx: index("orders_share_token_idx").on(table.shareToken),
   statusIdx: index("orders_status_idx").on(table.status),
   customerIdx: index("orders_customer_id_idx").on(table.customerId),
   scheduledAtIdx: index("orders_scheduled_at_idx").on(table.scheduledAt),
   providerIdx: index("orders_provider_id_idx").on(table.providerId),
 }));
 
+// --- Order Intake (customer-submitted intake; 1:1 child of orders) ---
+//
+// A row exists iff the customer actually submitted intake (e.g. via the
+// AI chat flow). Walk-in admin orders and routine-maintenance reorders
+// have NO row. Use a LEFT JOIN when reading; null intake means
+// "shop-created order, no customer-side narrative".
+
+export const orderIntake = pgTable("order_intake", {
+  orderId: integer("order_id")
+    .primaryKey()
+    .references(() => orders.id, { onDelete: "cascade" }),
+  symptomDescription: text("symptom_description"),
+  photoUrls: jsonb("photo_urls").$type<string[] | null>(),
+  customerNotes: text("customer_notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 // --- Order Events (audit log) ---
+
+export const orderEventTypeEnum = pgEnum("order_event_type", [
+  "status_change",
+  "items_edited",
+  "schedule_attached",
+  "provider_assigned",
+  "payment_recorded",
+  "note_added",
+  // Historical: no current code path writes this. Kept in the enum so the
+  // 13 legacy dev rows survive the cast in migration 0018. The admin/portal
+  // event-feed default branch formats unrecognized types automatically.
+  "contact_edited",
+]);
 
 export const orderEvents = pgTable("order_events", {
   id: uuid("id").primaryKey().defaultRandom(),
   orderId: integer("order_id").references(() => orders.id, { onDelete: "cascade" }).notNull(),
-  eventType: varchar("event_type", { length: 50 }).notNull(),
+  eventType: orderEventTypeEnum("event_type").notNull(),
   fromStatus: varchar("from_status", { length: 50 }),
   toStatus: varchar("to_status", { length: 50 }),
   actor: varchar("actor", { length: 100 }),
@@ -231,7 +297,11 @@ export const olpLaborTimes = pgTable("olp_labor_times", {
 
 // --- Fixo tables ---
 
-export const userTierEnum = pgEnum("user_tier", ["free", "plus"]);
+// 'pro' is a future-ready extension point — no Stripe Product/Price exists
+// yet. Webhook tier resolution (tierFromPriceId) returns null for unknown
+// price IDs, so adding Pro is a Dashboard + env var change with no code/
+// migration work.
+export const userTierEnum = pgEnum("user_tier", ["free", "plus", "pro"]);
 
 export const userProfiles = pgTable(
   "user_profiles",
@@ -240,11 +310,143 @@ export const userProfiles = pgTable(
     stripeCustomerId: text("stripe_customer_id"),
     stripeSubscriptionId: text("stripe_subscription_id"),
     tier: userTierEnum("tier").default("free").notNull(),
+    // Credits granted on subscription period (Plus = 2000, Pro = 6000) or
+    // free monthly refresh (Free = 100). Reset to the new grant on each
+    // period boundary (overwrite, not add — this is the expiry mechanism).
+    creditsMonthlyRemaining: integer("credits_monthly_remaining")
+      .notNull()
+      .default(0),
+    // Credits bought via one-time top-up. Never expire. Consumed only
+    // after monthly bucket is empty.
+    creditsTopupRemaining: integer("credits_topup_remaining")
+      .notNull()
+      .default(0),
+    // When the current monthly grant period started. Used by the lazy
+    // refresh path to decide if a new free grant is due (rolling 30-day
+    // window). Plus users get refreshed by Stripe `invoice.payment_succeeded`
+    // — we still update this field for symmetry.
+    monthlyGrantPeriodStart: timestamp("monthly_grant_period_start", {
+      withTimezone: true,
+    }),
+    // Out-of-order webhook protection. Subscription.* handlers only apply
+    // an event if its event.created is newer than this column. Stripe
+    // doesn't guarantee delivery order; without this guard, a stale
+    // `subscription.deleted` arriving after a fresh `subscription.created`
+    // would flip the user back to free.
+    lastSubscriptionEventAt: timestamp("last_subscription_event_at", {
+      withTimezone: true,
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
   },
-  (table) => [index("idx_user_profiles_stripe").on(table.stripeCustomerId)],
+  (table) => [
+    index("idx_user_profiles_stripe").on(table.stripeCustomerId),
+    check(
+      "user_profiles_credits_monthly_nonneg",
+      sql`${table.creditsMonthlyRemaining} >= 0`,
+    ),
+    check(
+      "user_profiles_credits_topup_nonneg",
+      sql`${table.creditsTopupRemaining} >= 0`,
+    ),
+  ],
+);
+
+// --- Credit ledger (audit trail) ---
+
+export const creditLedger = pgTable(
+  "credit_ledger",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    // Positive = grant or top-up purchase or refund. Negative = consumption.
+    delta: integer("delta").notNull(),
+    // Which bucket this row touched: 'monthly' or 'topup'.
+    bucket: text("bucket").notNull(),
+    // 'subscription_grant' | 'free_monthly_grant' | 'topup_purchase' |
+    // 'consumption' | 'refund' | 'admin_adjustment' | 'legacy_migration'
+    reason: text("reason").notNull(),
+    // For 'consumption' rows: the session that triggered the charge.
+    sessionId: integer("session_id").references(() => fixoSessions.id, {
+      onDelete: "set null",
+    }),
+    // For 'consumption' rows: which kind of input (text/photo/audio/...).
+    inputType: text("input_type"),
+    // For Stripe-driven rows: the event.id, used as an idempotency key
+    // against retries. Unique partial index enforces this.
+    stripeEvent: text("stripe_event"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("idx_credit_ledger_user").on(
+      table.userId,
+      table.createdAt.desc(),
+    ),
+    uniqueIndex("idx_credit_ledger_stripe_event")
+      .on(table.stripeEvent)
+      .where(sql`stripe_event IS NOT NULL`),
+    check(
+      "credit_ledger_bucket_valid",
+      sql`${table.bucket} IN ('monthly', 'topup')`,
+    ),
+  ],
+);
+
+// --- Promo codes (bonus credits, non-monetary) ---
+//
+// Stripe coupons can only do $/% discounts. Codes that grant credits
+// without a monetary discount (influencer codes, beta rewards, referrals)
+// live here.
+
+export const promoCodes = pgTable(
+  "promo_codes",
+  {
+    code: text("code").primaryKey(),
+    credits: integer("credits").notNull(),
+    maxUses: integer("max_uses").notNull().default(1),
+    uses: integer("uses").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check("promo_codes_credits_positive", sql`${table.credits} > 0`),
+    check("promo_codes_max_uses_positive", sql`${table.maxUses} > 0`),
+    check("promo_codes_uses_nonneg", sql`${table.uses} >= 0`),
+    check("promo_codes_uses_le_max", sql`${table.uses} <= ${table.maxUses}`),
+  ],
+);
+
+export const promoRedemptions = pgTable(
+  "promo_redemptions",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    code: text("code")
+      .notNull()
+      .references(() => promoCodes.code, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    redeemedAt: timestamp("redeemed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    ledgerId: bigint("ledger_id", { mode: "number" }),
+  },
+  (table) => [
+    unique("promo_redemptions_code_user_unique").on(table.code, table.userId),
+    index("idx_promo_redemptions_user").on(
+      table.userId,
+      table.redeemedAt.desc(),
+    ),
+  ],
 );
 
 export const vehicles = pgTable(
@@ -286,6 +488,63 @@ export const obdSourceEnum = pgEnum("fixo_obd_source", [
   "ocr",
 ]);
 
+// --- DiagnosticState (Fixo agent's structured 8-step diagnostic memory) ---
+//
+// Persisted on fixo_sessions.diagnostic_state (jsonb). Mutated by the
+// `update_diagnostic_state` agent tool, read each turn by buildAgentContext
+// and surfaced in the system prompt so the agent has durable diagnostic
+// memory that survives context-window summarization.
+//
+// The shape mirrors the 8 shop diagnostic stages:
+//   1 intake → 2 visual → 3 dtcs → 4 (reproduce — captured as testsDone) →
+//   5 candidateSystems → 6 testsPlanned/testsDone → 7 rootCause →
+//   8 estimateTiers
+//
+// Every field is optional; an empty `{}` means "fresh diagnostic, start at intake".
+
+export interface DiagnosticIntake {
+  primarySymptom?: string;
+  /** When the symptom appears: continuous, situational (cold/hot/load/...), etc. */
+  onset?: "always" | "intermittent" | "cold" | "hot" | "load" | "speed-dep";
+  /** Free-form frequency description, e.g. "every cold start, gone after 30s". */
+  frequency?: string;
+  warningLights?: string[];
+  recentRepairs?: string;
+  drivable?: "safe" | "limp" | "no-start";
+}
+
+export interface DiagnosticCandidateSystem {
+  /** "fuel", "ignition", "vacuum", "cooling", "brakes", etc. */
+  system: string;
+  /** 0=ruled-out, 1=low, 2=medium, 3=high. */
+  confidence: 0 | 1 | 2 | 3;
+  reasons: string[];
+}
+
+export interface DiagnosticTestResult {
+  test: string;
+  result: string;
+  /** ISO timestamp from the agent turn that recorded this result. */
+  recordedAt?: string;
+}
+
+export interface DiagnosticEstimateTier {
+  service: string;
+  tier: ItemTier;
+}
+
+export interface DiagnosticState {
+  intake?: DiagnosticIntake;
+  visual?: { observations: string[] };
+  dtcs?: Array<{ code: string; freezeFrame?: Record<string, unknown> }>;
+  candidateSystems?: DiagnosticCandidateSystem[];
+  testsPlanned?: string[];
+  testsDone?: DiagnosticTestResult[];
+  rootCause?: string;
+  estimateTiers?: DiagnosticEstimateTier[];
+  notes?: string;
+}
+
 export const fixoSessions = pgTable(
   "fixo_sessions",
   {
@@ -305,6 +564,10 @@ export const fixoSessions = pgTable(
       .notNull()
       .defaultNow(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
+    diagnosticState: jsonb("diagnostic_state")
+      .$type<DiagnosticState>()
+      .notNull()
+      .default({}),
   },
   (table) => [
     index("idx_fixo_sessions_customer").on(table.customerId),
@@ -327,6 +590,7 @@ export const fixoReports = pgTable(
     result: jsonb("result").notNull(),
     vehicleSnapshot: jsonb("vehicle_snapshot"),
     mediaSnapshot: jsonb("media_snapshot").notNull().default([]),
+    estimateSnapshot: jsonb("estimate_snapshot"),
     messageCount: integer("message_count").notNull(),
     generatedAt: timestamp("generated_at", { withTimezone: true })
       .notNull()
@@ -425,9 +689,50 @@ export const fixoEstimates = pgTable(
   ],
 );
 
+// Channel attribution + funnel telemetry for fixo推广 (CEO plan 2026-05-14).
+// Powers D5 kill criteria SQL queries (per-channel CTR, channel → paid
+// conversion). Distinct from fixo_message_events (which is credit-billing
+// per-AI-call). event_name + channel are free-form text, not enums — the
+// fixo推广 wedge may switch over the next 90 days, and we want to add new
+// channels (e.g. tiktok_creator_X) or events (e.g. quote_verifier_view)
+// without a migration each time.
+export const funnelEvents = pgTable(
+  "fixo_funnel_events",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    eventName: text("event_name").notNull(),
+    channel: text("channel").notNull(),
+    channelDetail: text("channel_detail"),
+    userId: uuid("user_id").references(() => userProfiles.id, {
+      onDelete: "set null",
+    }),
+    sessionId: integer("session_id").references(() => fixoSessions.id, {
+      onDelete: "set null",
+    }),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("idx_fixo_funnel_channel_event").on(
+      table.channel,
+      table.eventName,
+      table.createdAt,
+    ),
+    index("idx_fixo_funnel_user").on(table.userId, table.createdAt),
+  ],
+);
+
 // Fixo types
 export type UserProfile = typeof userProfiles.$inferSelect;
 export type NewUserProfile = typeof userProfiles.$inferInsert;
+export type CreditLedgerEntry = typeof creditLedger.$inferSelect;
+export type NewCreditLedgerEntry = typeof creditLedger.$inferInsert;
+export type PromoCode = typeof promoCodes.$inferSelect;
+export type NewPromoCode = typeof promoCodes.$inferInsert;
+export type PromoRedemption = typeof promoRedemptions.$inferSelect;
+export type NewPromoRedemption = typeof promoRedemptions.$inferInsert;
 export type Vehicle = typeof vehicles.$inferSelect;
 export type NewVehicle = typeof vehicles.$inferInsert;
 export type FixoSession = typeof fixoSessions.$inferSelect;
@@ -442,3 +747,5 @@ export type FixoReport = typeof fixoReports.$inferSelect;
 export type NewFixoReport = typeof fixoReports.$inferInsert;
 export type FixoMessageEvent = typeof fixoMessageEvents.$inferSelect;
 export type NewFixoMessageEvent = typeof fixoMessageEvents.$inferInsert;
+export type FunnelEvent = typeof funnelEvents.$inferSelect;
+export type NewFunnelEvent = typeof funnelEvents.$inferInsert;

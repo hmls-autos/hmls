@@ -11,6 +11,7 @@ import { billing, webhookHandler } from "./routes/fixo/billing.ts";
 import { reports } from "./routes/fixo/reports.ts";
 import { complete } from "./routes/fixo/complete.ts";
 import { vehicleRoutes } from "./routes/fixo/vehicles.ts";
+import { funnel } from "./routes/fixo/funnel.ts";
 
 const DEV_MODE = Deno.env.get("DEV_MODE") === "true";
 
@@ -89,6 +90,11 @@ export function createFixoApp() {
   app.use("/sessions/*", requireAuth);
   app.use("/reports/*", requireAuth);
   app.use("/billing/checkout", requireAuth);
+  app.use("/billing/topup", requireAuth);
+  app.use("/billing/balance", requireAuth);
+  app.use("/billing/history", requireAuth);
+  app.use("/billing/usage", requireAuth);
+  app.use("/billing/redeem", requireAuth);
   app.use("/billing/portal", requireAuth);
   app.use("/vehicles", requireAuth);
   app.use("/vehicles/*", requireAuth);
@@ -118,6 +124,10 @@ export function createFixoApp() {
   app.route("/vehicles", vehicleRoutes);
   app.route("/billing", billing);
   app.route("/billing/webhook", webhookHandler);
+  // /funnel/track is intentionally PUBLIC (no requireAuth) — SEO and
+  // email-CTA hits happen pre-signin. The route's own auth-aware logic
+  // attributes events to userId when an auth cookie is present.
+  app.route("/funnel", funnel);
 
   return app;
 }

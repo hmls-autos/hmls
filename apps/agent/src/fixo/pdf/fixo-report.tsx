@@ -101,6 +101,89 @@ const styles = StyleSheet.create({
     backgroundColor: "#dcfce7",
     color: "#16a34a",
   },
+  tierGroup: {
+    marginBottom: 12,
+  },
+  tierHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  tierBadge: {
+    fontSize: 9,
+    fontWeight: "bold",
+    padding: "3 8",
+    borderRadius: 3,
+    textTransform: "uppercase",
+  },
+  tierRequired: {
+    backgroundColor: "#fee2e2",
+    color: "#dc2626",
+  },
+  tierRecommended: {
+    backgroundColor: "#fef3c7",
+    color: "#d97706",
+  },
+  tierMaintenance: {
+    backgroundColor: "#e0f2fe",
+    color: "#0369a1",
+  },
+  tierOptional: {
+    backgroundColor: "#f3f4f6",
+    color: "#4b5563",
+  },
+  estimateRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  estimateName: {
+    fontSize: 10,
+    fontWeight: "bold",
+  },
+  estimateDescription: {
+    fontSize: 9,
+    color: "#6b7280",
+    marginTop: 1,
+  },
+  estimatePrice: {
+    fontSize: 10,
+    fontFamily: "Courier",
+  },
+  estimateTotalsBox: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: "#f9fafb",
+    borderRadius: 4,
+  },
+  estimateTotalsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    fontSize: 10,
+    marginBottom: 4,
+  },
+  estimateTotalsLabel: {
+    color: "#4b5563",
+  },
+  estimateRangeRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    fontSize: 11,
+    fontWeight: "bold",
+    marginTop: 4,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
+  },
+  estimateMeta: {
+    fontSize: 9,
+    color: "#6b7280",
+    marginTop: 6,
+  },
   table: {
     marginTop: 10,
   },
@@ -205,6 +288,28 @@ interface VehicleSnapshot {
   vin?: string | null;
 }
 
+type EstimateTier = "required" | "recommended" | "maintenance" | "optional";
+
+// Frozen line items at report-generation time. Mirrors fixo_estimates.items
+// (OrderItem[]) with the fields actually rendered. Discount items are negative
+// totalCents; we still render them inline so the math reads cleanly.
+export interface EstimateSnapshot {
+  items: Array<{
+    name: string;
+    description?: string;
+    quantity: number;
+    unitPriceCents: number;
+    totalCents: number;
+    category: "labor" | "parts" | "fee" | "discount" | "tax";
+    tier?: EstimateTier;
+  }>;
+  subtotalCents: number;
+  priceRangeLowCents: number;
+  priceRangeHighCents: number;
+  validDays?: number;
+  expiresAt?: string | Date;
+}
+
 // One frozen media row at report-generation time.
 // Image embedding is intentionally omitted — we'd need to re-sign storageKey at
 // render time, and v1 of the snapshot-rendered PDF only surfaces transcriptions
@@ -223,6 +328,7 @@ interface FixoReportProps {
   vehicle?: VehicleSnapshot | null;
   media: MediaSnapshotEntry[];
   result: FixoResult;
+  estimate?: EstimateSnapshot | null;
 }
 
 function formatDate(date: Date | string): string {
@@ -256,16 +362,77 @@ function getSeverityStyle(severity: string) {
   }
 }
 
+// Display order: most-urgent first so customers see required work before optional.
+// Mirrors apps/fixo-web/src/components/chat/FixoEstimateCard.tsx so the PDF and
+// chat card present the same triage shape.
+const TIER_ORDER: EstimateTier[] = [
+  "required",
+  "recommended",
+  "maintenance",
+  "optional",
+];
+
+const TIER_LABELS: Record<EstimateTier, string> = {
+  required: "Required",
+  recommended: "Recommended",
+  maintenance: "Maintenance",
+  optional: "Optional",
+};
+
+function getTierStyle(tier: EstimateTier) {
+  switch (tier) {
+    case "required":
+      return styles.tierRequired;
+    case "recommended":
+      return styles.tierRecommended;
+    case "maintenance":
+      return styles.tierMaintenance;
+    case "optional":
+      return styles.tierOptional;
+  }
+}
+
+function formatCents(cents: number): string {
+  const dollars = cents / 100;
+  const sign = dollars < 0 ? "-" : "";
+  return `${sign}$${Math.abs(dollars).toFixed(2)}`;
+}
+
+function groupItemsByTier(items: EstimateSnapshot["items"]): Array<{
+  tier: EstimateTier | "untiered";
+  items: EstimateSnapshot["items"];
+}> {
+  const buckets = new Map<EstimateTier | "untiered", EstimateSnapshot["items"]>();
+  for (const item of items) {
+    const key = item.tier ?? "untiered";
+    const existing = buckets.get(key);
+    if (existing) existing.push(item);
+    else buckets.set(key, [item]);
+  }
+  const result: Array<{ tier: EstimateTier | "untiered"; items: EstimateSnapshot["items"] }> = [];
+  for (const tier of TIER_ORDER) {
+    const bucket = buckets.get(tier);
+    if (bucket && bucket.length > 0) result.push({ tier, items: bucket });
+  }
+  const untiered = buckets.get("untiered");
+  if (untiered && untiered.length > 0) result.push({ tier: "untiered", items: untiered });
+  return result;
+}
+
 export function DiagnosticReportPdf({
   reportId,
   generatedAt,
   vehicle,
   media,
   result,
+  estimate,
 }: FixoReportProps) {
   const mediaCount = media.length;
   const transcriptions = media.filter((m) => m.transcription && m.transcription.trim().length > 0);
   const shortReportId = reportId.slice(0, 8);
+  const estimateGroups = estimate && estimate.items.length > 0
+    ? groupItemsByTier(estimate.items)
+    : [];
   return (
     <Document>
       <Page size="LETTER" style={styles.page}>
@@ -328,6 +495,56 @@ export function DiagnosticReportPdf({
                   )}
                 </View>
               ))}
+            </View>
+          </View>
+        )}
+
+        {/* Estimate (tier-grouped line items) */}
+        {estimate && estimateGroups.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Estimate</Text>
+            {estimateGroups.map((group) => (
+              <View key={group.tier} style={styles.tierGroup}>
+                {group.tier !== "untiered" && (
+                  <View style={styles.tierHeader}>
+                    <Text style={[styles.tierBadge, getTierStyle(group.tier)]}>
+                      {TIER_LABELS[group.tier]}
+                    </Text>
+                  </View>
+                )}
+                {group.items.map((item, i) => (
+                  <View key={i} style={styles.estimateRow}>
+                    <View style={{ flex: 1, paddingRight: 10 }}>
+                      <Text style={styles.estimateName}>
+                        {item.name}
+                        {item.quantity > 1 ? ` ×${item.quantity}` : ""}
+                      </Text>
+                      {item.description && (
+                        <Text style={styles.estimateDescription}>{item.description}</Text>
+                      )}
+                    </View>
+                    <Text style={styles.estimatePrice}>{formatCents(item.totalCents)}</Text>
+                  </View>
+                ))}
+              </View>
+            ))}
+            <View style={styles.estimateTotalsBox}>
+              <View style={styles.estimateTotalsRow}>
+                <Text style={styles.estimateTotalsLabel}>Subtotal</Text>
+                <Text style={styles.estimatePrice}>{formatCents(estimate.subtotalCents)}</Text>
+              </View>
+              <View style={styles.estimateRangeRow}>
+                <Text>Estimated range</Text>
+                <Text style={styles.estimatePrice}>
+                  {formatCents(estimate.priceRangeLowCents)} -{" "}
+                  {formatCents(estimate.priceRangeHighCents)}
+                </Text>
+              </View>
+              {estimate.expiresAt && (
+                <Text style={styles.estimateMeta}>
+                  Valid until {formatDate(estimate.expiresAt)}
+                </Text>
+              )}
             </View>
           </View>
         )}

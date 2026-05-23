@@ -118,3 +118,85 @@ audio paths.
 - If worse: keep spectrogram path indefinitely; document the call.
 
 **Depends on / blocked by:** Plan B merged (the codepaths are stable).
+
+---
+
+## Credit System (still deferred after Phase 11-16 follow-ups)
+
+Most originally-deferred items shipped in this PR. Remaining (still deferred):
+
+### Migrate to Stripe Entitlements (when 2nd paid tier launches)
+
+When Pro is actually live, migrate from `customer.subscription.*` events to
+`entitlements.active_entitlement_summary.updated`. Today the `tierFromPriceId` helper +
+single-paid-tier setup makes Entitlements overkill, but the SoT-on-Stripe model is the right end
+state for ≥2 paid tiers + feature flags.
+
+### Async webhook processing (when scale demands)
+
+Stripe recommends 2xx-then-queue. Today our DB tx is fast (<100ms) so synchronous handling is fine.
+Revisit if the Plus monthly renewal spike starts saturating the DB pool — then introduce a
+`stripe_events` table + worker.
+
+### Stripe SDK upgrade (20.4.1 → 22.x)
+
+Bump deno.json `stripe` dep, update `STRIPE_API_VERSION` from `2026-02-25.clover` to
+`2026-04-22.dahlia`, also update Stripe Dashboard webhook endpoint API version. Likely safe but
+needs regression check on every webhook event we handle. Single-purpose PR.
+
+### Restricted API Key (RAK) migration
+
+Stripe Dashboard → Developers → Create restricted key with: Customers (RW), Checkout Sessions (RW),
+Billing Portal Sessions (RW), Subscriptions (R), Invoices (R), Charges (R), Webhook Events (R).
+Replace `STRIPE_SECRET_KEY` env var. SDK accepts both transparently. Pure ops change.
+
+---
+
+## Fixo Quote-Verifier Mini-Product (P2)
+
+**What:** New fixo flow where a user uploads a photo of a maintenance/repair quote from a shop, and
+fixo extracts the line items via vision + returns a verdict (fair / high / very high) compared to
+local market averages.
+
+**Why:** Surfaced during /plan-ceo-review of the Speed Wedge 30-day plan (2026-05-14) as a wedge
+candidate for the case where Speed Wedge fails to validate at Week 3. Highest LTV scenario (a person
+checks every repair quote for the rest of their car-owning life). Reddit can't give local market
+averages, ChatGPT can't either. fixo can.
+
+**Pros:**
+
+- Highest LTV per user of the three wedge candidates evaluated in /office-hours
+- PDF verdict report is naturally viral (users hand it back to the shop, exposes fixo to mechanics)
+- Reuses existing fixo vision + PDF pipeline
+  ([apps/agent/src/fixo/tools/](apps/agent/src/fixo/tools))
+
+**Cons:**
+
+- Requires local market price data (labor rate × ZIP + parts markup × region). Data acquisition is
+  the actual hard problem, not the agent UX.
+- Legal: publishing per-shop prices could draw threats from local shops. Aggregate-only is safer.
+- Effort: XL — 4 weeks alone in the speed wedge plan budget couldn't ship it; needs its own runway.
+
+**Context:**
+
+- Surfaced as Approach C in
+  [/office-hours design doc 2026-05-14](~/.gstack/projects/hmls-autos-hmls/spenc-spinsirr-pedantic-kilby-a78e57-design-20260514-010011.md).
+  Rejected in that session in favor of Speed Wedge.
+- Re-surfaced in
+  [/plan-ceo-review 2026-05-14](~/.gstack/projects/hmls-autos-hmls/ceo-plans/2026-05-14-fixo-speed-wedge-30day.md)
+  as a wedge-switch target. If Speed Wedge kill criteria (Week 2 ChatGPT in ≥80% scenarios at fixo
+  quality OR Week 3 SEO 0 impressions) trigger, this is the most natural pivot.
+- Data acquisition options to evaluate when picked up:
+  - RepairPal/YourMechanic scrape (gray legal area)
+  - Crowdsource from r/MechanicAdvice answers (manual, slow)
+  - Licensed data from Mitchell 1 or Mitchell ProDemand (expensive, requires shop contract)
+  - LLM estimation from olpLaborTimes table + national mean adjusted by ZIP cost-of-living
+- Existing `tier-grouped estimate section in diagnostic report` (commit a266c21, PR #64) is the
+  closest existing primitive.
+
+**Effort:** XL (human team) → L (CC+gstack)
+
+**Priority:** P2
+
+**Depends on / blocked by:** Speed Wedge 30-day plan completing first. Pick up only if Speed Wedge
+kill criteria fire, OR if Speed Wedge succeeds but you want a second wedge to compound retention.

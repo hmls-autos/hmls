@@ -221,6 +221,16 @@ Subsequent revisions in the same chat re-call `create_order` with the captured `
 - `0010` - Layer 3 PR C: drop `bookings`, `estimates`, `quotes` tables; drop orders legacy FK
   columns (estimate_id, quote_id, booking_id, stripe_quote_id, stripe_invoice_id,
   stripe_payment_intent_id, preauth_amount_cents)
+- `0018` - Schema invariants: enums for status/event_type/payment_method/role; share_token UNIQUE;
+  provider_availability EXCLUDE no-overlap; provider_schedule_overrides UNIQUE; trigger
+  IS-DISTINCT-FROM short-circuit; drop dead
+  `providers.specialties/service_radius_miles/home_base_*`; rename `captured_amount_cents` →
+  `paid_amount_cents`
+- `0019` - Layer 4 PR A: extract `order_intake` (1:1 child of orders, PK=order_id, ON DELETE
+  CASCADE). Holds `symptom_description`, `photo_urls`, `customer_notes` — exists iff customer
+  submitted intake via chat. Walk-in / direct admin orders have NO row.
+- `0020` - Lock `orders.customer_id` to NOT NULL; backfill 8 orphan dev rows to a "Walk-in
+  (unlinked)" placeholder customer (email `walkin-unlinked@hmls.local`)
 
 ## Pre-Push CI
 
@@ -290,16 +300,17 @@ deno deploy env delete <KEY> --app hmls-api --org spinsirr
 | ----------------- | ------------------------------------ | ------------------------------------------------------------------------ |
 | Web (HMLS)        | `https://hmls.autos`                 | Deno Deploy                                                              |
 | API (main + fixo) | `https://api.fixo.hmls.autos` (fixo) | Deno Deploy (`hmls-api`)                                                 |
-| Fixo Web          | `https://fixo.hmls.autos`            | Vercel (`prj_EzagTZlxfjG6U6h3Cbdt8uWjPwdO`, scope: `spinsirrs-projects`) |
+| Fixo Web          | `https://fixo.ink`                   | Vercel (`prj_EzagTZlxfjG6U6h3Cbdt8uWjPwdO`, scope: `spinsirrs-projects`) |
 
 Both main API and Fixo API run in the same Deno Deploy app (`hmls-api`), routed by hostname.
 
 ### Cloudflare DNS (zone: `hmls.autos`)
 
-| Type  | Name       | Target                 | Proxy                 |
-| ----- | ---------- | ---------------------- | --------------------- |
-| CNAME | `fixo`     | `cname.vercel-dns.com` | DNS only (gray cloud) |
-| CNAME | `api.fixo` | `hmls-api.deno.dev`    | DNS only (gray cloud) |
+| Type  | Name       | Target              | Proxy                 |
+| ----- | ---------- | ------------------- | --------------------- |
+| CNAME | `api.fixo` | `hmls-api.deno.dev` | DNS only (gray cloud) |
+
+(`fixo.ink` is its own zone, registered to the team — not managed in this Cloudflare zone.)
 
 ### Supabase Auth (project: `ddkapmjkubklyzuciscd`)
 
@@ -309,7 +320,7 @@ Both main API and Fixo API run in the same Deno Deploy app (`hmls-api`), routed 
 - **Redirect URLs**:
   - `https://hmls.autos`
   - `http://localhost:3000`
-  - `https://fixo.hmls.autos/**`
+  - `https://fixo.ink/**`
   - `http://localhost:3001/**` (fixo local dev)
 
 ### Vercel Environment Variables (fixo-web)
@@ -346,3 +357,23 @@ vercel env add NEXT_PUBLIC_AGENT_URL --scope spinsirrs-projects  # https://api.f
   yet. BAR § 3353 compliance flow — design in the air, not implemented. Stripe auto- capture is
   dormant — needs re-implementation if a shop opts in (add payment columns back selectively, wire
   webhook handlers).
+
+## Skill routing
+
+When the user's request matches an available skill, invoke it via the Skill tool. When in doubt,
+invoke the skill.
+
+Key routing rules:
+
+- Product ideas/brainstorming → invoke /office-hours
+- Strategy/scope → invoke /plan-ceo-review
+- Architecture → invoke /plan-eng-review
+- Design system/plan review → invoke /design-consultation or /plan-design-review
+- Full review pipeline → invoke /autoplan
+- Bugs/errors → invoke /investigate
+- QA/testing site behavior → invoke /qa or /qa-only
+- Code review/diff check → invoke /review
+- Visual polish → invoke /design-review
+- Ship/deploy/PR → invoke /ship or /land-and-deploy
+- Save progress → invoke /context-save
+- Resume context → invoke /context-restore
