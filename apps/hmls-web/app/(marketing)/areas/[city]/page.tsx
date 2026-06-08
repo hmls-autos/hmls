@@ -20,8 +20,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { city: slug } = await params;
   const city = findCity(slug);
   if (!city) return { title: "Not Found" };
+  const region = REGIONS[city.region];
   const title = `Mobile Mechanic in ${city.name}, CA`;
-  const description = `On-demand mobile mechanic service in ${city.name}, California. Oil changes, brake repair, batteries, diagnostics, and pre-purchase inspections — we come to your driveway. Call ${BUSINESS.phoneDisplay}.`;
+  const description = `On-demand mobile mechanic service in ${city.name}, California. Oil changes, brake repair, batteries, diagnostics, and pre-purchase inspections — we come to your driveway. Call ${region.phoneDisplay}.`;
   return {
     title,
     description,
@@ -89,11 +90,11 @@ export default async function CityPage({ params }: Props) {
               </div>
             )}
             <a
-              href={`tel:${BUSINESS.phone}`}
+              href={`tel:${region.phone}`}
               className="flex items-center gap-2 text-red-primary hover:underline"
             >
               <Phone className="w-4 h-4" />
-              <span>{BUSINESS.phoneDisplay}</span>
+              <span>{region.phoneDisplay}</span>
             </a>
           </div>
 
@@ -105,10 +106,10 @@ export default async function CityPage({ params }: Props) {
               Get an Estimate Now
             </Link>
             <a
-              href={`tel:${BUSINESS.phone}`}
+              href={`tel:${region.phone}`}
               className="inline-flex items-center justify-center px-8 py-4 rounded-xl border border-border bg-surface text-text font-semibold hover:bg-surface-alt transition-colors"
             >
-              Call {BUSINESS.phoneDisplay}
+              Call {region.phoneDisplay}
             </a>
           </div>
         </FadeIn>

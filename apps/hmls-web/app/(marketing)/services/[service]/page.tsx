@@ -20,8 +20,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { service: slug } = await params;
   const service = findService(slug);
   if (!service) return { title: "Not Found" };
-  const title = `${service.name} — Mobile in Orange County`;
-  const description = `${service.shortName} done at your home or office in Orange County. ${service.estimatedRange}. Typical visit: ${service.typicalDuration}. Call ${BUSINESS.phoneDisplay}.`;
+  const title = `${service.name} — Mobile in Orange County & San Jose`;
+  const description = `${service.shortName} done at your home or office in Orange County and the San Jose / South Bay. ${service.estimatedRange}. Typical visit: ${service.typicalDuration}. Call ${BUSINESS.phoneDisplay}.`;
   return {
     title,
     description,
@@ -130,8 +130,8 @@ export default async function ServicePage({ params }: Props) {
             Where we offer {service.shortName.toLowerCase()}
           </h2>
           <p className="text-text-secondary mb-4">
-            All {CITIES.length} of our Orange County service areas — most visits
-            happen the same day or the next morning.
+            Across all {CITIES.length} of our Orange County &amp; San Jose
+            service areas — most visits happen the same day or the next morning.
           </p>
           <div className="flex flex-wrap gap-2 mb-12">
             {CITIES.map((c) => (

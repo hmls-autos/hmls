@@ -1,5 +1,5 @@
 import { BUSINESS, REGIONS, type Region } from "./business";
-import type { CityContent, ServiceContent } from "./seo-content";
+import { CITIES, type CityContent, type ServiceContent } from "./seo-content";
 
 /**
  * JSON-LD builders. Each returns a plain object suitable for `<JsonLd>`.
@@ -37,9 +37,11 @@ function openingHoursSpecification() {
 }
 
 function areaServedCities() {
-  return BUSINESS.serviceAreaCities.map((name) => ({
+  // All metros we serve (OC + SJ), so the home + service-page structured data
+  // reflects the full footprint, not just Orange County.
+  return CITIES.map((c) => ({
     "@type": "City",
-    name,
+    name: c.name,
     containedInPlace: { "@type": "State", name: "California" },
   }));
 }
