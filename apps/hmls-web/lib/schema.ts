@@ -1,5 +1,5 @@
-import { BUSINESS } from "./business";
-import type { CityContent, ServiceContent } from "./seo-content";
+import { BUSINESS, REGIONS, type Region } from "./business";
+import { CITIES, type CityContent, type ServiceContent } from "./seo-content";
 
 /**
  * JSON-LD builders. Each returns a plain object suitable for `<JsonLd>`.
@@ -8,22 +8,22 @@ import type { CityContent, ServiceContent } from "./seo-content";
 
 const ORG_ID = `${BUSINESS.url}#business`;
 
-function postalAddress() {
+function postalAddress(region: Region = REGIONS.oc) {
   return {
     "@type": "PostalAddress",
-    streetAddress: BUSINESS.address.street,
-    addressLocality: BUSINESS.address.city,
-    addressRegion: BUSINESS.address.region,
-    postalCode: BUSINESS.address.postalCode,
-    addressCountry: BUSINESS.address.country,
+    ...(region.address.street ? { streetAddress: region.address.street } : {}),
+    addressLocality: region.address.city,
+    addressRegion: region.address.region,
+    postalCode: region.address.postalCode,
+    addressCountry: region.address.country,
   };
 }
 
-function geoCoordinates() {
+function geoCoordinates(region: Region = REGIONS.oc) {
   return {
     "@type": "GeoCoordinates",
-    latitude: BUSINESS.geo.latitude,
-    longitude: BUSINESS.geo.longitude,
+    latitude: region.geo.latitude,
+    longitude: region.geo.longitude,
   };
 }
 
@@ -37,9 +37,11 @@ function openingHoursSpecification() {
 }
 
 function areaServedCities() {
-  return BUSINESS.serviceAreaCities.map((name) => ({
+  // All metros we serve (OC + SJ), so the home + service-page structured data
+  // reflects the full footprint, not just Orange County.
+  return CITIES.map((c) => ({
     "@type": "City",
-    name,
+    name: c.name,
     containedInPlace: { "@type": "State", name: "California" },
   }));
 }
@@ -93,6 +95,7 @@ export function autoRepairSchema() {
 
 /** Per-city LocalBusiness schema for /areas/[city] pages. */
 export function cityServiceSchema(city: CityContent) {
+  const region = REGIONS[city.region];
   const url = `${BUSINESS.url}/areas/${city.slug}`;
   return {
     "@context": "https://schema.org",
@@ -100,12 +103,12 @@ export function cityServiceSchema(city: CityContent) {
     "@id": `${url}#business`,
     name: `${BUSINESS.name} — ${city.name}`,
     url,
-    telephone: BUSINESS.phone,
+    telephone: region.phone,
     email: BUSINESS.email,
     description: `Mobile mechanic service for ${city.name}, CA — oil changes, brakes, batteries, diagnostics, and pre-purchase inspections in your driveway.`,
     parentOrganization: { "@id": ORG_ID },
-    address: postalAddress(),
-    geo: geoCoordinates(),
+    address: postalAddress(region),
+    geo: geoCoordinates(region),
     priceRange: BUSINESS.priceRange,
     areaServed: {
       "@type": "City",
@@ -113,14 +116,20 @@ export function cityServiceSchema(city: CityContent) {
       containedInPlace: { "@type": "State", name: "California" },
     },
     hasOfferCatalog: offerCatalog(),
-    sameAs: [BUSINESS.gmb.shareUrl],
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: BUSINESS.rating.value,
-      reviewCount: BUSINESS.rating.count,
-      bestRating: 5,
-      worstRating: 1,
-    },
+    // Only advertise a GMB link / rating the metro actually has. SJ has neither
+    // yet, so its pages omit both rather than borrowing OC's.
+    ...(region.gmbShareUrl ? { sameAs: [region.gmbShareUrl] } : {}),
+    ...(region.rating
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: region.rating.value,
+            reviewCount: region.rating.count,
+            bestRating: 5,
+            worstRating: 1,
+          },
+        }
+      : {}),
   };
 }
 
