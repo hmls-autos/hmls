@@ -9,9 +9,9 @@ it up cold.
 
 ### Terms page still scopes service to "Orange County, California" (P2 — founder sign-off)
 
-`apps/hmls-web/app/(marketing)/terms/page.tsx:43` legal wording under-scopes the actual service
-area now that SJ is live. Legal copy — founder decides exact wording (suggest "in California" or
-naming both metros). One line.
+`apps/hmls-web/app/(marketing)/terms/page.tsx:43` legal wording under-scopes the actual service area
+now that SJ is live. Legal copy — founder decides exact wording (suggest "in California" or naming
+both metros). One line.
 
 ### Coverage map legibility at dual-metro zoom (P3 — design call)
 
