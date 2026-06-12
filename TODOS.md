@@ -5,6 +5,22 @@ it up cold.
 
 ---
 
+## Dual-metro follow-ups (deferred from the SEO front-door PR, 2026-06-12)
+
+### Terms page still scopes service to "Orange County, California" (P2 — founder sign-off)
+
+`apps/hmls-web/app/(marketing)/terms/page.tsx:43` legal wording under-scopes the actual service area
+now that SJ is live. Legal copy — founder decides exact wording (suggest "in California" or naming
+both metros). One line.
+
+### Contact page links OC Google profile while claiming dual coverage (P2 — blocked by SJ GBP verification)
+
+`apps/hmls-web/app/(marketing)/contact/page.tsx` map embed + profile link come from `BUSINESS.gmb`
+(OC listing). When the SJ Google Business Profile passes verification, set `REGIONS.sj.gmbShareUrl`
+and make the contact links region-aware. SJ profile created 2026-06-11, verification pending.
+
+---
+
 ## Bug B — PDF report endpoint always returns 400
 
 **What:** `GET /sessions/:id/report` requires `fixoSessions.result` jsonb populated. No code writes

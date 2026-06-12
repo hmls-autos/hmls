@@ -3,6 +3,13 @@
 import type * as L from "leaflet";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
+import { REGIONS } from "@/lib/business";
+import {
+  boundsForView,
+  type MapView,
+  nearestRegion,
+  SERVICE_CITIES,
+} from "@/lib/map-cities";
 import "leaflet/dist/leaflet.css";
 
 // Leaflet components must be dynamically imported to avoid SSR issues
@@ -26,18 +33,46 @@ interface MapProps {
   className?: string;
 }
 
-// Centered on Orange County
-const CENTER: [number, number] = [33.7175, -117.8311]; // Near Irvine/Tustin
-const ZOOM = 9;
+// How long we wait for /api/geo before falling back to the overview.
+const GEO_TIMEOUT_MS = 800;
+
+/** Initial view from Vercel IP geo — "all" when unavailable or far away. */
+async function detectInitialView(): Promise<MapView> {
+  try {
+    const res = await fetch("/api/geo", {
+      signal: AbortSignal.timeout(GEO_TIMEOUT_MS),
+    });
+    if (!res.ok) return "all";
+    const { lat, lng } = (await res.json()) as {
+      lat: number | null;
+      lng: number | null;
+    };
+    if (lat == null || lng == null) return "all";
+    return nearestRegion(lat, lng) ?? "all";
+  } catch {
+    return "all";
+  }
+}
+
+const VIEW_OPTIONS: { view: MapView; label: string }[] = [
+  { view: "sj", label: REGIONS.sj.label },
+  { view: "oc", label: REGIONS.oc.label },
+  { view: "all", label: "All" },
+];
 
 export default function RealMap({ className = "" }: MapProps) {
-  const [isMounted, setIsMounted] = useState(false);
   const [Leaflet, setLeaflet] = useState<typeof L | null>(null);
+  // null = still resolving (leaflet + geo race together at mount)
+  const [view, setView] = useState<MapView | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      const leaflet = await import("leaflet");
-      setLeaflet(leaflet);
+      const [leaflet, initialView] = await Promise.all([
+        import("leaflet"),
+        detectInitialView(),
+      ]);
+      if (cancelled) return;
 
       // Fix Leaflet's default icon path issues
       delete (leaflet.Icon.Default.prototype as { _getIconUrl?: string })
@@ -51,8 +86,12 @@ export default function RealMap({ className = "" }: MapProps) {
           "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
       });
 
-      setIsMounted(true);
+      setLeaflet(leaflet);
+      setView(initialView);
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Create a single shared icon instance (stable across renders)
@@ -68,7 +107,7 @@ export default function RealMap({ className = "" }: MapProps) {
     [Leaflet],
   );
 
-  if (!isMounted || !Leaflet || !customIcon) {
+  if (!Leaflet || !customIcon || view === null) {
     return (
       <div
         className={`w-full h-full bg-surface-alt flex items-center justify-center ${className}`}
@@ -82,9 +121,13 @@ export default function RealMap({ className = "" }: MapProps) {
     <div
       className={`relative w-full h-full overflow-hidden rounded-2xl ${className}`}
     >
+      {/* key={view}: react-leaflet only applies bounds at creation, so a view
+          switch remounts the map with the new camera. Markers always show
+          both metros — the view only moves the camera. */}
       <MapContainer
-        center={CENTER}
-        zoom={ZOOM}
+        key={view}
+        bounds={boundsForView(view)}
+        boundsOptions={{ padding: [24, 24] }}
         scrollWheelZoom={false}
         className="w-full h-full z-0"
         zoomControl={false}
@@ -95,25 +138,9 @@ export default function RealMap({ className = "" }: MapProps) {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
         />
 
-        {/* Markers for key cities across LA and OC */}
-        {[
-          // Orange County
-          { name: "Irvine", coords: [33.6846, -117.8265] },
-          { name: "Santa Ana", coords: [33.7455, -117.8677] },
-          { name: "Newport Beach", coords: [33.6189, -117.9289] },
-          { name: "Anaheim", coords: [33.8366, -117.9143] },
-          { name: "Huntington Beach", coords: [33.6595, -117.9988] },
-          { name: "Lake Forest", coords: [33.6469, -117.6892] },
-          { name: "Mission Viejo", coords: [33.6, -117.672] },
-          // Los Angeles Area
-          { name: "Los Angeles", coords: [34.0522, -118.2437] },
-          { name: "Long Beach", coords: [33.7701, -118.1937] },
-        ].map((city) => (
-          <Marker
-            key={city.name}
-            position={city.coords as [number, number]}
-            icon={customIcon}
-          >
+        {/* Markers for served cities across both metros */}
+        {SERVICE_CITIES.map((city) => (
+          <Marker key={city.name} position={city.coords} icon={customIcon}>
             <Popup className="custom-popup">
               <div className="text-text font-medium text-sm">{city.name}</div>
               <div className="text-xs text-text-secondary">
@@ -126,6 +153,24 @@ export default function RealMap({ className = "" }: MapProps) {
 
       {/* Border Overlay */}
       <div className="absolute inset-0 pointer-events-none border border-border rounded-2xl z-[400]" />
+
+      {/* Metro Toggle */}
+      <div className="absolute top-4 left-4 flex gap-1 p-1 bg-surface/90 border border-border rounded-lg backdrop-blur-sm z-[400]">
+        {VIEW_OPTIONS.map((opt) => (
+          <button
+            key={opt.view}
+            type="button"
+            onClick={() => setView(opt.view)}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+              view === opt.view
+                ? "bg-red-primary text-white"
+                : "text-text-secondary hover:text-text"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
 
       {/* Coverage Label */}
       <div className="absolute bottom-4 right-4 px-3 py-1.5 bg-surface/90 border border-border rounded-lg text-[10px] text-red-primary font-semibold uppercase tracking-widest backdrop-blur-sm z-[400]">

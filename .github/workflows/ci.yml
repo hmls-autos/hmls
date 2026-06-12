@@ -62,6 +62,9 @@ jobs:
       - name: Type Check (hmls-web)
         run: cd apps/hmls-web && bun run typecheck
 
+      - name: Test (hmls-web)
+        run: cd apps/hmls-web && bun run test
+
       - name: Build (hmls-web)
         run: cd apps/hmls-web && bun run build
         env:

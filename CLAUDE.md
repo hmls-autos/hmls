@@ -16,6 +16,7 @@ deno task dev:api                # API + Fixo agent on port 8080
 cd apps/hmls-web && bun run build     # Build Next.js
 cd apps/hmls-web && bun run lint      # Lint with Biome
 cd apps/hmls-web && bun run typecheck # TypeScript type checking
+cd apps/hmls-web && bun run test      # Bun unit tests (lib/*.test.ts)
 deno task check                  # Deno check gateway + agent
 deno task lint                   # Deno lint (excludes web)
 deno task fmt:check              # Deno format check (excludes web)
@@ -87,7 +88,7 @@ shared deps go there, app-specific deps in each app's `deno.json`.
 
 ```
 apps/
-├── hmls-web/           # Next.js 16 frontend (React 19, Tailwind CSS 4) → Deno Deploy
+├── hmls-web/           # Next.js 16 frontend (React 19, Tailwind CSS 4) → Vercel
 ├── gateway/            # HTTP server (Hono, routing, auth, CORS) → Deno Deploy
 └── agent/              # AI agents + domain logic (library package)
     ├── llm/            #   GeminiOpenAIProvider (shared)
@@ -239,6 +240,7 @@ Subsequent revisions in the same chat re-call `create_order` with the captured `
 ```bash
 cd apps/hmls-web && bun run lint        # Biome lint
 cd apps/hmls-web && bun run typecheck   # TypeScript check
+cd apps/hmls-web && bun run test        # Bun unit tests
 cd apps/hmls-web && bun run build       # Next.js build
 deno task check                    # Deno check gateway + agent
 ```
@@ -298,7 +300,7 @@ deno deploy env delete <KEY> --app hmls-api --org spinsirr
 
 | App               | Domain                               | Hosting                                                                  |
 | ----------------- | ------------------------------------ | ------------------------------------------------------------------------ |
-| Web (HMLS)        | `https://hmls.autos`                 | Deno Deploy                                                              |
+| Web (HMLS)        | `https://hmls.autos`                 | Vercel (project `hmls`, scope: `spinsirrs-projects`)                     |
 | API (main + fixo) | `https://api.fixo.hmls.autos` (fixo) | Deno Deploy (`hmls-api`)                                                 |
 | Fixo Web          | `https://fixo.ink`                   | Vercel (`prj_EzagTZlxfjG6U6h3Cbdt8uWjPwdO`, scope: `spinsirrs-projects`) |
 
