@@ -3,6 +3,7 @@
 import type * as L from "leaflet";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
+import { SERVICE_CITIES } from "@/lib/map-cities";
 import "leaflet/dist/leaflet.css";
 
 // Leaflet components must be dynamically imported to avoid SSR issues
@@ -26,9 +27,8 @@ interface MapProps {
   className?: string;
 }
 
-// Centered on Orange County
-const CENTER: [number, number] = [33.7175, -117.8311]; // Near Irvine/Tustin
-const ZOOM = 9;
+// Bounds derive from the marker data — adding a city can never clip off-view.
+const BOUNDS: [number, number][] = SERVICE_CITIES.map((c) => c.coords);
 
 export default function RealMap({ className = "" }: MapProps) {
   const [isMounted, setIsMounted] = useState(false);
@@ -83,8 +83,8 @@ export default function RealMap({ className = "" }: MapProps) {
       className={`relative w-full h-full overflow-hidden rounded-2xl ${className}`}
     >
       <MapContainer
-        center={CENTER}
-        zoom={ZOOM}
+        bounds={BOUNDS}
+        boundsOptions={{ padding: [24, 24] }}
         scrollWheelZoom={false}
         className="w-full h-full z-0"
         zoomControl={false}
@@ -95,25 +95,9 @@ export default function RealMap({ className = "" }: MapProps) {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
         />
 
-        {/* Markers for key cities across LA and OC */}
-        {[
-          // Orange County
-          { name: "Irvine", coords: [33.6846, -117.8265] },
-          { name: "Santa Ana", coords: [33.7455, -117.8677] },
-          { name: "Newport Beach", coords: [33.6189, -117.9289] },
-          { name: "Anaheim", coords: [33.8366, -117.9143] },
-          { name: "Huntington Beach", coords: [33.6595, -117.9988] },
-          { name: "Lake Forest", coords: [33.6469, -117.6892] },
-          { name: "Mission Viejo", coords: [33.6, -117.672] },
-          // Los Angeles Area
-          { name: "Los Angeles", coords: [34.0522, -118.2437] },
-          { name: "Long Beach", coords: [33.7701, -118.1937] },
-        ].map((city) => (
-          <Marker
-            key={city.name}
-            position={city.coords as [number, number]}
-            icon={customIcon}
-          >
+        {/* Markers for served cities across both metros */}
+        {SERVICE_CITIES.map((city) => (
+          <Marker key={city.name} position={city.coords} icon={customIcon}>
             <Popup className="custom-popup">
               <div className="text-text font-medium text-sm">{city.name}</div>
               <div className="text-xs text-text-secondary">

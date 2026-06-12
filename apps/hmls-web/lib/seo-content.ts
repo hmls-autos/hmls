@@ -3,7 +3,9 @@
  *
  * Each entry has unique 2-3 sentence prose so Google doesn't class the
  * pages as duplicate / doorway content. When you onboard a new city or
- * service, add an entry here — the dynamic route picks it up.
+ * service, add an entry here — the dynamic route picks it up. If the city
+ * should also appear on the coverage map, add a marker in lib/map-cities.ts
+ * (lib/map-cities.test.ts enforces markers ⊆ CITIES).
  *
  * Data shape is deliberately simple: slug + display name + 1-2 lines of
  * differentiated copy. Templated layout fills in the rest from BUSINESS.
