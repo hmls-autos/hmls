@@ -5,6 +5,30 @@ it up cold.
 
 ---
 
+## Dual-metro follow-ups (deferred from the SEO front-door PR, 2026-06-12)
+
+### Terms page still scopes service to "Orange County, California" (P2 — founder sign-off)
+
+`apps/hmls-web/app/(marketing)/terms/page.tsx:43` legal wording under-scopes the actual service
+area now that SJ is live. Legal copy — founder decides exact wording (suggest "in California" or
+naming both metros). One line.
+
+### Coverage map legibility at dual-metro zoom (P3 — design call)
+
+`RealMap` now fits both metros (~zoom 6): each metro renders as a cluster of overlapping 12px dots;
+per-city popups are effectively untappable and there is no zoom-out control (`zoomControl={false}`).
+Acceptable as a "we cover these two regions" communicative graphic; if the map should be
+navigational, consider per-metro toggle/flyTo or two side-by-side maps. Flagged by adversarial
+review 2026-06-12.
+
+### Contact page links OC Google profile while claiming dual coverage (P2 — blocked by SJ GBP verification)
+
+`apps/hmls-web/app/(marketing)/contact/page.tsx` map embed + profile link come from `BUSINESS.gmb`
+(OC listing). When the SJ Google Business Profile passes verification, set `REGIONS.sj.gmbShareUrl`
+and make the contact links region-aware. SJ profile created 2026-06-11, verification pending.
+
+---
+
 ## Bug B — PDF report endpoint always returns 400
 
 **What:** `GET /sessions/:id/report` requires `fixoSessions.result` jsonb populated. No code writes
