@@ -105,6 +105,24 @@ export const pricingConfig = pgTable("pricing_config", {
  */
 export type ItemTier = "required" | "recommended" | "maintenance" | "optional";
 
+/**
+ * Internal tech-prep metadata attached to a labor OrderItem, sourced from the
+ * `repair_jobs` catalog. For the shop's dispatch + the assigned mobile tech
+ * (what tools/parts to bring, how hard, whether HV certification is needed) —
+ * NOT shown to the customer.
+ */
+export interface RepairTechPrep {
+  /** 1 (trivial) – 5 (engine-out / specialist) */
+  difficulty: number;
+  tools: { name: string; specialty?: boolean; optional?: boolean }[];
+  typicalParts: string[];
+  /** EV high-voltage job: requires an HV-certified tech + insulated PPE */
+  hvSafety: boolean;
+  /** AI-estimated common fastener sizes — prep hint only, may be null */
+  likelySizes: string[] | null;
+  notes: string;
+}
+
 export interface OrderItem {
   id: string;
   category: "labor" | "parts" | "fee" | "discount";
@@ -121,6 +139,9 @@ export interface OrderItem {
   // priced into an order, but the id lets us aggregate "most-ordered jobs".
   olpLaborTimeId?: number;
   tier?: ItemTier;
+  // Internal-only repair-job enrichment for tech prep / dispatch (labor items).
+  // Never rendered to the customer — see EstimateCard / portal order views.
+  techPrep?: RepairTechPrep;
 }
 
 // --- jsonb shapes (declared once so Drizzle $inferSelect knows them) ---

@@ -22,7 +22,8 @@ import {
 } from "../../hmls/skills/estimate/pricing.ts";
 import { toolResult } from "@hmls/shared/tool-result";
 import type { DiscountType, LineItem, ServiceInput } from "../../hmls/skills/estimate/types.ts";
-import type { OrderItem } from "@hmls/shared/db/schema";
+import type { OrderItem, RepairTechPrep } from "@hmls/shared/db/schema";
+import { getRepairJobs } from "../../hmls/tools/olp-client.ts";
 import { patchItems } from "../../services/order-state.ts";
 import { upsertOrderIntake } from "../../services/order-intake.ts";
 import {
@@ -48,7 +49,7 @@ const discountEnum = z.enum([
 function toOrderItem(
   item: LineItem,
   category: OrderItem["category"],
-  opts?: { laborHours?: number; quantity?: number },
+  opts?: { laborHours?: number; quantity?: number; techPrep?: RepairTechPrep },
 ): OrderItem {
   const quantity = opts?.quantity ?? 1;
   return {
@@ -61,6 +62,7 @@ function toOrderItem(
     totalCents: item.price * quantity,
     taxable: category !== "discount",
     ...(opts?.laborHours ? { laborHours: opts.laborHours } : {}),
+    ...(opts?.techPrep ? { techPrep: opts.techPrep } : {}),
   };
 }
 
@@ -228,10 +230,38 @@ async function priceServices(input: PriceServicesInput): Promise<{
     services,
   });
 
+  // Tech-prep enrichment (internal, best-effort): pull tools/difficulty/HV-safety
+  // from the repair_jobs catalog for any service that carried a jobSlug, so the
+  // shop's assigned mobile tech knows what to bring. Never blocks order creation.
+  const techPrepBySlug = new Map<string, RepairTechPrep>();
+  const jobSlugs = services
+    .map((s) => s.jobSlug)
+    .filter((s): s is string => typeof s === "string" && s.length > 0);
+  if (jobSlugs.length > 0) {
+    try {
+      for (const j of await getRepairJobs(jobSlugs)) {
+        techPrepBySlug.set(j.slug, {
+          difficulty: j.difficulty,
+          tools: j.tools,
+          typicalParts: j.typicalParts,
+          hvSafety: j.hvSafety,
+          likelySizes: j.likelySizes,
+          notes: j.notes,
+        });
+      }
+    } catch {
+      // enrichment is non-critical — proceed without it
+    }
+  }
+
   const items: OrderItem[] = [
-    ...serviceLineItems.map((li, i) =>
-      toOrderItem(li, "labor", { laborHours: services[i]?.laborHours })
-    ),
+    ...serviceLineItems.map((li, i) => {
+      const slug = services[i]?.jobSlug;
+      return toOrderItem(li, "labor", {
+        laborHours: services[i]?.laborHours,
+        techPrep: slug ? techPrepBySlug.get(slug) : undefined,
+      });
+    }),
     ...customLineItems.map((li) => toOrderItem(li, "labor")),
     ...feeLineItems.map((li) => toOrderItem(li, "fee")),
   ];
@@ -350,6 +380,12 @@ export const createOrderTool = {
             .default(false)
             .describe(
               "Customer is bringing their own parts. Skips parts pricing; bills labor only.",
+            ),
+          jobSlug: z
+            .string()
+            .optional()
+            .describe(
+              "The `slug` for this job from lookup_labor_time results. Pass it through so the shop gets tools/difficulty/HV-safety for tech prep (internal — never shown to the customer).",
             ),
         }),
       )
