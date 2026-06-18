@@ -63,9 +63,15 @@ export const requireShopContext = createMiddleware<ShopEnv>(async (c, next) => {
     const [p] = await db.select({ shopId: schema.providers.shopId })
       .from(schema.providers).where(eq(schema.providers.authUserId, user.id)).limit(1);
     homeShopId = p?.shopId ?? null;
-  } else if (role === "admin") {
-    const [cust] = await db.select({ shopId: schema.customers.shopId })
+  } else if (role === "admin" || role === "customer") {
+    // admin + customer are both `customers` rows. Match by auth_user_id, with an
+    // email fallback (mirrors requireAuth) so guests who later sign in still resolve.
+    let [cust] = await db.select({ shopId: schema.customers.shopId })
       .from(schema.customers).where(eq(schema.customers.authUserId, user.id)).limit(1);
+    if (!cust && user.email) {
+      [cust] = await db.select({ shopId: schema.customers.shopId })
+        .from(schema.customers).where(eq(schema.customers.email, user.email)).limit(1);
+    }
     homeShopId = cust?.shopId ?? null;
   }
 
