@@ -36,15 +36,18 @@ export const shops = pgTable("shops", {
   timezone: varchar("timezone", { length: 100 }).default("America/Los_Angeles"),
   laborRateCents: integer("labor_rate_cents").default(12000),
   taxRatePercent: numeric("tax_rate_percent", { precision: 5, scale: 4 }).default("0.1000"),
+  latitude: numeric("latitude", { precision: 10, scale: 7 }),
+  longitude: numeric("longitude", { precision: 10, scale: 7 }),
+  serviceRadiusKm: integer("service_radius_km"),
   stripeAccountId: varchar("stripe_account_id", { length: 255 }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
-export const userRoleEnum = pgEnum("user_role", ["customer", "admin", "mechanic"]);
+export const userRoleEnum = pgEnum("user_role", ["customer", "admin", "mechanic", "owner"]);
 
 export const customers = pgTable("customers", {
   id: serial("id").primaryKey(),
-  shopId: uuid("shop_id").references(() => shops.id),
+  shopId: uuid("shop_id").references(() => shops.id).notNull(),
   name: varchar("name", { length: 255 }),
   phone: varchar("phone", { length: 20 }),
   email: varchar("email", { length: 255 }),
@@ -58,6 +61,7 @@ export const customers = pgTable("customers", {
 
 export const providers = pgTable("providers", {
   id: serial("id").primaryKey(),
+  shopId: uuid("shop_id").references(() => shops.id).notNull(),
   authUserId: varchar("auth_user_id", { length: 255 }).unique(),
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }),
@@ -188,7 +192,7 @@ export const paymentMethodEnum = pgEnum("payment_method", [
 
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
-  shopId: uuid("shop_id").references(() => shops.id),
+  shopId: uuid("shop_id").references(() => shops.id).notNull(),
   customerId: integer("customer_id").references(() => customers.id).notNull(),
   status: orderStatusEnum("status").notNull().default("draft"),
   statusHistory: jsonb("status_history").$type<OrderStatusHistoryEntry[]>().notNull().default(
@@ -242,6 +246,7 @@ export const orders = pgTable("orders", {
   customerIdx: index("orders_customer_id_idx").on(table.customerId),
   scheduledAtIdx: index("orders_scheduled_at_idx").on(table.scheduledAt),
   providerIdx: index("orders_provider_id_idx").on(table.providerId),
+  shopStatusIdx: index("orders_shop_status_idx").on(table.shopId, table.status),
 }));
 
 // --- Order Intake (customer-submitted intake; 1:1 child of orders) ---
