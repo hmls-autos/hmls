@@ -3,6 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { db, schema } from "@hmls/agent/db";
 import { and, count, desc, eq, gte, sql } from "drizzle-orm";
 import { type AdminEnv, requireAdmin } from "../middleware/admin.ts";
+import { OWNER_ALL_SHOPS, requireShopContext, type WithShop } from "../middleware/shop-context.ts";
 import {
   createCustomerInput,
   listCustomersQuery,
@@ -13,10 +14,11 @@ import type { OrderStatus } from "@hmls/shared/order/status";
 
 type ApiError = { error: { code: string; message: string } };
 
-const admin = new Hono<AdminEnv>();
+const admin = new Hono<WithShop<AdminEnv>>();
 
 // All admin routes require admin role
 admin.use("*", requireAdmin);
+admin.use("*", requireShopContext);
 
 // GET /me — lightweight role check (no DB). Used as the admin guard in the
 // web DashboardLayout; keeps the heavy /dashboard query for the dashboard page
@@ -32,6 +34,7 @@ admin.get("/me", (c) => {
 admin.get("/dashboard", async (c) => {
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const shopId = c.get("shopId");
 
   const [
     [customerCount],
@@ -39,13 +42,18 @@ admin.get("/dashboard", async (c) => {
     upcomingBookings,
     recentCustomers,
   ] = await Promise.all([
-    db.select({ count: count() }).from(schema.customers),
-    db.select({ count: count() }).from(schema.orders),
+    db.select({ count: count() }).from(schema.customers).where(
+      eq(schema.customers.shopId, shopId),
+    ),
+    db.select({ count: count() }).from(schema.orders).where(
+      eq(schema.orders.shopId, shopId),
+    ),
     db
       .select()
       .from(schema.orders)
       .where(
         and(
+          eq(schema.orders.shopId, shopId),
           gte(schema.orders.scheduledAt, now),
           sql`${schema.orders.status} IN ('scheduled', 'in_progress')`,
         ),
@@ -55,6 +63,7 @@ admin.get("/dashboard", async (c) => {
     db
       .select()
       .from(schema.customers)
+      .where(eq(schema.customers.shopId, shopId))
       .orderBy(desc(schema.customers.createdAt))
       .limit(5),
   ]);
@@ -69,24 +78,30 @@ admin.get("/dashboard", async (c) => {
     })
     .from(schema.orders)
     .where(
-      sql`${schema.orders.status} = 'completed' AND ${schema.orders.createdAt} >= ${thirtyDaysAgo.toISOString()}`,
+      and(
+        eq(schema.orders.shopId, shopId),
+        sql`${schema.orders.status} = 'completed' AND ${schema.orders.createdAt} >= ${thirtyDaysAgo.toISOString()}`,
+      ),
     );
 
   const [pendingReview] = await db
     .select({ count: count() })
     .from(schema.orders)
-    .where(eq(schema.orders.status, "draft"));
+    .where(and(eq(schema.orders.shopId, shopId), eq(schema.orders.status, "draft")));
 
   const [pendingApprovals] = await db
     .select({ count: count() })
     .from(schema.orders)
-    .where(eq(schema.orders.status, "estimated"));
+    .where(and(eq(schema.orders.shopId, shopId), eq(schema.orders.status, "estimated")));
 
   const [activeJobs] = await db
     .select({ count: count() })
     .from(schema.orders)
     .where(
-      sql`${schema.orders.status} IN ('approved', 'scheduled', 'in_progress')`,
+      and(
+        eq(schema.orders.shopId, shopId),
+        sql`${schema.orders.status} IN ('approved', 'scheduled', 'in_progress')`,
+      ),
     );
 
   return c.json<{
@@ -129,19 +144,24 @@ admin.get("/dashboard", async (c) => {
 // GET /customers — all customers
 admin.get("/customers", zValidator("query", listCustomersQuery), async (c) => {
   const { search } = c.req.valid("query");
+  const shopId = c.get("shopId");
   let query = db
     .select()
     .from(schema.customers)
+    .where(eq(schema.customers.shopId, shopId))
     .orderBy(desc(schema.customers.createdAt))
     .$dynamic();
 
   if (search) {
     query = query.where(
-      sql`(${schema.customers.name} ILIKE ${
-        "%" + search + "%"
-      } OR ${schema.customers.email} ILIKE ${
-        "%" + search + "%"
-      } OR ${schema.customers.phone} ILIKE ${"%" + search + "%"})`,
+      and(
+        eq(schema.customers.shopId, shopId),
+        sql`(${schema.customers.name} ILIKE ${
+          "%" + search + "%"
+        } OR ${schema.customers.email} ILIKE ${
+          "%" + search + "%"
+        } OR ${schema.customers.phone} ILIKE ${"%" + search + "%"})`,
+      ),
     );
   }
 
@@ -159,10 +179,12 @@ admin.get("/customers/:id", async (c) => {
     );
   }
 
+  const shopId = c.get("shopId");
+
   const [customer] = await db
     .select()
     .from(schema.customers)
-    .where(eq(schema.customers.id, id))
+    .where(and(eq(schema.customers.id, id), eq(schema.customers.shopId, shopId)))
     .limit(1);
 
   if (!customer) {
@@ -172,7 +194,7 @@ admin.get("/customers/:id", async (c) => {
   const orders = await db
     .select()
     .from(schema.orders)
-    .where(eq(schema.orders.customerId, id))
+    .where(and(eq(schema.orders.customerId, id), eq(schema.orders.shopId, shopId)))
     .orderBy(desc(schema.orders.createdAt));
 
   return c.json<{ customer: CustomerRow; orders: OrderRow[] }>({ customer, orders });
@@ -189,6 +211,10 @@ admin.patch("/customers/:id", zValidator("json", updateCustomerInput), async (c)
   }
 
   const body = c.req.valid("json");
+  const shopId = c.get("shopId");
+  if (shopId === OWNER_ALL_SHOPS) {
+    return c.json({ error: { code: "NO_SHOP", message: "Select a shop before writing" } }, 400);
+  }
 
   const updates: Record<string, unknown> = {};
   if (body.name !== undefined) updates.name = body.name;
@@ -207,7 +233,7 @@ admin.patch("/customers/:id", zValidator("json", updateCustomerInput), async (c)
   const [updated] = await db
     .update(schema.customers)
     .set(updates)
-    .where(eq(schema.customers.id, id))
+    .where(and(eq(schema.customers.id, id), eq(schema.customers.shopId, shopId)))
     .returning();
 
   if (!updated) {
@@ -220,6 +246,10 @@ admin.patch("/customers/:id", zValidator("json", updateCustomerInput), async (c)
 // POST /customers — create customer
 admin.post("/customers", zValidator("json", createCustomerInput), async (c) => {
   const body = c.req.valid("json");
+  const shopId = c.get("shopId");
+  if (shopId === OWNER_ALL_SHOPS) {
+    return c.json({ error: { code: "NO_SHOP", message: "Select a shop before writing" } }, 400);
+  }
 
   if (!body.name && !body.email && !body.phone) {
     return c.json<ApiError>({
@@ -230,6 +260,7 @@ admin.post("/customers", zValidator("json", createCustomerInput), async (c) => {
   const [customer] = await db
     .insert(schema.customers)
     .values({
+      shopId,
       name: body.name ?? null,
       phone: body.phone ?? null,
       email: body.email ?? null,
@@ -252,17 +283,21 @@ admin.delete("/customers/:id", async (c) => {
     );
   }
 
+  const shopId = c.get("shopId");
+
   const [existing] = await db
     .select({ id: schema.customers.id })
     .from(schema.customers)
-    .where(eq(schema.customers.id, id))
+    .where(and(eq(schema.customers.id, id), eq(schema.customers.shopId, shopId)))
     .limit(1);
 
   if (!existing) {
     return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Customer not found" } }, 404);
   }
 
-  await db.delete(schema.customers).where(eq(schema.customers.id, id));
+  await db.delete(schema.customers).where(
+    and(eq(schema.customers.id, id), eq(schema.customers.shopId, shopId)),
+  );
   return c.json<{ success: true }>({ success: true });
 });
 

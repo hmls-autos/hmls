@@ -15,6 +15,13 @@ export type ShopEnv = Env & {
   };
 };
 
+/**
+ * Mixin helper: extends any existing Env with shopId + isOwner without losing
+ * the original Variables (authUser, customerId, providerId, etc.).
+ * Usage: `new Hono<WithShop<AdminEnv>>()`
+ */
+export type WithShop<E extends Env> = E & { Variables: { shopId: string; isOwner: boolean } };
+
 type PickInput = {
   role: string | null | undefined;
   homeShopId: string | null;
@@ -42,8 +49,12 @@ async function loadValidShopIds(): Promise<string[]> {
   return rows.map((r) => r.id);
 }
 
+// Typed narrowly — only declares what this middleware sets — so it can be
+// mounted on any WithShop<E> router without a generic conflict.
+type ShopCtx = Env & { Variables: { shopId: string; isOwner: boolean } };
+
 /** Resolves ctx.shopId + ctx.isOwner. Mount AFTER requireAdmin/requireAuth/requireMechanic. */
-export const requireShopContext = createMiddleware<ShopEnv>(async (c, next) => {
+export const requireShopContext = createMiddleware<ShopCtx>(async (c, next) => {
   if (Deno.env.get("SKIP_AUTH") === "true") {
     const devShop = Deno.env.get("DEV_SHOP_ID");
     if (!devShop) {
@@ -55,7 +66,9 @@ export const requireShopContext = createMiddleware<ShopEnv>(async (c, next) => {
     return;
   }
 
-  const user = c.get("authUser");
+  // authUser is set by the upstream requireAdmin/requireAuth/requireMechanic;
+  // cast through unknown because ShopCtx is typed narrowly (only what we set).
+  const user = c.get("authUser" as never) as AuthUser;
   const role = user.role;
 
   let homeShopId: string | null = null;

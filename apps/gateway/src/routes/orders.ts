@@ -4,6 +4,7 @@ import { renderToStream } from "@react-pdf/renderer";
 import { db, schema } from "@hmls/agent/db";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { type AdminEnv, requireAdmin } from "../middleware/admin.ts";
+import { OWNER_ALL_SHOPS, requireShopContext, type WithShop } from "../middleware/shop-context.ts";
 import { EstimatePdf } from "@hmls/agent";
 import type { OrderItem } from "@hmls/agent/db";
 import {
@@ -55,9 +56,10 @@ async function backfillShareTokenIfMissing(orderId: number): Promise<void> {
   }
 }
 
-const orders = new Hono<AdminEnv>();
+const orders = new Hono<WithShop<AdminEnv>>();
 
 orders.use("*", requireAdmin);
+orders.use("*", requireShopContext);
 
 // GET /orders — list all orders (with pagination)
 orders.get("/", zValidator("query", listOrdersQuery), async (c) => {
@@ -71,13 +73,15 @@ orders.get("/", zValidator("query", listOrdersQuery), async (c) => {
   const limit = Math.min(200, Math.max(1, rawLimit ?? 50));
   const offset = (page - 1) * limit;
 
+  const shopId = c.get("shopId");
+
   let query = db
     .select()
     .from(schema.orders)
     .orderBy(desc(schema.orders.createdAt))
     .$dynamic();
 
-  const conditions = [];
+  const conditions = [eq(schema.orders.shopId, shopId)];
   if (status) {
     conditions.push(eq(schema.orders.status, status));
   }
@@ -118,13 +122,17 @@ orders.get("/", zValidator("query", listOrdersQuery), async (c) => {
 // POST /orders — create a new draft order
 orders.post("/", zValidator("json", createOrderInput), async (c) => {
   const body = c.req.valid("json");
+  const shopId = c.get("shopId");
+  if (shopId === OWNER_ALL_SHOPS) {
+    return c.json({ error: { code: "NO_SHOP", message: "Select a shop before writing" } }, 400);
+  }
 
   const customerId = body.customer_id;
 
   const [customer] = await db
     .select()
     .from(schema.customers)
-    .where(eq(schema.customers.id, customerId))
+    .where(and(eq(schema.customers.id, customerId), eq(schema.customers.shopId, shopId)))
     .limit(1);
 
   if (!customer) {
@@ -164,6 +172,7 @@ orders.post("/", zValidator("json", createOrderInput), async (c) => {
     .insert(schema.orders)
     .values({
       customerId,
+      shopId,
       status: "draft",
       statusHistory: [{ status: "draft", timestamp: new Date().toISOString(), actor }],
       items: orderItems,
@@ -202,10 +211,12 @@ orders.get("/:id", async (c) => {
     return c.json<ApiError>({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
   }
 
+  const shopId = c.get("shopId");
+
   const [order] = await db
     .select()
     .from(schema.orders)
-    .where(eq(schema.orders.id, id))
+    .where(and(eq(schema.orders.id, id), eq(schema.orders.shopId, shopId)))
     .limit(1);
 
   if (!order) {
@@ -242,6 +253,7 @@ orders.patch("/:id", zValidator("json", updateOrderInput), async (c) => {
   }
 
   const body = c.req.valid("json");
+  const shopId = c.get("shopId");
 
   const authUser = c.get("authUser");
   const actor = adminActor(authUser.email);
@@ -257,7 +269,7 @@ orders.patch("/:id", zValidator("json", updateOrderInput), async (c) => {
     const [current] = await db
       .select({ items: schema.orders.items })
       .from(schema.orders)
-      .where(eq(schema.orders.id, id))
+      .where(and(eq(schema.orders.id, id), eq(schema.orders.shopId, shopId)))
       .limit(1);
     if (!current) {
       return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
@@ -296,7 +308,7 @@ orders.patch("/:id", zValidator("json", updateOrderInput), async (c) => {
     await db
       .update(schema.orders)
       .set(directUpdates)
-      .where(eq(schema.orders.id, id));
+      .where(and(eq(schema.orders.id, id), eq(schema.orders.shopId, shopId)));
   }
 
   if (!wantsItemEdit && Object.keys(directUpdates).length === 1) {
@@ -312,7 +324,7 @@ orders.patch("/:id", zValidator("json", updateOrderInput), async (c) => {
   const [latest] = await db
     .select()
     .from(schema.orders)
-    .where(eq(schema.orders.id, id))
+    .where(and(eq(schema.orders.id, id), eq(schema.orders.shopId, shopId)))
     .limit(1);
   if (!latest) {
     return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
@@ -351,6 +363,7 @@ orders.post("/:id/schedule", zValidator("json", scheduleOrderInput), async (c) =
     );
   }
 
+  const shopId = c.get("shopId");
   const authUser = c.get("authUser");
   const result = await attachSchedule(
     id,
@@ -372,7 +385,7 @@ orders.post("/:id/schedule", zValidator("json", scheduleOrderInput), async (c) =
   const [refreshed] = await db
     .select()
     .from(schema.orders)
-    .where(eq(schema.orders.id, id))
+    .where(and(eq(schema.orders.id, id), eq(schema.orders.shopId, shopId)))
     .limit(1);
   return c.json<OrderRow>(refreshed ?? result.value);
 });
@@ -386,6 +399,7 @@ orders.patch("/:id/status", zValidator("json", transitionOrderInput), async (c) 
 
   const body = c.req.valid("json");
   const newStatus = body.status as OrderStatus;
+  const shopId = c.get("shopId");
   const authUser = c.get("authUser");
 
   // Drive-by adminNotes write — status-agnostic, so do it regardless of
@@ -395,7 +409,7 @@ orders.patch("/:id/status", zValidator("json", transitionOrderInput), async (c) 
     await db
       .update(schema.orders)
       .set({ adminNotes: body.notes })
-      .where(eq(schema.orders.id, id));
+      .where(and(eq(schema.orders.id, id), eq(schema.orders.shopId, shopId)));
   }
   await backfillShareTokenIfMissing(id);
 
@@ -491,11 +505,12 @@ orders.patch("/:id/notes", zValidator("json", updateAdminNotesInput), async (c) 
   }
 
   const body = c.req.valid("json");
+  const shopId = c.get("shopId");
 
   const [updated] = await db
     .update(schema.orders)
     .set({ adminNotes: body.notes, updatedAt: new Date() })
-    .where(eq(schema.orders.id, id))
+    .where(and(eq(schema.orders.id, id), eq(schema.orders.shopId, shopId)))
     .returning();
 
   if (!updated) {

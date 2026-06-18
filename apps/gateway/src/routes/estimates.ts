@@ -11,6 +11,12 @@ import { sendOrderStateResult } from "../lib/order-state-http.ts";
 // After Layer 3 "estimate" is a VIEW on the `orders` table — there is no
 // separate `estimates` table anymore. The routes below still live under
 // `/estimates/:id` for URL compat but the :id parameter is an order ID.
+//
+// NOTE: requireShopContext is intentionally NOT mounted here. Public routes
+// (/pdf, /review, /approve, /decline) use shareToken as the authorization
+// proof — the token IS the auth. The authenticated GET uses customerId
+// ownership. There is no shop context to resolve from an anonymous caller
+// holding a share-token link, and scoping by shopId would break those links.
 
 const estimates = new Hono<AuthEnv>();
 

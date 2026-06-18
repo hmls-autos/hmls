@@ -4,6 +4,7 @@ import { and, asc, between, desc, eq, gte, inArray, lte, sql } from "drizzle-orm
 import { db, schema } from "@hmls/agent/db";
 import { type Actor, assignProvider } from "@hmls/agent/order-state";
 import { type AdminEnv, requireAdmin } from "../middleware/admin.ts";
+import { OWNER_ALL_SHOPS, requireShopContext, type WithShop } from "../middleware/shop-context.ts";
 import { sendOrderStateResult } from "../lib/order-state-http.ts";
 import {
   availableMinutesForWeek,
@@ -52,9 +53,10 @@ function adminActor(email: string | null | undefined): Actor {
   return { kind: "admin", email: email ?? "admin" };
 }
 
-const adminMechanics = new Hono<AdminEnv>();
+const adminMechanics = new Hono<WithShop<AdminEnv>>();
 
 adminMechanics.use("*", requireAdmin);
+adminMechanics.use("*", requireShopContext);
 
 // GET / — list mechanics with aggregate stats
 adminMechanics.get("/", async (c) => {
@@ -62,10 +64,12 @@ adminMechanics.get("/", async (c) => {
   const weekStart = new Date(now);
   weekStart.setUTCDate(weekStart.getUTCDate() - 14);
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const shopId = c.get("shopId");
 
   const providers = await db
     .select()
     .from(schema.providers)
+    .where(eq(schema.providers.shopId, shopId))
     .orderBy(desc(schema.providers.isActive), asc(schema.providers.name));
 
   if (providers.length === 0) return c.json<ProviderWithStats[]>([]);
@@ -106,6 +110,7 @@ adminMechanics.get("/", async (c) => {
       .from(schema.orders)
       .where(
         and(
+          eq(schema.orders.shopId, shopId),
           inArray(schema.orders.providerId, providerIds),
           gte(schema.orders.scheduledAt, weekStart),
           activeStatusSql,
@@ -122,6 +127,7 @@ adminMechanics.get("/", async (c) => {
       .from(schema.orders)
       .where(
         and(
+          eq(schema.orders.shopId, shopId),
           inArray(schema.orders.providerId, providerIds),
           between(
             schema.orders.scheduledAt,
@@ -142,6 +148,7 @@ adminMechanics.get("/", async (c) => {
       .from(schema.orders)
       .where(
         and(
+          eq(schema.orders.shopId, shopId),
           inArray(schema.orders.providerId, providerIds),
           eq(schema.orders.status, "completed"),
           gte(schema.orders.createdAt, thirtyDaysAgo),
@@ -155,6 +162,7 @@ adminMechanics.get("/", async (c) => {
       .from(schema.orders)
       .where(
         and(
+          eq(schema.orders.shopId, shopId),
           inArray(schema.orders.providerId, providerIds),
           gte(schema.orders.scheduledAt, now),
           lte(schema.orders.scheduledAt, endOfWeek(now)),
@@ -170,6 +178,7 @@ adminMechanics.get("/", async (c) => {
       .from(schema.orders)
       .where(
         and(
+          eq(schema.orders.shopId, shopId),
           inArray(schema.orders.providerId, providerIds),
           gte(schema.orders.scheduledAt, now),
           sql`${schema.orders.status} IN ('scheduled', 'in_progress')`,
@@ -251,10 +260,15 @@ adminMechanics.get("/", async (c) => {
 // POST / — create a new mechanic
 adminMechanics.post("/", zValidator("json", createMechanicInput), async (c) => {
   const body = c.req.valid("json");
+  const shopId = c.get("shopId");
+  if (shopId === OWNER_ALL_SHOPS) {
+    return c.json({ error: { code: "NO_SHOP", message: "Select a shop before writing" } }, 400);
+  }
 
   const [created] = await db
     .insert(schema.providers)
     .values({
+      shopId,
       name: body.name,
       email: body.email ?? null,
       phone: body.phone ?? null,
@@ -277,10 +291,12 @@ adminMechanics.get("/:id", async (c) => {
     );
   }
 
+  const shopId = c.get("shopId");
+
   const [provider] = await db
     .select()
     .from(schema.providers)
-    .where(eq(schema.providers.id, id))
+    .where(and(eq(schema.providers.id, id), eq(schema.providers.shopId, shopId)))
     .limit(1);
 
   if (!provider) {
@@ -303,6 +319,10 @@ adminMechanics.patch("/:id", zValidator("json", updateMechanicInput), async (c) 
   }
 
   const body = c.req.valid("json");
+  const shopId = c.get("shopId");
+  if (shopId === OWNER_ALL_SHOPS) {
+    return c.json({ error: { code: "NO_SHOP", message: "Select a shop before writing" } }, 400);
+  }
 
   const updates: Record<string, unknown> = {};
   if (body.name !== undefined) updates.name = body.name;
@@ -322,7 +342,7 @@ adminMechanics.patch("/:id", zValidator("json", updateMechanicInput), async (c) 
   const [updated] = await db
     .update(schema.providers)
     .set(updates)
-    .where(eq(schema.providers.id, id))
+    .where(and(eq(schema.providers.id, id), eq(schema.providers.shopId, shopId)))
     .returning();
 
   if (!updated) {
@@ -345,10 +365,12 @@ adminMechanics.delete("/:id", async (c) => {
     );
   }
 
+  const shopId = c.get("shopId");
+
   const [updated] = await db
     .update(schema.providers)
     .set({ isActive: false })
-    .where(eq(schema.providers.id, id))
+    .where(and(eq(schema.providers.id, id), eq(schema.providers.shopId, shopId)))
     .returning();
 
   if (!updated) {
@@ -541,8 +563,9 @@ adminMechanics.get("/:id/orders", zValidator("query", listMechanicOrdersQuery), 
     );
   }
   const { from, to } = c.req.valid("query");
+  const shopId = c.get("shopId");
 
-  const conditions = [eq(schema.orders.providerId, id)];
+  const conditions = [eq(schema.orders.providerId, id), eq(schema.orders.shopId, shopId)];
   if (from && to) {
     conditions.push(
       between(schema.orders.scheduledAt, new Date(from), new Date(to)),
@@ -598,14 +621,17 @@ adminMechanics.post(
 
     const body = c.req.valid("json");
 
+    const shopId = c.get("shopId");
+
     // Pre-check the provider here so the "mechanic not found" error keeps its
     // specific wording — the harness's `not_found` path is keyed on the id we
     // pass in, so routing this through `sendOrderStateResult` alone would
     // surface it as "Order #<providerId> not found" in the admin dialog.
+    // Also scope by shopId so cross-shop assignment is impossible.
     const [provider] = await db
       .select({ id: schema.providers.id })
       .from(schema.providers)
-      .where(eq(schema.providers.id, body.providerId))
+      .where(and(eq(schema.providers.id, body.providerId), eq(schema.providers.shopId, shopId)))
       .limit(1);
     if (!provider) {
       return c.json<ApiError>(
