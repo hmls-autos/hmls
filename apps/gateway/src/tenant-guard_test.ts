@@ -8,9 +8,6 @@ const EXCEPT = new Set([
   // estimates.ts: shareToken IS the authorization; scoping by shopId would
   // break anonymous share-token links. Intentionally left unscoped.
   "estimates.ts",
-  // chat.ts: customer upsert at first-contact — shopId injection is deferred
-  // to T12/T13 (stamp shopId in create_order + pass shopId from chat routes).
-  "chat.ts",
 ]);
 const TENANT = /schema\.(orders|customers|providers)\b/;
 

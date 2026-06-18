@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { desc, eq, ilike, or } from "drizzle-orm";
-import { db, schema } from "../../db/client.ts";
+import { and, desc, eq, ilike, or } from "drizzle-orm";
+import { db, schema, scoped, whereShop } from "../../db/client.ts";
 import type { OrderItem } from "@hmls/shared/db/schema";
 import { EDITABLE_STATUSES, isOrderStatus } from "@hmls/shared/order/status";
 import { toolResult } from "@hmls/shared/tool-result";
@@ -39,9 +39,10 @@ const listOrdersTool = {
   }),
   execute: async (
     params: { status?: string; limit?: number },
-    _ctx: unknown,
+    ctx: ToolContext | undefined,
   ) => {
     const limit = Math.min(params.limit ?? 50, 100);
+    const shopId = ctx?.shopId;
 
     let query = db
       .select()
@@ -59,7 +60,12 @@ const listOrdersTool = {
             `revised, approved, declined, scheduled, in_progress, completed, cancelled.`,
         });
       }
-      query = query.where(eq(schema.orders.status, params.status));
+      // Combine shop scope with status filter.
+      const shopFilter = shopId ? whereShop(schema.orders.shopId, shopId) : undefined;
+      const statusFilter = eq(schema.orders.status, params.status);
+      query = query.where(and(shopFilter, statusFilter));
+    } else if (shopId) {
+      query = query.where(whereShop(schema.orders.shopId, shopId));
     }
 
     const rows = await query.limit(limit);
@@ -102,19 +108,20 @@ const searchCustomersTool = {
       .min(1)
       .describe("Search term — matches against customer name, email, or phone"),
   }),
-  execute: async (params: { query: string }, _ctx: unknown) => {
+  execute: async (params: { query: string }, ctx: ToolContext | undefined) => {
     const term = `%${params.query}%`;
+    const shopId = ctx?.shopId;
+
+    const searchFilter = or(
+      ilike(schema.customers.name, term),
+      ilike(schema.customers.email, term),
+      ilike(schema.customers.phone, term),
+    );
 
     const rows = await db
       .select()
       .from(schema.customers)
-      .where(
-        or(
-          ilike(schema.customers.name, term),
-          ilike(schema.customers.email, term),
-          ilike(schema.customers.phone, term),
-        ),
-      )
+      .where(shopId ? scoped(schema.customers.shopId, shopId, searchFilter) : searchFilter)
       .orderBy(desc(schema.customers.createdAt))
       .limit(20);
 

@@ -3,6 +3,7 @@ import { convertToModelMessages } from "ai";
 import { eq } from "drizzle-orm";
 import { type AgentConfig, runHmlsAgent, type UserContext } from "@hmls/agent";
 import { db, schema } from "@hmls/agent/db";
+import { routeOrderToShop } from "@hmls/agent/common/shop-routing";
 import { Errors } from "@hmls/shared/errors";
 import { getLogger } from "@logtape/logtape";
 import { type AuthUserEnv, requireAuthUser } from "../middleware/auth.ts";
@@ -15,10 +16,12 @@ export function initChat(config: AgentConfig) {
   _config = config;
 }
 
-/** Look up customer by email, or create one if not found. */
+/** Look up customer by email, or create one if not found.
+ *  Returns the customer context AND their shopId (resolved from the DB row,
+ *  or stamped at creation using the primary shop). */
 async function resolveCustomer(
   userInfo: { email: string; name?: string; phone?: string },
-): Promise<UserContext | undefined> {
+): Promise<{ ctx: UserContext; shopId: string } | undefined> {
   if (!userInfo.email) return undefined;
 
   // Try to find existing customer by email
@@ -29,29 +32,45 @@ async function resolveCustomer(
     .limit(1);
 
   if (existing) {
+    // Use the customer's assigned shopId, or fall back to primary shop if unset.
+    let shopId = existing.shopId ?? null;
+    if (!shopId) {
+      const { shopId: primary } = await routeOrderToShop(null);
+      shopId = primary;
+    }
     return {
-      id: existing.id,
-      name: existing.name ?? userInfo.name ?? "",
-      email: existing.email ?? userInfo.email,
-      phone: existing.phone ?? userInfo.phone ?? "",
+      ctx: {
+        id: existing.id,
+        name: existing.name ?? userInfo.name ?? "",
+        email: existing.email ?? userInfo.email,
+        phone: existing.phone ?? userInfo.phone ?? "",
+      },
+      shopId,
     };
   }
 
-  // Create new customer
+  // Resolve primary shop for new customers (address unknown at first contact).
+  const { shopId } = await routeOrderToShop(null);
+
+  // Create new customer stamped with the primary shop.
   const [created] = await db
     .insert(schema.customers)
     .values({
       name: userInfo.name || null,
       email: userInfo.email,
       phone: userInfo.phone || null,
+      shopId,
     })
     .returning();
 
   return {
-    id: created.id,
-    name: created.name ?? "",
-    email: created.email ?? userInfo.email,
-    phone: created.phone ?? "",
+    ctx: {
+      id: created.id,
+      name: created.name ?? "",
+      email: created.email ?? userInfo.email,
+      phone: created.phone ?? "",
+    },
+    shopId: created.shopId ?? shopId,
   };
 }
 
@@ -97,12 +116,14 @@ chat.post("/", requireAuthUser, async (c) => {
   }
 
   // Resolve authenticated user -> customer record (upsert on first contact).
-  const userContext = await resolveCustomer({ email: authUser.email });
+  const resolved = await resolveCustomer({ email: authUser.email });
+  const userContext = resolved?.ctx;
+  const shopId = resolved?.shopId;
 
   const startTime = Date.now();
   const userId = userContext?.id ?? authUser.email;
   const messageCount = messages.length;
-  logger.info("Request received", { userId, messageCount });
+  logger.info("Request received", { userId, shopId, messageCount });
 
   try {
     const modelMessages = await convertToModelMessages(messages);
@@ -111,6 +132,7 @@ chat.post("/", requireAuthUser, async (c) => {
       messages: modelMessages,
       config: _config,
       userContext,
+      shopId,
     });
 
     const response = result.toUIMessageStreamResponse();
