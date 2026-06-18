@@ -31,6 +31,26 @@ import type {
 
 type ApiError = { error: { code: string; message: string } };
 
+/** Returns true when the order exists and belongs to the given shop. */
+async function orderInShop(id: number, shopId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: schema.orders.id })
+    .from(schema.orders)
+    .where(and(eq(schema.orders.id, id), eq(schema.orders.shopId, shopId)))
+    .limit(1);
+  return !!row;
+}
+
+/** Returns true when the provider exists and belongs to the given shop. */
+async function providerInShop(id: number, shopId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: schema.providers.id })
+    .from(schema.providers)
+    .where(and(eq(schema.providers.id, id), eq(schema.providers.shopId, shopId)))
+    .limit(1);
+  return !!row;
+}
+
 /** Provider row with aggregate mechanic stats appended. */
 type ProviderWithStats = ProviderRow & {
   weekUtilization: number | null;
@@ -391,6 +411,13 @@ adminMechanics.get("/:id/availability", async (c) => {
       400,
     );
   }
+  const shopId = c.get("shopId");
+  if (!(await providerInShop(id, shopId))) {
+    return c.json<ApiError>(
+      { error: { code: "NOT_FOUND", message: "Mechanic not found" } },
+      404,
+    );
+  }
   const rows = await db
     .select()
     .from(schema.providerAvailability)
@@ -406,6 +433,14 @@ adminMechanics.put("/:id/availability", zValidator("json", setAvailabilityInput)
     return c.json<ApiError>(
       { error: { code: "BAD_REQUEST", message: "Invalid mechanic ID" } },
       400,
+    );
+  }
+
+  const shopId = c.get("shopId");
+  if (!(await providerInShop(id, shopId))) {
+    return c.json<ApiError>(
+      { error: { code: "NOT_FOUND", message: "Mechanic not found" } },
+      404,
     );
   }
 
@@ -454,6 +489,13 @@ adminMechanics.get("/:id/overrides", zValidator("query", listOverridesQuery), as
       400,
     );
   }
+  const shopId = c.get("shopId");
+  if (!(await providerInShop(id, shopId))) {
+    return c.json<ApiError>(
+      { error: { code: "NOT_FOUND", message: "Mechanic not found" } },
+      404,
+    );
+  }
   const { from, to } = c.req.valid("query");
 
   const conditions = [eq(schema.providerScheduleOverrides.providerId, id)];
@@ -479,6 +521,14 @@ adminMechanics.post("/:id/overrides", zValidator("json", createOverrideInput), a
     return c.json<ApiError>(
       { error: { code: "BAD_REQUEST", message: "Invalid mechanic ID" } },
       400,
+    );
+  }
+
+  const shopId = c.get("shopId");
+  if (!(await providerInShop(id, shopId))) {
+    return c.json<ApiError>(
+      { error: { code: "NOT_FOUND", message: "Mechanic not found" } },
+      404,
     );
   }
 
@@ -531,6 +581,14 @@ adminMechanics.delete("/:id/overrides/:overrideId", async (c) => {
     return c.json<ApiError>(
       { error: { code: "BAD_REQUEST", message: "Invalid ID" } },
       400,
+    );
+  }
+
+  const shopId = c.get("shopId");
+  if (!(await providerInShop(id, shopId))) {
+    return c.json<ApiError>(
+      { error: { code: "NOT_FOUND", message: "Mechanic not found" } },
+      404,
     );
   }
 
@@ -636,6 +694,15 @@ adminMechanics.post(
     if (!provider) {
       return c.json<ApiError>(
         { error: { code: "NOT_FOUND", message: "Target mechanic not found" } },
+        404,
+      );
+    }
+
+    // Guard the order too — the provider is shop-checked above but the order
+    // path param was not yet verified to belong to this shop.
+    if (!(await orderInShop(orderId, shopId))) {
+      return c.json<ApiError>(
+        { error: { code: "NOT_FOUND", message: "Order not found" } },
         404,
       );
     }

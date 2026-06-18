@@ -38,6 +38,16 @@ function adminActor(email: string | null | undefined): Actor {
   return { kind: "admin", email: email ?? "admin" };
 }
 
+/** Returns true when the order exists and belongs to the given shop. */
+async function orderInShop(id: number, shopId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: schema.orders.id })
+    .from(schema.orders)
+    .where(and(eq(schema.orders.id, id), eq(schema.orders.shopId, shopId)))
+    .limit(1);
+  return !!row;
+}
+
 /** Legacy orders predate the shareToken column. Lazily backfill one before
  *  a lifecycle write so the subsequent notification / PDF link has a valid
  *  token. Separate UPDATE (not inside the harness transaction) keeps the
@@ -402,6 +412,10 @@ orders.patch("/:id/status", zValidator("json", transitionOrderInput), async (c) 
   const shopId = c.get("shopId");
   const authUser = c.get("authUser");
 
+  if (!(await orderInShop(id, shopId))) {
+    return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
+  }
+
   // Drive-by adminNotes write — status-agnostic, so do it regardless of
   // transition outcome. Backfill shareToken for legacy orders while we're
   // here (pre-existing behavior kept for compatibility).
@@ -425,6 +439,10 @@ orders.post("/:id/send", async (c) => {
   if (!Number.isInteger(id) || id <= 0) {
     return c.json<ApiError>({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
   }
+  const shopId = c.get("shopId");
+  if (!(await orderInShop(id, shopId))) {
+    return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
+  }
   const authUser = c.get("authUser");
   await backfillShareTokenIfMissing(id);
   const result = await transition(id, "estimated", adminActor(authUser.email));
@@ -439,6 +457,10 @@ orders.post("/:id/revise", async (c) => {
   if (!Number.isInteger(id) || id <= 0) {
     return c.json<ApiError>({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
   }
+  const shopId = c.get("shopId");
+  if (!(await orderInShop(id, shopId))) {
+    return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
+  }
   const authUser = c.get("authUser");
   const result = await transition(id, "revised", adminActor(authUser.email));
   return sendOrderStateResult(c, result);
@@ -449,6 +471,11 @@ orders.get("/:id/events", async (c) => {
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id) || id <= 0) {
     return c.json<ApiError>({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
+  }
+
+  const shopId = c.get("shopId");
+  if (!(await orderInShop(id, shopId))) {
+    return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
   }
 
   const events = await db
@@ -469,6 +496,11 @@ orders.post("/:id/events", zValidator("json", addOrderNoteInput), async (c) => {
     return c.json<ApiError>({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
   }
 
+  const shopId = c.get("shopId");
+  if (!(await orderInShop(id, shopId))) {
+    return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
+  }
+
   const body = c.req.valid("json");
 
   const authUser = c.get("authUser");
@@ -483,6 +515,11 @@ orders.post("/:id/payment", zValidator("json", recordPaymentInput), async (c) =>
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id) || id <= 0) {
     return c.json<ApiError>({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
+  }
+
+  const shopId = c.get("shopId");
+  if (!(await orderInShop(id, shopId))) {
+    return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
   }
 
   const body = c.req.valid("json");
