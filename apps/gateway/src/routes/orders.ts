@@ -246,8 +246,17 @@ orders.get("/:id", async (c) => {
 
   const [customer, events, intake] = await Promise.all([
     order.customerId
-      ? db.select().from(schema.customers).where(eq(schema.customers.id, order.customerId)).limit(1)
-        .then((r) => r[0])
+      ? db.select().from(schema.customers).where(
+        // Scope by the order's shop unless the caller is the cross-shop owner
+        // (OWNER_ALL_SHOPS). This prevents a foreign-shop customer profile from
+        // leaking when an order is routed to a different shop than the customer's
+        // home shop. The order's contact snapshot (contactName/Email/Phone/Address)
+        // is always present and serves as the fallback when null is returned here.
+        shopId === OWNER_ALL_SHOPS ? eq(schema.customers.id, order.customerId) : and(
+          eq(schema.customers.id, order.customerId),
+          eq(schema.customers.shopId, order.shopId),
+        ),
+      ).limit(1).then((r) => r[0])
       : null,
     db.select().from(schema.orderEvents).where(eq(schema.orderEvents.orderId, id))
       .orderBy(desc(schema.orderEvents.createdAt)),

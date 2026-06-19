@@ -644,7 +644,14 @@ adminMechanics.get("/:id/orders", zValidator("query", listMechanicOrdersQuery), 
     .from(schema.orders)
     .leftJoin(
       schema.customers,
-      eq(schema.orders.customerId, schema.customers.id),
+      // Scope the join by the order's own shopId so a customer whose home shop
+      // differs from the order's routed shop is never surfaced here. Using the
+      // order-column shop (not the caller's shopId) handles OWNER_ALL_SHOPS
+      // transparently — the join only succeeds when customer and order share a shop.
+      and(
+        eq(schema.orders.customerId, schema.customers.id),
+        eq(schema.customers.shopId, schema.orders.shopId),
+      ),
     )
     .where(and(...conditions))
     .orderBy(asc(schema.orders.scheduledAt))
