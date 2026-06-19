@@ -79,11 +79,28 @@ export const requireShopContext = createMiddleware<ShopCtx>(async (c, next) => {
   } else if (role === "admin" || role === "customer") {
     // admin + customer are both `customers` rows. Match by auth_user_id, with an
     // email fallback (mirrors requireAuth) so guests who later sign in still resolve.
-    let [cust] = await db.select({ shopId: schema.customers.shopId })
+    let custId: number | undefined;
+    let [cust] = await db
+      .select({ id: schema.customers.id, shopId: schema.customers.shopId })
       .from(schema.customers).where(eq(schema.customers.authUserId, user.id)).limit(1);
     if (!cust && user.email) {
-      [cust] = await db.select({ shopId: schema.customers.shopId })
-        .from(schema.customers).where(eq(schema.customers.email, user.email)).limit(1);
+      // Email fallback: only bind when EXACTLY ONE row matches — avoids cross-shop
+      // mis-binding when multiple shops have a customer with the same email.
+      const emailMatches = await db
+        .select({ id: schema.customers.id, shopId: schema.customers.shopId })
+        .from(schema.customers)
+        .where(eq(schema.customers.email, user.email))
+        .limit(2);
+      if (emailMatches.length === 1) {
+        cust = emailMatches[0];
+        custId = cust.id;
+        // Self-heal: stamp auth_user_id so the fallback is not needed next time.
+        await db
+          .update(schema.customers)
+          .set({ authUserId: user.id })
+          .where(eq(schema.customers.id, custId));
+      }
+      // 0 or ≥2 matches → cust stays undefined → NO_SHOP (403 below).
     }
     homeShopId = cust?.shopId ?? null;
   }

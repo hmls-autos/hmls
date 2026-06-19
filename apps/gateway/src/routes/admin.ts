@@ -273,6 +273,27 @@ admin.post("/customers", zValidator("json", createCustomerInput), async (c) => {
     }, 400);
   }
 
+  // Per-shop uniqueness: reject if this shop already has a customer with the
+  // same email. Different shops may share emails (no global constraint).
+  if (body.email) {
+    const [dupe] = await db
+      .select({ id: schema.customers.id })
+      .from(schema.customers)
+      .where(and(eq(schema.customers.email, body.email), eq(schema.customers.shopId, shopId)))
+      .limit(1);
+    if (dupe) {
+      return c.json<ApiError>(
+        {
+          error: {
+            code: "CONFLICT",
+            message: "A customer with this email already exists in this shop",
+          },
+        },
+        409,
+      );
+    }
+  }
+
   const [customer] = await db
     .insert(schema.customers)
     .values({

@@ -7,8 +7,27 @@
 BEGIN;
 
 -- Catch stragglers (rows inserted before the stamping code landed) -> san-jose.
+-- RAISE NOTICE lets the operator see how many rows get re-tenanted instead of
+-- the backfill being silent.
+DO $$
+BEGIN
+  RAISE NOTICE 'backfilling % NULL shop_id rows in customers',
+    (SELECT count(*) FROM customers WHERE shop_id IS NULL);
+END $$;
 UPDATE customers SET shop_id = (SELECT id FROM shops WHERE slug = 'san-jose' LIMIT 1) WHERE shop_id IS NULL;
+
+DO $$
+BEGIN
+  RAISE NOTICE 'backfilling % NULL shop_id rows in orders',
+    (SELECT count(*) FROM orders WHERE shop_id IS NULL);
+END $$;
 UPDATE orders    SET shop_id = (SELECT id FROM shops WHERE slug = 'san-jose' LIMIT 1) WHERE shop_id IS NULL;
+
+DO $$
+BEGIN
+  RAISE NOTICE 'backfilling % NULL shop_id rows in providers',
+    (SELECT count(*) FROM providers WHERE shop_id IS NULL);
+END $$;
 UPDATE providers SET shop_id = (SELECT id FROM shops WHERE slug = 'san-jose' LIMIT 1) WHERE shop_id IS NULL;
 
 -- Enforce.
