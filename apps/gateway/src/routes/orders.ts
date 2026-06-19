@@ -560,9 +560,76 @@ orders.patch("/:id/notes", zValidator("json", updateAdminNotesInput), async (c) 
   return c.json<OrderRow>(updated);
 });
 
+// GET /orders/:id/pdf — admin-authenticated PDF (no token required; shop-scoped)
+// Mounted under /api/admin/orders, so requireAdmin + requireShopContext are
+// already applied by the orders router middleware above.
+orders.get("/:id/pdf", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id <= 0) {
+    return c.json<ApiError>({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
+  }
+
+  const shopId = c.get("shopId");
+
+  const [order] = await db
+    .select()
+    .from(schema.orders)
+    .where(
+      shopId === OWNER_ALL_SHOPS
+        ? eq(schema.orders.id, id)
+        : and(eq(schema.orders.id, id), eq(schema.orders.shopId, shopId)),
+    )
+    .limit(1);
+
+  if (!order) {
+    return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
+  }
+
+  const customer = {
+    name: order.contactName,
+    phone: order.contactPhone,
+    email: order.contactEmail,
+    address: order.contactAddress,
+    vehicleInfo: order.vehicleInfo as { make?: string; model?: string; year?: string } | null,
+  };
+
+  const items =
+    ((order.items ?? []) as { name: string; description?: string; totalCents: number }[]).map(
+      (i) => ({
+        name: i.name,
+        description: i.description ?? "",
+        price: i.totalCents ?? 0,
+      }),
+    );
+
+  const pdfStream = await renderToStream(
+    EstimatePdf({
+      estimate: {
+        id,
+        items,
+        subtotal: order.subtotalCents ?? 0,
+        priceRangeLow: order.priceRangeLowCents ?? 0,
+        priceRangeHigh: order.priceRangeHighCents ?? 0,
+        notes: order.notes,
+        expiresAt: order.expiresAt ?? new Date(),
+        createdAt: order.createdAt,
+      },
+      customer,
+    }),
+  );
+
+  return new Response(pdfStream as unknown as ReadableStream, {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="HMLS-Estimate-${id}.pdf"`,
+    },
+  });
+});
+
 export { orders };
 
-// Public order PDF route (token-based, no admin auth required)
+// Public order PDF route — token is REQUIRED; no token = 404.
+// This is the unauthenticated, capability-based path shared in customer emails.
 const ordersPdf = new Hono();
 
 ordersPdf.get("/:id/pdf", zValidator("query", orderPdfQuery), async (c) => {
@@ -573,14 +640,17 @@ ordersPdf.get("/:id/pdf", zValidator("query", orderPdfQuery), async (c) => {
 
   const { token } = c.req.valid("query");
 
+  // Require a non-empty token — id-only access is an IDOR (any caller can read
+  // any order's PDF by guessing the numeric id). Token presence is the
+  // capability proof that authorizes access to this specific order.
+  if (!token) {
+    return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
+  }
+
   const [order] = await db
     .select()
     .from(schema.orders)
-    .where(
-      token
-        ? and(eq(schema.orders.id, id), eq(schema.orders.shareToken, token))
-        : eq(schema.orders.id, id),
-    )
+    .where(and(eq(schema.orders.id, id), eq(schema.orders.shareToken, token)))
     .limit(1);
 
   if (!order) {
