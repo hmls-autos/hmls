@@ -48,26 +48,24 @@ filled (Task 2). The scorer is ready but starved until capture lands. Run it wit
 
 ---
 
-### Task 2: Require `confirmed_diagnosis` at completion — STATUS: DONE (2026-06-20, option B: hard-block)
+### Task 2: Capture `confirmed_diagnosis` at completion — STATUS: DONE (2026-06-20, option A: soft-nudge)
 
 Today `complete_job` (`in_progress → completed`) succeeds with an empty
-`confirmed_diagnosis`, so the loop starves. **Decision: hard-block (B).** The
-harness now rejects `→ completed` until the mechanic's confirmed diagnosis is on
-record — enforced server-side (can't be bypassed by any surface), surfaced to the
-mechanic via the existing `toast.error` in `transitionStatus`.
+`confirmed_diagnosis`, so the loop starves. **Decision: soft-nudge (A).** Hard-block
+(B) was built first, then reverted at the user's call ("don't hard-block"). The
+mechanic is prompted for the diagnosis inline at completion but can always proceed;
+nothing is enforced server-side.
 
 **Files:**
-- Modify: `packages/shared/src/order/status.ts` — pure `completionMissingDiagnosis(to, confirmedDiagnosis)` predicate.
-- Test: `packages/shared/src/order/status_test.ts`.
-- Modify: `apps/agent/src/services/order-state.ts` — `transition()` guard + new `diagnosis_required` error code.
-- Modify: `apps/gateway/src/lib/order-state-http.ts` — map `diagnosis_required` → 400 `DIAGNOSIS_REQUIRED`.
-- Modify: `apps/agent/src/services/order-state-tool.ts` — map `diagnosis_required` for the chat-agent envelope (caught by exhaustiveness check).
+- `packages/shared/src/order/status.ts` (+ `status_test.ts`) — pure `completionMissingDiagnosis(to, confirmedDiagnosis)` predicate (kept; now web-only).
+- `apps/hmls-web/lib/order-actions.ts` (+ `order-actions.test.ts`) — `complete_job.invoke` prompts via the existing `askReason` dialog when the diagnosis is missing, saves the entry if given, then completes; `null` (backed out) aborts. `saveConfirmedDiagnosis` added to `ActionContext`.
+- Reverted: the `transition()` guard + `diagnosis_required` error code + its HTTP/tool mappers (server no longer blocks).
 
-- [x] **Step 1–4:** TDD the pure `completionMissingDiagnosis` predicate (empty/blank/null → block; present → allow; only gates `completed`). 3 tests pass.
-- [x] **Step 5:** Guard in `transition()` returns `{ code: "diagnosis_required" }` before any write; add the error code to the union + both error mappers (HTTP + tool).
-- [x] **Step 6:** `deno task check` + `deno lint` + `deno fmt` clean; 8/8 shared/order tests pass; web `typecheck` clean (additive shared export). Committed.
+- [x] TDD `completionMissingDiagnosis` (shared, 3 cases).
+- [x] `complete_job` soft-nudge (web, 4 cases: present→complete; missing+text→save+complete; missing+blank→complete; missing+cancel→abort).
+- [x] Verified: `deno task check` / lint / fmt + shared tests; web `bun test` + `typecheck` + biome. Committed.
 
-**Optional polish (not done, low value):** pre-empt in the web action bar — disable the "Complete" button with a tooltip when `confirmedDiagnosis` is empty (reuse `completionMissingDiagnosis`), so the mechanic sees the requirement before clicking instead of via a toast on rejection.
+**UX:** mechanic clicks Complete → if no diagnosis, a titled text prompt ("What did it turn out to be?") appears; type it (saved) or leave blank (skipped); either way the order completes. Captures at the highest-leverage moment without wedging anyone.
 
 ---
 

@@ -225,12 +225,11 @@ export function availableActions(
   return perms.filter((s) => allowed.includes(s));
 }
 
-/** Completing an order requires the mechanic's confirmed diagnosis on record.
- *  That (intake symptom → confirmed truth) pair is the labeled ground truth the
- *  diagnostic engine calibrates on, so the harness hard-blocks `→ completed`
- *  until it's filled. Returns true when the transition must be blocked. Pure —
- *  the write layer (transition) enforces it; the web UI calls it to pre-empt
- *  the round-trip and guide the mechanic to the diagnosis field. */
+/** True when an order is being completed without the mechanic's confirmed
+ *  diagnosis. That (intake symptom → confirmed truth) pair is the labeled
+ *  ground truth the diagnostic engine calibrates on. The web uses this to
+ *  prompt for it at completion — a soft nudge, not a hard block: the mechanic
+ *  can still proceed. Pure. */
 export function completionMissingDiagnosis(
   to: OrderStatus,
   confirmedDiagnosis: string | null | undefined,

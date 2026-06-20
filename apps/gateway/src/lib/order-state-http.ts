@@ -59,11 +59,6 @@ export function orderStateErrorResponse(
         status: 400,
         body: { error: { code: "BAD_REQUEST", message: err.message } },
       };
-    case "diagnosis_required":
-      return {
-        status: 400,
-        body: { error: { code: "DIAGNOSIS_REQUIRED", message: err.message } },
-      };
   }
 }
 

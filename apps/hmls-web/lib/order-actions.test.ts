@@ -27,6 +27,7 @@ function makeCtx(overrides: Partial<ActionContext> = {}): ActionContext {
     transitionStatus: mock(async () => {}),
     setSchedule: mock(async () => {}),
     markPaid: mock(async () => {}),
+    saveConfirmedDiagnosis: mock(async () => {}),
     openDialog: mock(() => {}),
     askReason: mock(async () => "reason"),
     mutate: mock(() => {}),
@@ -146,6 +147,49 @@ describe("ACTION_REGISTRY.invoke behavior", () => {
     const ctx = makeCtx();
     await ACTION_REGISTRY.mark_paid.invoke(ctx);
     expect(ctx.openDialog).toHaveBeenCalledWith("mark_paid");
+  });
+});
+
+describe("complete_job soft-nudge for confirmed diagnosis", () => {
+  test("completes directly when a confirmed diagnosis is already recorded", async () => {
+    const ctx = makeCtx({
+      order: makeOrder({ confirmedDiagnosis: "worn front pads" }),
+    });
+    await ACTION_REGISTRY.complete_job.invoke(ctx);
+    expect(ctx.askReason).not.toHaveBeenCalled();
+    expect(ctx.transitionStatus).toHaveBeenCalledWith("completed");
+  });
+
+  test("prompts when diagnosis is missing, saves the entry, then completes", async () => {
+    const ctx = makeCtx({
+      order: makeOrder({ confirmedDiagnosis: null }),
+      askReason: mock(async () => "seized brake caliper"),
+    });
+    await ACTION_REGISTRY.complete_job.invoke(ctx);
+    expect(ctx.saveConfirmedDiagnosis).toHaveBeenCalledWith(
+      "seized brake caliper",
+    );
+    expect(ctx.transitionStatus).toHaveBeenCalledWith("completed");
+  });
+
+  test("completes without saving when the prompt is left blank", async () => {
+    const ctx = makeCtx({
+      order: makeOrder({ confirmedDiagnosis: null }),
+      askReason: mock(async () => ""),
+    });
+    await ACTION_REGISTRY.complete_job.invoke(ctx);
+    expect(ctx.saveConfirmedDiagnosis).not.toHaveBeenCalled();
+    expect(ctx.transitionStatus).toHaveBeenCalledWith("completed");
+  });
+
+  test("aborts completion when the mechanic backs out of the prompt", async () => {
+    const ctx = makeCtx({
+      order: makeOrder({ confirmedDiagnosis: null }),
+      askReason: mock(async () => null),
+    });
+    await ACTION_REGISTRY.complete_job.invoke(ctx);
+    expect(ctx.saveConfirmedDiagnosis).not.toHaveBeenCalled();
+    expect(ctx.transitionStatus).not.toHaveBeenCalled();
   });
 });
 

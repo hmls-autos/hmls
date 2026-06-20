@@ -37,7 +37,6 @@ import {
   actorString,
   allowedTransitions,
   canActorTransition,
-  completionMissingDiagnosis,
   EDITABLE_STATUSES,
   isOrderStatus,
   isTerminal,
@@ -78,8 +77,7 @@ export type OrderStateError =
   | { code: "conflict"; message: string }
   | { code: "terminal_state"; status: TerminalStatus }
   | { code: "not_editable"; status: OrderStatus }
-  | { code: "invalid_input"; message: string }
-  | { code: "diagnosis_required"; message: string };
+  | { code: "invalid_input"; message: string };
 
 export type OrderStateResult<T = OrderRow> =
   | { ok: true; value: T }
@@ -146,19 +144,6 @@ export async function transition(
       error: {
         code: "forbidden",
         reason: `${actorString(actor)} cannot transition ${from}->${to}`,
-      },
-    };
-  }
-
-  // Hard invariant (Phase 0): completing an order requires the mechanic's
-  // confirmed diagnosis on record — that (intake symptom → confirmed truth)
-  // pair is the ground truth the diagnostic engine calibrates on.
-  if (completionMissingDiagnosis(to, current.confirmedDiagnosis)) {
-    return {
-      ok: false,
-      error: {
-        code: "diagnosis_required",
-        message: "Record the confirmed diagnosis before marking the order completed.",
       },
     };
   }
