@@ -15,6 +15,7 @@ import {
   transition,
 } from "@hmls/agent/order-state";
 import { autoAssignProvider } from "@hmls/agent/auto-assign";
+import { recordOutcome } from "@hmls/agent/fixo-brain";
 import { sendOrderStateResult } from "../lib/order-state-http.ts";
 import { pdfResponse } from "../lib/pdf-response.ts";
 import {
@@ -317,6 +318,22 @@ orders.patch("/:id", zValidator("json", updateOrderInput), async (c) => {
   if (!latest) {
     return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
   }
+
+  // Loop closer: when the mechanic's confirmed diagnosis is recorded on a
+  // fixo-linked order, report the outcome back to the brain. Fire-and-forget —
+  // a calibration write must never block or fail the order save. No-op until an
+  // order carries a fixo_prediction_id (set once HMLS routes through the brain).
+  const diag = body.confirmedDiagnosis?.trim();
+  if (diag && latest.fixoPredictionId) {
+    recordOutcome({
+      predictionId: latest.fixoPredictionId,
+      confirmedDiagnosis: diag,
+      actualCostCents: latest.paidAmountCents ?? latest.subtotalCents,
+    }).catch((err) => {
+      console.error(`recordOutcome failed for order ${id}:`, String(err));
+    });
+  }
+
   return c.json<OrderRow>(latest);
 });
 

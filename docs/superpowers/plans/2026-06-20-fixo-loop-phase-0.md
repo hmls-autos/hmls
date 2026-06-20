@@ -108,7 +108,7 @@ POST /fixo/outcomes            # the back-seam / loop closer
   - [x] unit test for the `isolateSystems` core (was untested).
   - [ ] `estimate` — needs the OLP pricing-engine extraction (the calc is embedded in `createFixoEstimateTool.execute`). NEXT. When it lands, assemble the three into a `BrainService` object.
 - [ ] **2.4 HMLS full replace** — point `agent/src/hmls` diagnosis + estimate at `BrainService`; stamp the returned `predictionId` onto `orders.fixo_prediction_id` at order create.
-- [ ] **2.5 Outcome callback** — in the `confirmedDiagnosis` write path, when the order has a `fixo_prediction_id`, call `recordOutcome`. Fire-and-forget; failures logged, never block the save.
+- [x] **2.5 Outcome callback** — DONE. Gateway orders PATCH fires `recordOutcome` after a `confirmed_diagnosis` write when the order carries `fixo_prediction_id` (actualCost = paidAmount ?? subtotal). Fire-and-forget (`.catch` logs), never blocks the save. Added `@hmls/agent/fixo-brain` export. No-op until 2.4 stamps `prediction_id`.
 - [ ] **2.6 Eval join** — extend `fixo-eval --real` to score the brain's stored prediction against the confirmed outcome via the `predictionId` join (not just a fresh re-run).
 
 ---
