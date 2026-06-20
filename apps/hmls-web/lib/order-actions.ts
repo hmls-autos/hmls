@@ -1,7 +1,11 @@
 import type { Order } from "@hmls/shared/db/types";
 import type { ActionId } from "@hmls/shared/order/profiles";
 import { STATUS_PROFILES } from "@hmls/shared/order/profiles";
-import { isOrderStatus, type OrderStatus } from "@hmls/shared/order/status";
+import {
+  completionMissingDiagnosis,
+  isOrderStatus,
+  type OrderStatus,
+} from "@hmls/shared/order/status";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useOrderMutations } from "@/hooks/useOrderMutations";
@@ -24,6 +28,7 @@ export type ActionContext = {
     reference?: string;
     paidAt?: string;
   }): Promise<void>;
+  saveConfirmedDiagnosis(diagnosis: string): Promise<void>;
   openDialog(id: DialogId): void;
   askReason(opts: {
     title: string;
@@ -166,7 +171,24 @@ export const ACTION_REGISTRY: Readonly<Record<ActionId, ActionDescriptor>> = {
     variant: () => "primary",
     visible: () => true,
     enabled: () => true,
-    invoke: (ctx) => ctx.transitionStatus("completed"),
+    // Soft nudge (Phase 0): completing without a confirmed diagnosis starves
+    // the diagnostic data loop. Prompt for it inline at completion, but let
+    // the mechanic proceed either way — not a hard block.
+    invoke: async (ctx) => {
+      if (
+        completionMissingDiagnosis("completed", ctx.order.confirmedDiagnosis)
+      ) {
+        const d = await ctx.askReason({
+          title: "What did it turn out to be?",
+          description:
+            "Recording the confirmed diagnosis trains the estimate engine. " +
+            "Leave blank to complete without it.",
+        });
+        if (d === null) return; // mechanic backed out of completing
+        if (d.trim()) await ctx.saveConfirmedDiagnosis(d.trim());
+      }
+      await ctx.transitionStatus("completed");
+    },
   },
   cancel_order: {
     id: "cancel_order",
@@ -268,6 +290,7 @@ export function useActionInvoker(
       transitionStatus: m.transitionStatus,
       setSchedule: m.setSchedule,
       markPaid: m.markPaid,
+      saveConfirmedDiagnosis: m.saveConfirmedDiagnosis,
       openDialog: setDialog,
       askReason,
       mutate: revalidate,

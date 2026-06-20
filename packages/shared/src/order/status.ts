@@ -225,6 +225,18 @@ export function availableActions(
   return perms.filter((s) => allowed.includes(s));
 }
 
+/** True when an order is being completed without the mechanic's confirmed
+ *  diagnosis. That (intake symptom → confirmed truth) pair is the labeled
+ *  ground truth the diagnostic engine calibrates on. The web uses this to
+ *  prompt for it at completion — a soft nudge, not a hard block: the mechanic
+ *  can still proceed. Pure. */
+export function completionMissingDiagnosis(
+  to: OrderStatus,
+  confirmedDiagnosis: string | null | undefined,
+): boolean {
+  return to === "completed" && !confirmedDiagnosis?.trim();
+}
+
 // ---------------------------------------------------------------------------
 // Step-progress helpers (consumed by web's progress bar)
 // ---------------------------------------------------------------------------

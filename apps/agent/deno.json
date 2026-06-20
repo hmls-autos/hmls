@@ -7,7 +7,8 @@
     "./order-state": "./src/services/order-state.ts",
     "./order-state-core": "./src/services/order-state-core.ts",
     "./order-intake": "./src/services/order-intake.ts",
-    "./auto-assign": "./src/services/auto-assign.ts"
+    "./auto-assign": "./src/services/auto-assign.ts",
+    "./fixo-brain": "./src/fixo/fixo-brain.ts"
   },
   "imports": {
     "@react-pdf/renderer": "npm:@react-pdf/renderer@^4.3.2",
