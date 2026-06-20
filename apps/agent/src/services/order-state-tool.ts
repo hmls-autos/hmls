@@ -46,6 +46,8 @@ export function orderStateErrorMessage(err: OrderStateError): string {
       return `Order in '${err.status}' status cannot be edited`;
     case "invalid_input":
       return err.message;
+    case "diagnosis_required":
+      return err.message;
     default: {
       const _exhaustive: never = err;
       throw new Error(`Unhandled OrderStateError: ${JSON.stringify(_exhaustive)}`);

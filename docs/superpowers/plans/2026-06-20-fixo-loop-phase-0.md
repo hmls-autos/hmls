@@ -48,27 +48,26 @@ filled (Task 2). The scorer is ready but starved until capture lands. Run it wit
 
 ---
 
-### Task 2: Require/nudge `confirmed_diagnosis` at completion — STATUS: SPEC ONLY (needs a product decision)
+### Task 2: Require `confirmed_diagnosis` at completion — STATUS: DONE (2026-06-20, option B: hard-block)
 
 Today `complete_job` (`in_progress → completed`) succeeds with an empty
-`confirmed_diagnosis`. The field is editable but optional, so the loop starves.
-This task makes capture reliable.
+`confirmed_diagnosis`, so the loop starves. **Decision: hard-block (B).** The
+harness now rejects `→ completed` until the mechanic's confirmed diagnosis is on
+record — enforced server-side (can't be bypassed by any surface), surfaced to the
+mechanic via the existing `toast.error` in `transitionStatus`.
 
-**DECISION REQUIRED (user):** hard-block vs soft-nudge.
-- **(A) Soft-nudge (recommended):** web-only. Before `transitionStatus("completed")`, if `confirmedDiagnosis` is empty, show a confirm dialog ("Mark complete without recording what it actually was? This trains the diagnostic engine."). Non-blocking, reversible, zero gateway/contract risk. Mechanic can still skip.
-- **(B) Hard-block:** gateway guard in `transition()` — reject `→ completed` when `confirmedDiagnosis` is empty (`Errors.badRequest`). Guarantees 100% fill but can wedge the completion flow and surprise the mechanic.
+**Files:**
+- Modify: `packages/shared/src/order/status.ts` — pure `completionMissingDiagnosis(to, confirmedDiagnosis)` predicate.
+- Test: `packages/shared/src/order/status_test.ts`.
+- Modify: `apps/agent/src/services/order-state.ts` — `transition()` guard + new `diagnosis_required` error code.
+- Modify: `apps/gateway/src/lib/order-state-http.ts` — map `diagnosis_required` → 400 `DIAGNOSIS_REQUIRED`.
+- Modify: `apps/agent/src/services/order-state-tool.ts` — map `diagnosis_required` for the chat-agent envelope (caught by exhaustiveness check).
 
-**Files (option A):**
-- Modify: `apps/hmls-web/hooks/useOrderMutations.ts:35` (`transitionStatus`) or the `complete_job` action handler in the order detail BookingPanel/action bar.
-- Test: web unit test for the guard predicate (empty diagnosis + target=completed → needs-confirm true).
+- [x] **Step 1–4:** TDD the pure `completionMissingDiagnosis` predicate (empty/blank/null → block; present → allow; only gates `completed`). 3 tests pass.
+- [x] **Step 5:** Guard in `transition()` returns `{ code: "diagnosis_required" }` before any write; add the error code to the union + both error mappers (HTTP + tool).
+- [x] **Step 6:** `deno task check` + `deno lint` + `deno fmt` clean; 8/8 shared/order tests pass; web `typecheck` clean (additive shared export). Committed.
 
-**Steps (option A — TDD, write only after the decision is made):**
-- [ ] **Step 1:** Write failing test for a pure `needsDiagnosisConfirm(order, targetStatus): boolean` helper (`true` iff `targetStatus === "completed" && !order.confirmedDiagnosis?.trim()`).
-- [ ] **Step 2:** Run it, verify it fails.
-- [ ] **Step 3:** Implement `needsDiagnosisConfirm` in a web lib.
-- [ ] **Step 4:** Run test → PASS.
-- [ ] **Step 5:** Wire the `complete_job` handler to gate on it (show dialog; proceed on confirm).
-- [ ] **Step 6:** `bun run lint && bun run typecheck && bun run test && bun run build`; commit.
+**Optional polish (not done, low value):** pre-empt in the web action bar — disable the "Complete" button with a tooltip when `confirmedDiagnosis` is empty (reuse `completionMissingDiagnosis`), so the mechanic sees the requirement before clicking instead of via a toast on rejection.
 
 ---
 
