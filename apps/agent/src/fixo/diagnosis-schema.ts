@@ -3,7 +3,9 @@ import { z } from "zod";
 export const structuredDiagnosisSchema = z.object({
   candidate_systems: z.array(z.object({
     system: z.string().describe("e.g. 'brakes', 'fuel', 'ignition', 'cooling'"),
-    confidence: z.number().int().min(0).max(3).describe("0=ruled-out,1=low,2=medium,3=high"),
+    confidence: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]).describe(
+      "0=ruled-out,1=low,2=medium,3=high",
+    ),
     reasons: z.array(z.string()),
   })).describe("Ranked suspect systems."),
   likely_root_cause: z.string().optional()

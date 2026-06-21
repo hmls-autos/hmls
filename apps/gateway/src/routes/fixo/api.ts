@@ -1,6 +1,6 @@
 // Fixo public API (v1) — the diagnostic brain over REST. Key-gated (see the
-// api-key middleware). One symptom in → the agent's diagnosis + estimate out.
-// Wraps the proven full agent via runFixoOnce (single-shot, read-only).
+// api-key middleware). Runs the brain single-shot, returns STRUCTURED diagnosis:
+// { diagnosis: { candidate_systems, likely_root_cause?, recommended_tests, safety_flags, to_confirm, narrative } }
 
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";

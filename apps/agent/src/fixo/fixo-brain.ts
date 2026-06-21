@@ -11,12 +11,7 @@ import { eq } from "drizzle-orm";
 import { getLogger } from "@logtape/logtape";
 import { db, schema } from "../db/client.ts";
 import { diagnoseStructured } from "./diagnose-structured.ts";
-import {
-  type BrainService,
-  type DiagnoseRequest,
-  type DiagnoseResult,
-  newPredictionId,
-} from "./brain-service.ts";
+import { type BrainService, type DiagnoseRequest, newPredictionId } from "./brain-service.ts";
 import type { DiagnoseOnceInput } from "./run-once-prompt.ts";
 
 const logger = getLogger(["hmls", "agent", "fixo-brain"]);
@@ -84,7 +79,7 @@ export const diagnose: BrainService["diagnose"] = async (req) => {
     .where(eq(schema.fixoPredictions.id, predictionId));
   return {
     predictionId,
-    candidateSystems: structured.candidate_systems as DiagnoseResult["candidateSystems"],
+    candidateSystems: structured.candidate_systems,
     rootCause: structured.likely_root_cause,
     tests: structured.recommended_tests,
   };
