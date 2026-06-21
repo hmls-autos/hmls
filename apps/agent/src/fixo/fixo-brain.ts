@@ -5,37 +5,86 @@
 // fixo_predictions, so lifting behind HTTP later is a transport swap.
 //
 // `estimate` lands with the pricing-engine extraction (Slice 2.3 cont.); this
-// file ships `diagnose` (the rule layer) + `recordOutcome` (the loop closer).
+// file ships `diagnose` (the expert LLM layer) + `recordOutcome` (the loop closer).
 
 import { eq } from "drizzle-orm";
 import { getLogger } from "@logtape/logtape";
 import { db, schema } from "../db/client.ts";
-import { isolateSystems } from "./tools/system-isolation.ts";
-import { type BrainService, type DiagnoseResult, newPredictionId } from "./brain-service.ts";
+import { diagnoseStructured } from "./diagnose-structured.ts";
+import {
+  type BrainService,
+  type DiagnoseRequest,
+  type DiagnoseResult,
+  newPredictionId,
+} from "./brain-service.ts";
+import type { DiagnoseOnceInput } from "./run-once-prompt.ts";
 
 const logger = getLogger(["hmls", "agent", "fixo-brain"]);
 
-/** Rule-based diagnosis + prediction logging. Ranks candidate systems from the
- *  symptom and records the call as a fixo_predictions row keyed by the returned
- *  predictionId, so recordOutcome can link the real-world result later.
- *
- *  ponytail: v1 scores candidates from symptom keywords only; DTC codes are
- *  stored on the row but not yet mapped to systems (needs lookupObdCode), and
- *  rootCause / tests synthesis (the LLM layer) is a later enhancement. */
-export const diagnose: BrainService["diagnose"] = async (req) => {
-  const predictionId = newPredictionId();
-  const candidateSystems = isolateSystems({ symptomDescription: req.symptom });
-  const result: DiagnoseResult = { predictionId, candidateSystems };
+/** Map DiagnoseRequest.vehicle (VehicleInfo — all fields optional) to the
+ *  DiagnoseOnceInput.vehicle shape (year/make/model required). Fallback to
+ *  empty string so the agent still gets a usable prompt. */
+function toOnceVehicle(req: DiagnoseRequest): DiagnoseOnceInput["vehicle"] {
+  return {
+    year: req.vehicle.year ?? "",
+    make: req.vehicle.make ?? "",
+    model: req.vehicle.model ?? "",
+  };
+}
 
+/** Cheap, synchronous-ish: mint a prediction id + insert the prediction row
+ *  WITHOUT running the agent. For the create_order hot path — fill
+ *  predicted_diagnosis async after via fillPrediction.
+ *
+ *  ponytail: if a worker/queue ever exists, move fillPrediction there; for now
+ *  a detached promise is fine since Deno Deploy doesn't kill the isolate mid-request. */
+export async function openPrediction(req: DiagnoseRequest): Promise<string> {
+  const predictionId = newPredictionId();
   await db.insert(schema.fixoPredictions).values({
     id: predictionId,
     vehicleInfo: req.vehicle,
     symptom: req.symptom,
     dtcs: req.dtcs ?? null,
-    predictedDiagnosis: { candidateSystems },
+    predictedDiagnosis: null,
   });
+  return predictionId;
+}
 
-  return result;
+/** Fill an existing prediction row with the expert structured diagnosis.
+ *  Called fire-and-forget from create_order so the ~5s agent run does not
+ *  block order creation. */
+export async function fillPrediction(predictionId: string, req: DiagnoseRequest): Promise<void> {
+  const structured = await diagnoseStructured({
+    vehicle: toOnceVehicle(req),
+    symptom: req.symptom,
+    dtcs: req.dtcs,
+  });
+  await db
+    .update(schema.fixoPredictions)
+    .set({ predictedDiagnosis: structured })
+    .where(eq(schema.fixoPredictions.id, predictionId));
+}
+
+/** Full expert path: open + fill + return the enriched DiagnoseResult.
+ *  Use for direct API callers (POST /v1/diagnose) and tests — not for the
+ *  create_order hot path (which uses openPrediction + void fillPrediction). */
+export const diagnose: BrainService["diagnose"] = async (req) => {
+  const predictionId = await openPrediction(req);
+  const structured = await diagnoseStructured({
+    vehicle: toOnceVehicle(req),
+    symptom: req.symptom,
+    dtcs: req.dtcs,
+  });
+  await db
+    .update(schema.fixoPredictions)
+    .set({ predictedDiagnosis: structured })
+    .where(eq(schema.fixoPredictions.id, predictionId));
+  return {
+    predictionId,
+    candidateSystems: structured.candidate_systems as DiagnoseResult["candidateSystems"],
+    rootCause: structured.likely_root_cause,
+    tests: structured.recommended_tests,
+  };
 };
 
 /** Close the loop: stamp the mechanic's confirmed outcome onto the prediction
