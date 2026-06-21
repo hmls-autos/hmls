@@ -50,7 +50,7 @@ const BUSINESS_ADDRESS = Deno.env.get("BUSINESS_ADDRESS") ?? "";
 // /funnel/track GET endpoint so we capture the click before the
 // browser leaves for fixo.ink, then redirects to FIXO_PUBLIC_URL.
 const FIXO_PUBLIC_URL = Deno.env.get("FIXO_PUBLIC_URL") || "https://fixo.ink";
-const FIXO_API_URL = Deno.env.get("FIXO_API_URL") || "https://api.fixo.hmls.autos";
+const FIXO_API_URL = Deno.env.get("FIXO_API_URL") || "https://api.fixo.ink";
 
 if (!BUSINESS_ADDRESS) {
   logger.warn(
