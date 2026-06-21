@@ -14,7 +14,7 @@
 const FIXO_PUBLIC_URL = process.env.NEXT_PUBLIC_FIXO_URL || "https://fixo.ink";
 
 const FIXO_API_URL =
-  process.env.NEXT_PUBLIC_FIXO_API_URL || "https://api.fixo.hmls.autos";
+  process.env.NEXT_PUBLIC_FIXO_API_URL || "https://api.fixo.ink";
 
 export function buildFixoCtaUrl(channelDetail: string): string {
   const qs = new URLSearchParams({

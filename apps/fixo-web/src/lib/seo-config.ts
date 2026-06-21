@@ -11,4 +11,4 @@
 export const SITE_URL = "https://fixo.ink";
 
 export const GATEWAY_URL =
-  process.env.NEXT_PUBLIC_AGENT_URL || "https://api.fixo.hmls.autos";
+  process.env.NEXT_PUBLIC_AGENT_URL || "https://api.fixo.ink";

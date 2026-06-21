@@ -104,13 +104,13 @@ packages/
 The API server uses hostname-based dispatch to route requests:
 
 - **`localhost:8080`** / default → Main HMLS API (estimates, portal, admin, chat)
-- **`fixo.localhost:8080`** / `api.fixo.hmls.autos` → Fixo API (sessions, billing, vehicles, chat)
+- **`fixo.localhost:8080`** / `api.fixo.ink` → Fixo API (sessions, billing, vehicles, chat)
 
 Each sub-app has its own CORS, auth middleware, and error handler. No middleware leaks between
 domains.
 
 - **Web → Agent**: AI SDK v6 `useChat` with `DefaultChatTransport` (port 8080)
-- **Fixo Web → Agent**: AI SDK v6 via `http://fixo.localhost:8080` / `https://api.fixo.hmls.autos`
+- **Fixo Web → Agent**: AI SDK v6 via `http://fixo.localhost:8080` / `https://api.fixo.ink`
 - **Agent → DB**: Direct Supabase PostgreSQL connection via Drizzle ORM
 
 ### Key Patterns
@@ -301,7 +301,7 @@ deno deploy env delete <KEY> --app hmls-api --org spinsirr
 | App               | Domain                               | Hosting                                                                  |
 | ----------------- | ------------------------------------ | ------------------------------------------------------------------------ |
 | Web (HMLS)        | `https://hmls.autos`                 | Vercel (project `hmls`, scope: `spinsirrs-projects`)                     |
-| API (main + fixo) | `https://api.fixo.hmls.autos` (fixo) | Deno Deploy (`hmls-api`)                                                 |
+| API (main + fixo) | `https://api.fixo.ink` (fixo) | Deno Deploy (`hmls-api`)                                                 |
 | Fixo Web          | `https://fixo.ink`                   | Vercel (`prj_EzagTZlxfjG6U6h3Cbdt8uWjPwdO`, scope: `spinsirrs-projects`) |
 
 Both main API and Fixo API run in the same Deno Deploy app (`hmls-api`), routed by hostname.
@@ -330,7 +330,7 @@ Both main API and Fixo API run in the same Deno Deploy app (`hmls-api`), routed 
 ```bash
 vercel env add NEXT_PUBLIC_SUPABASE_URL --scope spinsirrs-projects
 vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY --scope spinsirrs-projects
-vercel env add NEXT_PUBLIC_AGENT_URL --scope spinsirrs-projects  # https://api.fixo.hmls.autos
+vercel env add NEXT_PUBLIC_AGENT_URL --scope spinsirrs-projects  # https://api.fixo.ink
 ```
 
 ## Recent session summary (2026-04-20)
