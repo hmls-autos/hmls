@@ -12,6 +12,7 @@ import { createFixoEstimateTool } from "./tools/fixo-estimate.ts";
 import { updateDiagnosticStateTool } from "./tools/diagnostic-state.ts";
 import { isolateSystemsTool } from "./tools/system-isolation.ts";
 import { planPinpointTestsTool } from "./tools/pinpoint-test-plan.ts";
+import { emitDiagnosisTool } from "./tools/emit-diagnosis.ts";
 
 const DEFAULT_MODEL = "gemini-3-flash-preview";
 
@@ -49,6 +50,7 @@ export function runFixoAgent(options: RunFixoAgentOptions) {
     updateDiagnosticStateTool,
     isolateSystemsTool,
     planPinpointTestsTool,
+    emitDiagnosisTool,
   ];
 
   const tools = convertTools(allTools, {

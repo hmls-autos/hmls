@@ -1,11 +1,11 @@
 // Fixo public API (v1) — the diagnostic brain over REST. Key-gated (see the
-// api-key middleware). One symptom in → the agent's diagnosis + estimate out.
-// Wraps the proven full agent via runFixoOnce (single-shot, read-only).
+// api-key middleware). Runs the brain single-shot, returns STRUCTURED diagnosis:
+// { diagnosis: { candidate_systems, likely_root_cause?, recommended_tests, safety_flags, to_confirm, narrative } }
 
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { runFixoOnce } from "@hmls/agent";
+import { diagnoseStructured } from "@hmls/agent";
 
 const diagnoseInput = z.object({
   vehicle: z.object({
@@ -22,6 +22,6 @@ export const fixoApi = new Hono();
 // POST /v1/diagnose — diagnosis + estimate for a vehicle + symptom.
 fixoApi.post("/diagnose", zValidator("json", diagnoseInput), async (c) => {
   const body = c.req.valid("json");
-  const result = await runFixoOnce(body);
-  return c.json(result);
+  const diagnosis = await diagnoseStructured(body);
+  return c.json({ diagnosis });
 });

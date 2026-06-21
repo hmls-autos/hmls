@@ -25,7 +25,7 @@ import type { DiscountType, LineItem, ServiceInput } from "../../hmls/skills/est
 import type { OrderItem } from "@hmls/shared/db/schema";
 import { patchItems } from "../../services/order-state.ts";
 import { upsertOrderIntake } from "../../services/order-intake.ts";
-import { diagnose, recordEstimate } from "../../fixo/fixo-brain.ts";
+import { fillPrediction, openPrediction, recordEstimate } from "../../fixo/fixo-brain.ts";
 import {
   customerAgentActor,
   staffAgentActor,
@@ -599,10 +599,16 @@ export const createOrderTool = {
     let fixoPredictionId: string | null = null;
     if (symptomDescription) {
       try {
-        fixoPredictionId =
-          (await diagnose({ vehicle: vehicleInfo, symptom: symptomDescription })).predictionId;
+        fixoPredictionId = await openPrediction({
+          vehicle: vehicleInfo,
+          symptom: symptomDescription,
+        });
+        // Fire-and-forget: the expert diagnosis (~5s agent run) must not block order create.
+        // ponytail: if a worker/queue ever exists, move this there; for now a detached promise is fine.
+        void fillPrediction(fixoPredictionId, { vehicle: vehicleInfo, symptom: symptomDescription })
+          .catch((err) => console.error("fillPrediction failed:", String(err)));
       } catch (err) {
-        console.error("diagnose failed during order create:", String(err));
+        console.error("openPrediction failed during order create:", String(err));
       }
     }
 
