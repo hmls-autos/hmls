@@ -18,6 +18,7 @@ import {
   newPredictionId,
 } from "./brain-service.ts";
 import type { DiagnoseOnceInput } from "./run-once-prompt.ts";
+import type { StructuredDiagnosis } from "./diagnosis-schema.ts";
 
 const logger = getLogger(["hmls", "agent", "fixo-brain"]);
 
@@ -66,6 +67,25 @@ export async function fillPrediction(predictionId: string, req: DiagnoseRequest)
     .update(schema.fixoPredictions)
     .set({ predictedDiagnosis: structured })
     .where(eq(schema.fixoPredictions.id, predictionId));
+}
+
+/** API path: mint a prediction id + run the full structured diagnosis + store it,
+ *  returning BOTH the id (for record_outcome) and the full StructuredDiagnosis.
+ *  Used by the MCP `diagnose` tool. */
+export async function diagnoseForApi(
+  req: DiagnoseRequest,
+): Promise<{ predictionId: string; diagnosis: StructuredDiagnosis }> {
+  const predictionId = await openPrediction(req);
+  const diagnosis = await diagnoseStructured({
+    vehicle: toOnceVehicle(req),
+    symptom: req.symptom,
+    dtcs: req.dtcs,
+  });
+  await db
+    .update(schema.fixoPredictions)
+    .set({ predictedDiagnosis: diagnosis })
+    .where(eq(schema.fixoPredictions.id, predictionId));
+  return { predictionId, diagnosis };
 }
 
 /** Full expert path: open + fill + return the enriched DiagnoseResult.

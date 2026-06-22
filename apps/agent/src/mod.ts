@@ -66,6 +66,10 @@ export {
 // Public-API key handling (gateway api-key middleware + mint script)
 export { generateApiKey, hashApiKey, verifyApiKey } from "./fixo/lib/api-keys.ts";
 
+// Fixo brain — public API surface (MCP server + gateway /v1/* routes)
+export { diagnoseForApi, recordOutcome } from "./fixo/fixo-brain.ts";
+export { type DiagnoseRequest, type OutcomeRequest } from "./fixo/brain-service.ts";
+
 // Notifications
 export { notifyOrderStatusChange, notifyPaymentFailed } from "./lib/notifications.ts";
 
