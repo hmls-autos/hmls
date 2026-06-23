@@ -72,6 +72,7 @@ export {
   revokeApiKeyForUser,
   verifyApiKey,
 } from "./fixo/lib/api-keys.ts";
+export { checkRateLimit, RATE_LIMITS } from "./fixo/lib/rate-limit.ts";
 
 // Fixo brain — public API surface (MCP server + gateway /v1/* routes)
 export { diagnoseForApi, recordOutcome } from "./fixo/fixo-brain.ts";
