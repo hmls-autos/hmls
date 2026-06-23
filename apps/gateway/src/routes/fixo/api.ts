@@ -13,8 +13,8 @@ const diagnoseInput = z.object({
     make: z.string().min(1),
     model: z.string().min(1),
   }),
-  symptom: z.string().min(1, "symptom is required"),
-  dtcs: z.array(z.string()).optional(),
+  symptom: z.string().min(1, "symptom is required").max(2000),
+  dtcs: z.array(z.string().max(20)).max(20).optional(),
 });
 
 export const fixoApi = new Hono();
