@@ -14,6 +14,7 @@ import { laborLookupTools } from "../common/tools/labor-lookup.ts";
 import { partsLookupTools } from "../common/tools/parts-lookup.ts";
 import { orderTools } from "../common/tools/order.ts";
 import { scheduleTools } from "../common/tools/schedule.ts";
+import { diagnoseSymptomTools } from "./tools/diagnose-symptom.ts";
 
 const logger = getLogger(["hmls", "agent", "hmls"]);
 
@@ -60,6 +61,7 @@ export async function runHmlsAgent(options: RunAgentOptions) {
   ];
 
   const allTools: LegacyTool[] = [
+    ...diagnoseSymptomTools,
     ...askUserQuestionTools,
     ...orderTools,
     ...schedulingTools,
