@@ -472,7 +472,7 @@ async function main() {
 
   console.log(
     `${C.bold}Fixo capability harness${C.reset} — ${selected.length} scenario(s), model=${
-      Deno.env.get("AGENT_MODEL") ?? "gemini-3-flash-preview"
+      Deno.env.get("AGENT_MODEL") ?? "gemini-3.1-flash-lite (default)"
     } (read-only, no DB writes, no credits)`,
   );
 
