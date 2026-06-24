@@ -1,4 +1,6 @@
 import { getLogger } from "@logtape/logtape";
+import { db } from "@hmls/agent/db";
+import { sql } from "drizzle-orm";
 import { createHmlsApp } from "./hmls-app.ts";
 import { createFixoApp } from "./fixo-app.ts";
 import { setupLogging } from "./logger.ts";
@@ -57,6 +59,20 @@ function handler(request: Request): Response | Promise<Response> {
 // Start server
 const isDenoDeploy = Deno.env.get("DENO_DEPLOYMENT_ID") !== undefined;
 if (isDenoDeploy) {
+  // Daily reap of abandoned draft orders. Replaces the pg_cron job from
+  // migration 0017, which never applied (pg_cron isn't installed on Supabase).
+  // Deploy-only on purpose: local dev points at the prod DB, so we never reap
+  // from a laptop. The actual cancel logic lives in the `cancel_abandoned_drafts`
+  // SQL function (migration 0034).
+  Deno.cron("cancel-abandoned-drafts", "0 3 * * *", async () => {
+    try {
+      const rows = await db.execute(sql`SELECT cancel_abandoned_drafts(14) AS n`);
+      const n = (rows as unknown as Array<{ n: number }>)[0]?.n ?? 0;
+      serverLogger.info("cancel-abandoned-drafts: cancelled {n} order(s)", { n });
+    } catch (err) {
+      serverLogger.error("cancel-abandoned-drafts cron failed: {err}", { err });
+    }
+  });
   Deno.serve(handler);
   serverLogger.info("HMLS API running on Deno Deploy");
 } else {
