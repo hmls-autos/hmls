@@ -18,7 +18,7 @@ import { diagnoseSymptomTools } from "./tools/diagnose-symptom.ts";
 
 const logger = getLogger(["hmls", "agent", "hmls"]);
 
-const DEFAULT_MODEL = "gemini-3-flash-preview";
+const DEFAULT_MODEL = "gemini-3.1-flash-lite";
 
 export interface AgentConfig {
   googleApiKey: string;

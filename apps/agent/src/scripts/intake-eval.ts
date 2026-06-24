@@ -21,7 +21,7 @@ if (!apiKey) {
   Deno.exit(2);
 }
 const agentModel = Deno.env.get("AGENT_MODEL") || undefined;
-console.log(`model: ${agentModel ?? "(default) gemini-3-flash-preview"}\n`);
+console.log(`model: ${agentModel ?? "(default) gemini-3.1-flash-lite"}\n`);
 
 interface Trace {
   toolOrder: string[];
