@@ -14,10 +14,11 @@ import { laborLookupTools } from "../common/tools/labor-lookup.ts";
 import { partsLookupTools } from "../common/tools/parts-lookup.ts";
 import { orderTools } from "../common/tools/order.ts";
 import { scheduleTools } from "../common/tools/schedule.ts";
+import { diagnoseSymptomTools } from "./tools/diagnose-symptom.ts";
 
 const logger = getLogger(["hmls", "agent", "hmls"]);
 
-const DEFAULT_MODEL = "gemini-3-flash-preview";
+const DEFAULT_MODEL = "gemini-3.1-flash-lite";
 
 export interface AgentConfig {
   googleApiKey: string;
@@ -60,6 +61,7 @@ export async function runHmlsAgent(options: RunAgentOptions) {
   ];
 
   const allTools: LegacyTool[] = [
+    ...diagnoseSymptomTools,
     ...askUserQuestionTools,
     ...orderTools,
     ...schedulingTools,

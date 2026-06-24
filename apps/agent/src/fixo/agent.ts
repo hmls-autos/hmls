@@ -14,7 +14,7 @@ import { isolateSystemsTool } from "./tools/system-isolation.ts";
 import { planPinpointTestsTool } from "./tools/pinpoint-test-plan.ts";
 import { emitDiagnosisTool } from "./tools/emit-diagnosis.ts";
 
-const DEFAULT_MODEL = "gemini-3-flash-preview";
+const DEFAULT_MODEL = "gemini-3.1-flash-lite";
 
 const logger = getLogger(["hmls", "agent", "fixo"]);
 
