@@ -149,9 +149,9 @@ webhook. `apps/agent/src/hmls/tools/stripe.ts` (dead `create_quote` tool) delete
 - `@hmls/agent` → Agent factories, types, fixo lib, notifications, PDF components
 - `@hmls/agent/db` → Drizzle DB client + schema
 
-**HMLS Agent** (`apps/agent/src/hmls/`): DeepSeek (`deepseek-v4-pro` via `@ai-sdk/deepseek`).
-Reads `DEEPSEEK_API_KEY` (required) + `HMLS_AGENT_MODEL` (optional model override) from env. Both
-customer and staff agents resolve provider + model internally — no `config` is passed in (the old
+**HMLS Agent** (`apps/agent/src/hmls/`): DeepSeek (`deepseek-v4-pro` via `@ai-sdk/deepseek`). Reads
+`DEEPSEEK_API_KEY` (required) + `HMLS_AGENT_MODEL` (optional model override) from env. Both customer
+and staff agents resolve provider + model internally — no `config` is passed in (the old
 `AgentConfig` / `initChat` / `initStaffChat` plumbing is gone). DeepSeek is text-only: in-chat image
 parts are silently dropped, which is fine because intake photos ride on the order, not the stream.
 Fixo stays on Gemini (see below).
