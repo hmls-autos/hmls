@@ -10,6 +10,7 @@ import { customerBookingActionTools } from "./tools/customer-booking-actions.ts"
 import { formatUserContext, type UserContext } from "../types/user-context.ts";
 import { convertTools, type LegacyTool } from "../common/convert-tools.ts";
 import { askUserQuestionTools } from "../common/tools/ask-user-question.ts";
+import { collectContactTools } from "../common/tools/collect-contact.ts";
 import { laborLookupTools } from "../common/tools/labor-lookup.ts";
 import { partsLookupTools } from "../common/tools/parts-lookup.ts";
 import { orderTools } from "../common/tools/order.ts";
@@ -60,6 +61,7 @@ export async function runHmlsAgent(options: RunAgentOptions) {
   const allTools: LegacyTool[] = [
     ...diagnoseSymptomTools,
     ...askUserQuestionTools,
+    ...collectContactTools,
     ...orderTools,
     ...schedulingTools,
     ...scheduleTools,
@@ -80,7 +82,7 @@ export async function runHmlsAgent(options: RunAgentOptions) {
     system: systemPrompt,
     messages,
     tools,
-    stopWhen: [stepCountIs(25), hasToolCall("ask_user_question")],
+    stopWhen: [stepCountIs(25), hasToolCall("ask_user_question"), hasToolCall("collect_contact")],
     onStepFinish: (step) => {
       const toolCalls = step.toolCalls ?? [];
       if (toolCalls.length > 0) {
