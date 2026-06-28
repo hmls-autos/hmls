@@ -250,4 +250,30 @@ portal.post(
   },
 );
 
+// POST /me/orders/:id/cancel — customer cancels an order they no longer want,
+// from the order detail page. The harness gates which states a customer may
+// cancel from (draft / estimated / scheduled — never approved/in_progress).
+// `cancel-booking` above is the Bookings-page equivalent for scheduled orders.
+portal.post("/me/orders/:id/cancel", zValidator("json", orderReasonInput), async (c) => {
+  const customerId = c.get("customerId");
+  const shopId = c.get("shopId");
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id <= 0) {
+    return c.json<ApiError>({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
+  }
+
+  const [order] = await db
+    .select({ id: schema.orders.id, customerId: schema.orders.customerId })
+    .from(schema.orders)
+    .where(and(eq(schema.orders.id, id), eq(schema.orders.shopId, shopId)))
+    .limit(1);
+  if (!order || order.customerId !== customerId) {
+    return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
+  }
+
+  const { reason } = c.req.valid("json");
+  const result = await transition(id, "cancelled", { kind: "customer", customerId }, { reason });
+  return sendOrderStateResult(c, result);
+});
+
 export { portal };
