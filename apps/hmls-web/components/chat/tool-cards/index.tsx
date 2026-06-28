@@ -6,6 +6,7 @@ import {
   type UIMessage,
 } from "ai";
 import { AskUserQuestionCard } from "./AskUserQuestionCard";
+import { ContactIntakeCard } from "./ContactIntakeCard";
 import {
   type CreateOrderOutput,
   EstimateCardInline,
@@ -73,6 +74,20 @@ export function renderToolCard(
     );
   }
 
+  if (toolName === "collect_contact") {
+    const input = (toolPart as { input?: unknown }).input as
+      | { note?: string }
+      | undefined;
+    return (
+      <ContactIntakeCard
+        note={input?.note}
+        isAnswered={opts.isAnswered ?? false}
+        answer={opts.answer}
+        onSubmit={(message) => opts.onAnswer?.(message)}
+      />
+    );
+  }
+
   if (toolName === "get_availability" && state === "output-available") {
     const output = (toolPart as { output?: unknown }).output as
       | SlotPickerOutput
@@ -106,6 +121,7 @@ export function renderToolCard(
 
 export {
   AskUserQuestionCard,
+  ContactIntakeCard,
   type CreateOrderOutput,
   EstimateCardInline,
   LookupStatusCard,
