@@ -1,18 +1,12 @@
 import { Hono } from "hono";
 import { convertToModelMessages } from "ai";
-import { type AgentConfig, runStaffAgent } from "@hmls/agent";
+import { runStaffAgent } from "@hmls/agent";
 import { Errors } from "@hmls/shared/errors";
 import { getLogger } from "@logtape/logtape";
 import { type AdminEnv, requireAdmin } from "../middleware/admin.ts";
 import { requireShopContext, type WithShop } from "../middleware/shop-context.ts";
 
 const logger = getLogger(["hmls", "gateway", "staff-chat"]);
-
-let _config: AgentConfig;
-
-export function initStaffChat(config: AgentConfig) {
-  _config = config;
-}
 
 const staffChat = new Hono<WithShop<AdminEnv>>();
 
@@ -50,12 +44,22 @@ staffChat.post("/", async (c) => {
 
     const result = await runStaffAgent({
       messages: modelMessages,
-      config: _config,
       adminEmail: authUser.email ?? undefined,
       shopId,
     });
 
-    const response = result.toUIMessageStreamResponse();
+    // onError logs the real provider failure; without it AI SDK masks every
+    // mid-stream error (DeepSeek 429/402/context-length) as a generic string
+    // with nothing in the logs. Return value is the (unchanged) client message.
+    const response = result.toUIMessageStreamResponse({
+      onError: (error) => {
+        logger.error("Agent stream error", {
+          userId: authUser.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return "An error occurred.";
+      },
+    });
     const duration = Date.now() - startTime;
     logger.info("Request finished", {
       userId: authUser.id,
