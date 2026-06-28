@@ -310,6 +310,29 @@ deno deploy env add <KEY> <VALUE> --app hmls-api --org spinsirr --secret
 deno deploy env delete <KEY> --app hmls-api --org spinsirr
 ```
 
+⚠️ **NEVER run bare `deno deploy`** — it triggers a manual deploy of your local tree (footgun).
+Deploys happen automatically on merge to `main` (Deno Deploy GitHub integration for the API; Vercel
+git integration for the webs). The CLI is for `env`/inspection only.
+
+## Ops runbook (safe operations)
+
+The lowest-friction fixes for this repo's ops pain. Helpers live in `scripts/`.
+
+- **Deploys** = merge to `main` (auto). Never deploy from local.
+- **Secrets** — Infisical is the single source of truth. After changing an API secret:
+  `scripts/sync-deno-env.sh <env>` pushes it to Deno Deploy. Web secrets flow Infisical → Vercel via
+  Infisical's Vercel integration (set up in the Infisical dashboard). Stop hand-adding the same key
+  in 3 places.
+- **DB migrations** — apply ONE SQL file safely with `scripts/db-apply.sh <env>
+  <file>` (explicit
+  target + confirmation; prod requires typing `prod`). Process: apply to `staging`, verify, then
+  `prod`. Never raw `psql -f` against prod. The drizzle journal only tracks ~2 of ~35 migrations, so
+  the `.sql` files are the source of truth — keep new ones idempotent.
+- **dev ≠ prod (PENDING dashboard setup)** — today Infisical `--env=dev` points at the **prod**
+  Supabase (there is no separate dev DB). To fix: create a **staging Supabase** project + split
+  Infisical into `dev`/`staging`/ `prod` envs. Until then, `dev` IS prod — do not test destructively
+  against it.
+
 ## Deployment & Domains
 
 ### Production URLs
