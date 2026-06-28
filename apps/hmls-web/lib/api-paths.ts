@@ -69,6 +69,7 @@ export const portalPaths = {
   decline: (id: number | string) => `/api/portal/me/orders/${id}/decline`,
   cancelBooking: (id: number | string) =>
     `/api/portal/me/orders/${id}/cancel-booking`,
+  cancel: (id: number | string) => `/api/portal/me/orders/${id}/cancel`,
 };
 
 export const mechanicPaths = {

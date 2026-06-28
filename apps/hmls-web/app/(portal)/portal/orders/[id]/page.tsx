@@ -257,6 +257,10 @@ export default function PortalOrderDetailPage() {
     ? [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ")
     : null;
   const canApproveDecline = order.status === "estimated";
+  // Customer may walk away while the order is still draft (being prepared) or
+  // scheduled (before the shop starts). estimated has its own decline action;
+  // approved/in_progress require contacting the shop (work may be committed).
+  const canCancel = order.status === "draft" || order.status === "scheduled";
   const tentative = isTentativeBooking(order);
   const portalStatus = statusDisplay(order.status, "portal", {
     tentativeBooking: tentative,
@@ -286,6 +290,23 @@ export default function PortalOrderDetailPage() {
       mutate();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : `Failed to ${action} order`);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleCancel() {
+    const reason = await askReason({
+      title: "Cancel this order?",
+      description: "Optional: let the shop know why. This can't be undone.",
+    });
+    if (reason === null) return;
+    setActionLoading(true);
+    try {
+      await api.post(portalPaths.cancel(order.id), reason ? { reason } : {});
+      mutate();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to cancel order");
     } finally {
       setActionLoading(false);
     }
@@ -546,6 +567,29 @@ export default function PortalOrderDetailPage() {
                     Decline
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Cancel — draft (still being prepared) or scheduled (before work starts) */}
+            {canCancel && (
+              <div className="bg-surface border border-border rounded-xl p-4 space-y-3">
+                <h2 className="text-sm font-semibold text-text">
+                  Changed your mind?
+                </h2>
+                <p className="text-xs text-text-secondary">
+                  {order.status === "draft"
+                    ? "This estimate is still being prepared — cancel it now if you no longer want the work, so the shop doesn't review it."
+                    : "You can cancel this order before the shop starts the work."}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  disabled={actionLoading}
+                  className="flex items-center justify-center gap-1.5 text-xs font-medium px-4 py-2.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+                >
+                  <XIcon className="w-3.5 h-3.5" />
+                  Cancel order
+                </button>
               </div>
             )}
 
