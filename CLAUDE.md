@@ -149,7 +149,12 @@ webhook. `apps/agent/src/hmls/tools/stripe.ts` (dead `create_quote` tool) delete
 - `@hmls/agent` → Agent factories, types, fixo lib, notifications, PDF components
 - `@hmls/agent/db` → Drizzle DB client + schema
 
-**HMLS Agent** (`apps/agent/src/hmls/`): Gemini 3 Flash Preview
+**HMLS Agent** (`apps/agent/src/hmls/`): DeepSeek (`deepseek-v4-pro` via `@ai-sdk/deepseek`).
+Reads `DEEPSEEK_API_KEY` (required) + `HMLS_AGENT_MODEL` (optional model override) from env. Both
+customer and staff agents resolve provider + model internally — no `config` is passed in (the old
+`AgentConfig` / `initChat` / `initStaffChat` plumbing is gone). DeepSeek is text-only: in-chat image
+parts are silently dropped, which is fine because intake photos ride on the order, not the stream.
+Fixo stays on Gemini (see below).
 
 - `agent.ts` - runHmlsAgent() — customer-facing (no stripe tools, scoped customer-order actions)
 - `staff-agent.ts` - runStaffAgent() — admin-facing (includes adminOrderTools: create_order,
@@ -270,12 +275,23 @@ Required in `.env`:
 
 ```
 DATABASE_URL=postgres://postgres.[ref]:[password]@aws-1-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
-GOOGLE_API_KEY=...              # Google AI Studio key for Gemini 2.5 Flash
+DEEPSEEK_API_KEY=sk-...         # DeepSeek key for the HMLS customer + staff agents (gateway fail-fasts at boot if missing)
+GOOGLE_API_KEY=...              # Google AI Studio key for the Fixo agent (Gemini) + Fixo media
 STRIPE_SECRET_KEY=sk_test_...
 SUPABASE_URL=...                # Supabase project URL
 SUPABASE_ANON_KEY=...           # Supabase anon key
 SUPABASE_SERVICE_ROLE_KEY=...   # Supabase service role key (fixo media storage)
 ```
+
+Optional in API (`.env`):
+
+```
+HMLS_AGENT_MODEL=deepseek-v4-pro   # override the HMLS agent model (default: deepseek-v4-pro)
+AGENT_MODEL=gemini-3.1-flash-lite  # override the Fixo agent model (default: gemini-3.1-flash-lite)
+```
+
+(The two model overrides are deliberately separate env vars so the DeepSeek-backed HMLS agent and
+the Gemini-backed Fixo agent never share a model id.)
 
 Optional in web (`.env.local`):
 
