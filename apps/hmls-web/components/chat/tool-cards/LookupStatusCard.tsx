@@ -2,6 +2,7 @@
 
 import { Check, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 
 /** Tools that resolve in <100ms would otherwise flash a spinner for one
  * frame and immediately swap to the checkmark — visual noise. Hold the
@@ -81,17 +82,17 @@ export function LookupStatusCard({
   const showRunning = isRunning || holdRunning;
 
   return (
-    <div
-      className={`inline-flex items-center gap-2 rounded-full border border-border bg-surface-alt px-3 py-1 text-xs text-text-secondary${
-        showRunning ? " chip-shimmer" : ""
-      }`}
-    >
+    <div className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-alt px-3 py-1 text-xs text-text-secondary">
       {showRunning ? (
         <Loader2 className="w-3.5 h-3.5 animate-spin text-red-primary" />
       ) : (
         <Check className="w-3.5 h-3.5 text-emerald-500" />
       )}
-      <span>{showRunning ? `${labels.running}…` : labels.done}</span>
+      {showRunning ? (
+        <Shimmer as="span">{`${labels.running}…`}</Shimmer>
+      ) : (
+        <span>{labels.done}</span>
+      )}
     </div>
   );
 }
