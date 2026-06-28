@@ -1,21 +1,36 @@
 # Live Diagnosis in Intake — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
+> (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Give the HMLS customer chat agent a `diagnose_symptom` tool that runs the Fixo brain DURING intake, so it asks the right follow-up questions and surfaces safety warnings before drafting the order.
+**Goal:** Give the HMLS customer chat agent a `diagnose_symptom` tool that runs the Fixo brain
+DURING intake, so it asks the right follow-up questions and surfaces safety warnings before drafting
+the order.
 
-**Architecture:** A contract-decoupled `diagnose()` client wraps the non-persisting in-process `diagnoseStructured()`. A new `diagnose_symptom` agent tool calls it and returns a curated, shop-only-marked result. The system prompt makes the agent call it first on repair/diagnostic symptoms. `create_order` and the outcome loop are UNCHANGED — the brain still runs fire-and-forget at create time as the persisted prediction-of-record.
+**Architecture:** A contract-decoupled `diagnose()` client wraps the non-persisting in-process
+`diagnoseStructured()`. A new `diagnose_symptom` agent tool calls it and returns a curated,
+shop-only-marked result. The system prompt makes the agent call it first on repair/diagnostic
+symptoms. `create_order` and the outcome loop are UNCHANGED — the brain still runs fire-and-forget
+at create time as the persisted prediction-of-record.
 
-**Tech Stack:** Deno + TypeScript, AI SDK v6 (`streamText`), Zod, `@std/assert` (Deno.test). Spec: `docs/superpowers/specs/2026-06-23-live-diagnosis-intake-design.md` (`682df7c`).
+**Tech Stack:** Deno + TypeScript, AI SDK v6 (`streamText`), Zod, `@std/assert` (Deno.test). Spec:
+`docs/superpowers/specs/2026-06-23-live-diagnosis-intake-design.md` (`682df7c`).
 
 ## Global Constraints
 
 - Deno apps: `deno fmt` (double quotes, 2-space indent, 100-col), `deno lint`, strict TS.
-- Tools follow the `LegacyTool` shape `{ name, description, schema (zod), execute(params, ctx?) }` and return via `toolResult` from `@hmls/shared/tool-result`.
-- `diagnose()` is best-effort: returns `null` on any thrown failure, never throws. A degraded empty-candidate diagnosis is a NON-null success.
-- Internal diagnosis fields (`candidate_systems` / `likely_root_cause`) are SHOP-ONLY — never recited to the customer. `safety_flags` MAY reach the customer as caution.
-- No change to `create_order` (`apps/agent/src/common/tools/order.ts`) or the outcome loop (`apps/gateway/src/routes/orders.ts:361-370`). Do NOT add a `recordOutcome` call at the `completed` transition (double-fire).
-- Run checks via Infisical (injects `GOOGLE_API_KEY` + `DATABASE_URL`). Pure unit tests need neither.
+- Tools follow the `LegacyTool` shape `{ name, description, schema (zod), execute(params, ctx?) }`
+  and return via `toolResult` from `@hmls/shared/tool-result`.
+- `diagnose()` is best-effort: returns `null` on any thrown failure, never throws. A degraded
+  empty-candidate diagnosis is a NON-null success.
+- Internal diagnosis fields (`candidate_systems` / `likely_root_cause`) are SHOP-ONLY — never
+  recited to the customer. `safety_flags` MAY reach the customer as caution.
+- No change to `create_order` (`apps/agent/src/common/tools/order.ts`) or the outcome loop
+  (`apps/gateway/src/routes/orders.ts:361-370`). Do NOT add a `recordOutcome` call at the
+  `completed` transition (double-fire).
+- Run checks via Infisical (injects `GOOGLE_API_KEY` + `DATABASE_URL`). Pure unit tests need
+  neither.
 
 ---
 
@@ -23,10 +38,12 @@
 
 - Create: `apps/agent/src/common/fixo-diagnose.ts` — the `diagnose()` client (transport seam).
 - Create: `apps/agent/src/common/fixo-diagnose_test.ts` — unit tests for the client.
-- Create: `apps/agent/src/hmls/tools/diagnose-symptom.ts` — the `diagnose_symptom` tool + pure `shapeDiagnosis`.
+- Create: `apps/agent/src/hmls/tools/diagnose-symptom.ts` — the `diagnose_symptom` tool + pure
+  `shapeDiagnosis`.
 - Create: `apps/agent/src/hmls/tools/diagnose-symptom_test.ts` — unit tests for `shapeDiagnosis`.
 - Modify: `apps/agent/src/hmls/agent.ts:11-15,62-70` — import + register the tool.
-- Modify: `apps/agent/src/hmls/system-prompt.ts:39-42,66-69` — repair-branch precondition + tool-call discipline rule.
+- Modify: `apps/agent/src/hmls/system-prompt.ts:39-42,66-69` — repair-branch precondition +
+  tool-call discipline rule.
 - Create: `apps/agent/src/scripts/intake-eval.ts` — real-model eval (tool-order + leak gate).
 
 ---
@@ -34,12 +51,18 @@
 ### Task 1: `diagnose()` client
 
 **Files:**
+
 - Create: `apps/agent/src/common/fixo-diagnose.ts`
 - Test: `apps/agent/src/common/fixo-diagnose_test.ts`
 
 **Interfaces:**
-- Consumes: `diagnoseStructured(input: DiagnoseOnceInput): Promise<StructuredDiagnosis>` and `type StructuredDiagnosis` from `../fixo/diagnose-structured.ts`; `type DiagnoseOnceInput` (`{ vehicle: { year: number|string; make: string; model: string }; symptom: string; dtcs?: string[] }`) from `../fixo/run-once-prompt.ts`.
-- Produces: `diagnose(input: DiagnoseInput, run?): Promise<StructuredDiagnosis | null>` and `interface DiagnoseInput { vehicle: { year?: number|string; make?: string; model?: string }; symptom: string; dtcs?: string[]; imageRefs?: string[] }`.
+
+- Consumes: `diagnoseStructured(input: DiagnoseOnceInput): Promise<StructuredDiagnosis>` and
+  `type StructuredDiagnosis` from `../fixo/diagnose-structured.ts`; `type DiagnoseOnceInput`
+  (`{ vehicle: { year: number|string; make: string; model: string }; symptom: string; dtcs?: string[] }`)
+  from `../fixo/run-once-prompt.ts`.
+- Produces: `diagnose(input: DiagnoseInput, run?): Promise<StructuredDiagnosis | null>` and
+  `interface DiagnoseInput { vehicle: { year?: number|string; make?: string; model?: string }; symptom: string; dtcs?: string[]; imageRefs?: string[] }`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -62,8 +85,16 @@ const SAMPLE: StructuredDiagnosis = {
 Deno.test("diagnose — maps input onto DiagnoseOnceInput, drops imageRefs", async () => {
   let seen: DiagnoseOnceInput | null = null;
   const out = await diagnose(
-    { vehicle: { year: 2019, make: "Honda", model: "Accord" }, symptom: "shakes", dtcs: ["P0300"], imageRefs: ["x"] },
-    (i) => { seen = i; return Promise.resolve(SAMPLE); },
+    {
+      vehicle: { year: 2019, make: "Honda", model: "Accord" },
+      symptom: "shakes",
+      dtcs: ["P0300"],
+      imageRefs: ["x"],
+    },
+    (i) => {
+      seen = i;
+      return Promise.resolve(SAMPLE);
+    },
   );
   assertEquals(out, SAMPLE);
   assertEquals(seen!.symptom, "shakes");
@@ -74,20 +105,29 @@ Deno.test("diagnose — maps input onto DiagnoseOnceInput, drops imageRefs", asy
 
 Deno.test("diagnose — missing vehicle fields default to empty strings", async () => {
   let seen: DiagnoseOnceInput | null = null;
-  await diagnose({ vehicle: {}, symptom: "x" }, (i) => { seen = i; return Promise.resolve(SAMPLE); });
+  await diagnose({ vehicle: {}, symptom: "x" }, (i) => {
+    seen = i;
+    return Promise.resolve(SAMPLE);
+  });
   assertEquals(seen!.vehicle.make, "");
   assertEquals(seen!.vehicle.model, "");
   assertEquals(seen!.vehicle.year, "");
 });
 
 Deno.test("diagnose — returns null on a thrown error", async () => {
-  const out = await diagnose({ vehicle: {}, symptom: "x" }, () => { throw new Error("boom"); });
+  const out = await diagnose({ vehicle: {}, symptom: "x" }, () => {
+    throw new Error("boom");
+  });
   assertEquals(out, null);
 });
 
 Deno.test("diagnose — a degraded empty-candidate diagnosis is non-null", async () => {
   const degraded: StructuredDiagnosis = {
-    candidate_systems: [], recommended_tests: [], safety_flags: [], to_confirm: [], narrative: "",
+    candidate_systems: [],
+    recommended_tests: [],
+    safety_flags: [],
+    to_confirm: [],
+    narrative: "",
   };
   const out = await diagnose({ vehicle: {}, symptom: "x" }, () => Promise.resolve(degraded));
   assert(out !== null);
@@ -97,8 +137,8 @@ Deno.test("diagnose — a degraded empty-candidate diagnosis is non-null", async
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `deno test apps/agent/src/common/fixo-diagnose_test.ts`
-Expected: FAIL — `Module not found "./fixo-diagnose.ts"`.
+Run: `deno test apps/agent/src/common/fixo-diagnose_test.ts` Expected: FAIL —
+`Module not found "./fixo-diagnose.ts"`.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -148,8 +188,7 @@ export async function diagnose(
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `deno test apps/agent/src/common/fixo-diagnose_test.ts`
-Expected: PASS (4 tests).
+Run: `deno test apps/agent/src/common/fixo-diagnose_test.ts` Expected: PASS (4 tests).
 
 - [ ] **Step 5: Format + commit**
 
@@ -164,13 +203,20 @@ git commit -m "feat(agent): diagnose() client — contract-decoupled, non-persis
 ### Task 2: `diagnose_symptom` tool + register
 
 **Files:**
+
 - Create: `apps/agent/src/hmls/tools/diagnose-symptom.ts`
 - Test: `apps/agent/src/hmls/tools/diagnose-symptom_test.ts`
 - Modify: `apps/agent/src/hmls/agent.ts:11-15` (import), `:62-70` (allTools array)
 
 **Interfaces:**
-- Consumes: `diagnose`, `DiagnoseInput` from `../../common/fixo-diagnose.ts`; `StructuredDiagnosis` from `../../fixo/diagnose-structured.ts`; `toolResult` from `@hmls/shared/tool-result`; `LegacyTool` from `../../common/convert-tools.ts`.
-- Produces: `export const diagnoseSymptomTools: LegacyTool[]`; `export function shapeDiagnosis(d: StructuredDiagnosis | null)` returning `{ available: false } | { available: true; toConfirm; safetyFlags; internalScope: { candidateSystems; recommendedTests; likelyRootCause } }` (NO prediction id).
+
+- Consumes: `diagnose`, `DiagnoseInput` from `../../common/fixo-diagnose.ts`; `StructuredDiagnosis`
+  from `../../fixo/diagnose-structured.ts`; `toolResult` from `@hmls/shared/tool-result`;
+  `LegacyTool` from `../../common/convert-tools.ts`.
+- Produces: `export const diagnoseSymptomTools: LegacyTool[]`;
+  `export function shapeDiagnosis(d: StructuredDiagnosis | null)` returning
+  `{ available: false } | { available: true; toConfirm; safetyFlags; internalScope: { candidateSystems; recommendedTests; likelyRootCause } }`
+  (NO prediction id).
 
 - [ ] **Step 1: Write the failing test (pure shaping logic)**
 
@@ -215,8 +261,8 @@ Deno.test("shapeDiagnosis — missing likely_root_cause → null", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `deno test apps/agent/src/hmls/tools/diagnose-symptom_test.ts`
-Expected: FAIL — `Module not found "./diagnose-symptom.ts"`.
+Run: `deno test apps/agent/src/hmls/tools/diagnose-symptom_test.ts` Expected: FAIL —
+`Module not found "./diagnose-symptom.ts"`.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -264,8 +310,18 @@ const diagnoseSymptomTool: LegacyTool = {
     symptom: z.string().min(1),
     dtcs: z.array(z.string()).optional().describe("OBD codes if the customer read them (rare)."),
   }),
-  execute: async (params: { vehicle: { year?: number | string; make?: string; model?: string }; symptom: string; dtcs?: string[] }) => {
-    const d = await diagnose({ vehicle: params.vehicle, symptom: params.symptom, dtcs: params.dtcs });
+  execute: async (
+    params: {
+      vehicle: { year?: number | string; make?: string; model?: string };
+      symptom: string;
+      dtcs?: string[];
+    },
+  ) => {
+    const d = await diagnose({
+      vehicle: params.vehicle,
+      symptom: params.symptom,
+      dtcs: params.dtcs,
+    });
     return toolResult({ success: true, ...shapeDiagnosis(d) });
   },
 };
@@ -275,8 +331,7 @@ export const diagnoseSymptomTools: LegacyTool[] = [diagnoseSymptomTool];
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `deno test apps/agent/src/hmls/tools/diagnose-symptom_test.ts`
-Expected: PASS (3 tests).
+Run: `deno test apps/agent/src/hmls/tools/diagnose-symptom_test.ts` Expected: PASS (3 tests).
 
 - [ ] **Step 5: Register the tool in the customer agent**
 
@@ -286,25 +341,25 @@ In `apps/agent/src/hmls/agent.ts`, add the import after line 16 (`import { sched
 import { diagnoseSymptomTools } from "./tools/diagnose-symptom.ts";
 ```
 
-Then add it to the `allTools` array (currently lines 62-70) — place it FIRST so it precedes the lookups/order tools:
+Then add it to the `allTools` array (currently lines 62-70) — place it FIRST so it precedes the
+lookups/order tools:
 
 ```ts
-  const allTools: LegacyTool[] = [
-    ...diagnoseSymptomTools,
-    ...askUserQuestionTools,
-    ...orderTools,
-    ...schedulingTools,
-    ...scheduleTools,
-    ...laborLookupTools,
-    ...partsLookupTools,
-    ...customerOrderTools,
-  ];
+const allTools: LegacyTool[] = [
+  ...diagnoseSymptomTools,
+  ...askUserQuestionTools,
+  ...orderTools,
+  ...schedulingTools,
+  ...scheduleTools,
+  ...laborLookupTools,
+  ...partsLookupTools,
+  ...customerOrderTools,
+];
 ```
 
 - [ ] **Step 6: Verify the agent still type-checks and the tool is registered**
 
-Run: `deno check apps/agent/src/hmls/agent.ts`
-Expected: PASS, no errors.
+Run: `deno check apps/agent/src/hmls/agent.ts` Expected: PASS, no errors.
 
 - [ ] **Step 7: Format + commit**
 
@@ -319,13 +374,18 @@ git commit -m "feat(agent): diagnose_symptom tool (shop-only diagnosis) + regist
 ### Task 3: System-prompt — make the agent diagnose first
 
 **Files:**
-- Modify: `apps/agent/src/hmls/system-prompt.ts:39-42` (repair branch), `:66-69` (tool-call discipline)
+
+- Modify: `apps/agent/src/hmls/system-prompt.ts:39-42` (repair branch), `:66-69` (tool-call
+  discipline)
 
 **Interfaces:**
-- Consumes: the `diagnose_symptom` tool registered in Task 2 (`toConfirm`, `safetyFlags`, `internalScope`, `available`).
+
+- Consumes: the `diagnose_symptom` tool registered in Task 2 (`toConfirm`, `safetyFlags`,
+  `internalScope`, `available`).
 - Produces: prompt text only — no code symbols.
 
-This task is prose edits to the system prompt. There is no unit test; Task 4's eval verifies the behavior end to end.
+This task is prose edits to the system prompt. There is no unit test; Task 4's eval verifies the
+behavior end to end.
 
 - [ ] **Step 1: Replace the "For repair / diagnostic" numbered list (lines 39-42)**
 
@@ -347,7 +407,8 @@ Replace with:
 3. Next turn, run the lookups + `create_order` (scoping services using `internalScope`) and show the estimate.
 ```
 
-- [ ] **Step 2: Add a `diagnose_symptom` discipline bullet (after line 68, the `get_order_status` bullet)**
+- [ ] **Step 2: Add a `diagnose_symptom` discipline bullet (after line 68, the `get_order_status`
+      bullet)**
 
 Find the line:
 
@@ -363,8 +424,7 @@ Add immediately after it:
 
 - [ ] **Step 3: Verify the prompt still loads (agent boot smoke check)**
 
-Run: `deno check apps/agent/src/hmls/system-prompt.ts apps/agent/src/hmls/agent.ts`
-Expected: PASS.
+Run: `deno check apps/agent/src/hmls/system-prompt.ts apps/agent/src/hmls/agent.ts` Expected: PASS.
 
 - [ ] **Step 4: Commit**
 
@@ -379,13 +439,21 @@ git commit -m "feat(agent): prompt — diagnose_symptom first on repair intake, 
 ### Task 4: Intake behavior eval (real model)
 
 **Files:**
+
 - Create: `apps/agent/src/scripts/intake-eval.ts`
 
 **Interfaces:**
-- Consumes: `runHmlsAgent` from `../hmls/agent.ts`; `GOOGLE_API_KEY` + `DATABASE_URL` from env (via Infisical).
-- Produces: a runnable script (not a CI unit test) that prints PASS/FAIL per check and exits non-zero on any failure.
 
-This is a real-model eval (like `fixo-eval --real`): it hits Gemini and the OLP/DB. It is the hard gate for the two behaviors unit tests can't cover — tool-call ORDER and the no-leak guarantee. Note: a repair scenario may cause `create_order` to write a `draft` row; phrase scenarios WITHOUT a service address so `create_order` returns `missingFields` and writes nothing, OR accept + clean up the test draft.
+- Consumes: `runHmlsAgent` from `../hmls/agent.ts`; `GOOGLE_API_KEY` + `DATABASE_URL` from env (via
+  Infisical).
+- Produces: a runnable script (not a CI unit test) that prints PASS/FAIL per check and exits
+  non-zero on any failure.
+
+This is a real-model eval (like `fixo-eval --real`): it hits Gemini and the OLP/DB. It is the hard
+gate for the two behaviors unit tests can't cover — tool-call ORDER and the no-leak guarantee. Note:
+a repair scenario may cause `create_order` to write a `draft` row; phrase scenarios WITHOUT a
+service address so `create_order` returns `missingFields` and writes nothing, OR accept + clean up
+the test draft.
 
 - [ ] **Step 1: Write the eval script**
 
@@ -407,7 +475,10 @@ if (!apiKey) {
   Deno.exit(2);
 }
 
-interface Trace { toolOrder: string[]; text: string }
+interface Trace {
+  toolOrder: string[];
+  text: string;
+}
 
 async function runTurn(prompt: string): Promise<Trace> {
   const result = runHmlsAgent({
@@ -450,7 +521,11 @@ function check(name: string, ok: boolean, detail: string) {
     `tools=${t.toolOrder.join(",")}`,
   );
   const leaked = LEAK_TERMS.filter((term) => t.text.toLowerCase().includes(term));
-  check("repair: no internalScope leak in assistant text", leaked.length === 0, `leaked=${leaked.join(",")}`);
+  check(
+    "repair: no internalScope leak in assistant text",
+    leaked.length === 0,
+    `leaked=${leaked.join(",")}`,
+  );
 }
 
 // Scenario B — routine maintenance (must NOT diagnose).
@@ -469,8 +544,10 @@ Deno.exit(failures === 0 ? 0 : 1);
 
 - [ ] **Step 2: Run the eval**
 
-Run: `infisical run --env=dev -- deno run -A apps/agent/src/scripts/intake-eval.ts`
-Expected: `ALL CHECKS PASSED`. If the repair scenario fails "diagnose_symptom is called", the prompt precondition (Task 3) is losing to the one-turn-pipeline instruction — strengthen the Task 3 step-2 wording and re-run. If a leak term appears, tighten the `internalScope` shop-only wording.
+Run: `infisical run --env=dev -- deno run -A apps/agent/src/scripts/intake-eval.ts` Expected:
+`ALL CHECKS PASSED`. If the repair scenario fails "diagnose_symptom is called", the prompt
+precondition (Task 3) is losing to the one-turn-pipeline instruction — strengthen the Task 3 step-2
+wording and re-run. If a leak term appears, tighten the `internalScope` shop-only wording.
 
 - [ ] **Step 3: Commit**
 
@@ -485,14 +562,21 @@ git commit -m "test(agent): intake eval — diagnose_symptom ordering + no inter
 ## Final verification
 
 - [ ] `deno fmt --check apps/agent/src` + `deno lint apps/agent/src` clean.
-- [ ] `deno test apps/agent/src/common/fixo-diagnose_test.ts apps/agent/src/hmls/tools/diagnose-symptom_test.ts` — all pass.
+- [ ] `deno test apps/agent/src/common/fixo-diagnose_test.ts apps/agent/src/hmls/tools/diagnose-symptom_test.ts`
+      — all pass.
 - [ ] `deno check apps/agent/src/hmls/agent.ts` — passes.
-- [ ] No-regression: existing `create_order` / order tests still pass (`deno test apps/agent/src/common/tools/`); `create_order` is unchanged.
-- [ ] `infisical run --env=dev -- deno run -A apps/agent/src/scripts/intake-eval.ts` — `ALL CHECKS PASSED`.
-- [ ] Manual: open the customer chat, describe a brake symptom, confirm the agent asks a sharper follow-up + (if any) a safety caution, and that no diagnosis pill renders and no candidate-system jargon appears in its reply.
+- [ ] No-regression: existing `create_order` / order tests still pass
+      (`deno test apps/agent/src/common/tools/`); `create_order` is unchanged.
+- [ ] `infisical run --env=dev -- deno run -A apps/agent/src/scripts/intake-eval.ts` —
+      `ALL CHECKS PASSED`.
+- [ ] Manual: open the customer chat, describe a brake symptom, confirm the agent asks a sharper
+      follow-up + (if any) a safety caution, and that no diagnosis pill renders and no
+      candidate-system jargon appears in its reply.
 
 ## What this plan does NOT touch
 
 - `create_order` and its fire-and-forget prediction persistence — unchanged.
-- The outcome loop (`recordOutcome` via the `confirmedDiagnosis` PATCH) — unchanged; do not add a second call at the `completed` transition.
-- Photo/vision (the `imageRefs` field is reserved + dropped), multi-tenancy, scheduling, HTTP transport — all out of scope.
+- The outcome loop (`recordOutcome` via the `confirmedDiagnosis` PATCH) — unchanged; do not add a
+  second call at the `completed` transition.
+- Photo/vision (the `imageRefs` field is reserved + dropped), multi-tenancy, scheduling, HTTP
+  transport — all out of scope.
