@@ -46,6 +46,27 @@ export const CUSTOMER_LOOKUP_LABELS: Record<
     running: "Canceling order",
     done: "Order canceled",
   },
+  cancel_booking: {
+    running: "Canceling your booking",
+    done: "Booking canceled",
+  },
+  // Perceptible waits that otherwise showed nothing until their result card
+  // (or, for diagnose_symptom, nothing at all) appeared. The running pill
+  // shimmers; on output-available the dispatcher's specific case takes over
+  // (get_availability -> SlotPicker, create_order -> EstimateCard) so the
+  // "done" label only ever shows for diagnose_symptom.
+  diagnose_symptom: {
+    running: "Looking into the symptoms",
+    done: "Reviewed the symptoms",
+  },
+  get_availability: {
+    running: "Checking availability",
+    done: "Checked availability",
+  },
+  create_order: {
+    running: "Putting your estimate together",
+    done: "Estimate ready",
+  },
 };
 
 /** Single-line, non-expandable status pill for backstage lookups. Never
