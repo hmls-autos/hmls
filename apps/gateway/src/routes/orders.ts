@@ -63,7 +63,7 @@ async function backfillShareTokenIfMissing(orderId: number): Promise<void> {
     await db
       .update(schema.orders)
       .set({ shareToken: crypto.randomUUID().replace(/-/g, "") })
-      .where(eq(schema.orders.id, orderId));
+      .where(eq(schema.orders.id, orderId)); // tenant-ok: orderId already verified by caller via orderInShop()
   }
 }
 
@@ -88,7 +88,7 @@ orders.get("/", zValidator("query", listOrdersQuery), async (c) => {
 
   let query = db
     .select()
-    .from(schema.orders)
+    .from(schema.orders) // tenant-ok: $dynamic() base; scoped later by conditions[0]=whereShop(shopId) on line 98
     .orderBy(desc(schema.orders.createdAt))
     .$dynamic();
 

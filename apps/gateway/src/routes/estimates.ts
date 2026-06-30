@@ -30,7 +30,7 @@ estimates.get("/:id", requireAuth, async (c) => {
   const customerId = c.get("customerId");
   const [order] = await db
     .select()
-    .from(schema.orders)
+    .from(schema.orders) // tenant-ok: customer-ownership checked post-fetch (order.customerId !== customerId below); requireShopContext intentionally not mounted on this router
     .where(eq(schema.orders.id, id))
     .limit(1);
 

@@ -32,8 +32,8 @@ mechanic.get("/me", async (c) => {
   const providerId = c.get("providerId");
   const [provider] = await db
     .select()
-    .from(schema.providers)
-    .where(eq(schema.providers.id, providerId))
+    .from(schema.providers) // tenant-ok: providerId comes from authenticated session; mechanic reads only their own row
+    .where(eq(schema.providers.id, providerId)) // tenant-ok: scoped to authenticated mechanic's own record
     .limit(1);
 
   if (!provider) {

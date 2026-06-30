@@ -24,7 +24,7 @@ async function resolveCustomer(
   // 1. Preferred: match by auth_user_id (fast, unambiguous).
   let existing = await db
     .select()
-    .from(schema.customers)
+    .from(schema.customers) // tenant-ok: identity resolution by authUserId — one user owns one customer row
     .where(eq(schema.customers.authUserId, userInfo.authUserId))
     .limit(1)
     .then((rows) => rows[0] ?? null);
@@ -34,14 +34,14 @@ async function resolveCustomer(
   if (!existing) {
     const emailMatches = await db
       .select()
-      .from(schema.customers)
-      .where(eq(schema.customers.email, userInfo.email))
+      .from(schema.customers) // tenant-ok: email match is guarded to exactly-1 to prevent cross-shop mis-binding
+      .where(eq(schema.customers.email, userInfo.email)) // tenant-ok: guarded to exactly-1 match; see comment above
       .limit(2);
     if (emailMatches.length === 1) {
       existing = emailMatches[0];
       // Self-heal: stamp auth_user_id so the fallback is not needed next time.
       await db
-        .update(schema.customers)
+        .update(schema.customers) // tenant-ok: own-row update; id comes from the identity lookup above (resolved customer)
         .set({ authUserId: userInfo.authUserId })
         .where(eq(schema.customers.id, existing.id));
     }
