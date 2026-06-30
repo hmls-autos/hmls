@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { nearestShop, parseGeocodeResponse } from "./shop-routing.ts";
+import { nearestShop, parseGeocodeResponse, routingReviewNote } from "./shop-routing.ts";
 
 const SJ = { id: "sj", latitude: "37.3361663", longitude: "-121.890591", serviceRadiusKm: null };
 const OC = { id: "oc", latitude: "33.6484505", longitude: "-117.8365716", serviceRadiusKm: null };
@@ -24,4 +24,20 @@ Deno.test("parseGeocodeResponse: extracts lat/lng from a Census match (x=lng, y=
 
 Deno.test("parseGeocodeResponse: no matches => null", () => {
   assertEquals(parseGeocodeResponse({ result: { addressMatches: [] } }), null);
+});
+
+Deno.test("routingReviewNote: null when the order auto-routed", () => {
+  assertEquals(routingReviewNote({ autoRouted: true, coords: { lat: 37, lng: -121 } }), null);
+});
+
+Deno.test("routingReviewNote: out-of-range note when coords resolved but no shop matched", () => {
+  const note = routingReviewNote({ autoRouted: false, coords: { lat: 0, lng: 0 } });
+  assertEquals(typeof note, "string");
+  assertEquals(note!.includes("service radius"), true);
+});
+
+Deno.test("routingReviewNote: geocode-fail note when coords are null", () => {
+  const note = routingReviewNote({ autoRouted: false, coords: null });
+  assertEquals(typeof note, "string");
+  assertEquals(note!.includes("geocode"), true);
 });

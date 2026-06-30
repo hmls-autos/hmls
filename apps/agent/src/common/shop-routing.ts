@@ -80,3 +80,19 @@ export async function routeOrderToShop(
   if (matchedId) return { shopId: matchedId, coords, autoRouted: true };
   return { shopId: primary.id, coords, autoRouted: false };
 }
+
+/**
+ * Review note for an order whose shop was NOT auto-routed. Customer orders
+ * always carry a service address, so a non-auto-route means the address
+ * either failed to geocode or fell outside every shop's service radius — the
+ * order landed on the primary shop as a fallback and a human should confirm
+ * the assignment. Returns null when the order auto-routed (nothing to review).
+ */
+export function routingReviewNote(
+  r: { autoRouted: boolean; coords: Coords | null },
+): string | null {
+  if (r.autoRouted) return null;
+  return r.coords
+    ? "⚠ Auto-routed to the default shop — the service address is outside every shop's service radius. Verify the assigned shop."
+    : "⚠ Auto-routed to the default shop — could not geocode the service address. Verify the assigned shop.";
+}

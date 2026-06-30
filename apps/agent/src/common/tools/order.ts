@@ -22,7 +22,12 @@ import {
   getPricingConfig,
   shopHourlyRate,
 } from "../../hmls/skills/estimate/pricing.ts";
-import { type Coords, geocodeAddress, routeOrderToShop } from "../shop-routing.ts";
+import {
+  type Coords,
+  geocodeAddress,
+  routeOrderToShop,
+  routingReviewNote,
+} from "../shop-routing.ts";
 import { toolResult } from "@hmls/shared/tool-result";
 import type { DiscountType, LineItem, ServiceInput } from "../../hmls/skills/estimate/types.ts";
 import type { OrderItem, RepairTechPrep } from "@hmls/shared/db/schema";
@@ -677,10 +682,16 @@ export const createOrderTool = {
     //    shop; geocode the order address only to populate coords.
     let orderShopId: string;
     let coords: Coords | null;
+    let routingNote: string | null = null;
     if (isCustomerAgent) {
       const routed = await routeOrderToShop(orderAddress);
       orderShopId = routed.shopId; // nearest shop wins
       coords = routed.coords;
+      // Coverage flag: surface a routing miss for staff review instead of
+      // silently leaving the order on the primary-shop fallback. ponytail:
+      // adminNotes is the cheapest visible channel (renders in the order
+      // detail Notes card); upgrade to a list badge if the queue needs it.
+      routingNote = routingReviewNote(routed);
     } else {
       orderShopId = insertAccess.shopId as string; // staff's own shop (per canWrite)
       coords = orderAddress ? await geocodeAddress(orderAddress) : null;
@@ -793,6 +804,7 @@ export const createOrderTool = {
           ],
           items,
           notes: params.notes ?? null,
+          adminNotes: routingNote,
           subtotalCents: subtotal,
           priceRangeLowCents: rangeLow,
           priceRangeHighCents: rangeHigh,
