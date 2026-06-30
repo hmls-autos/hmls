@@ -65,12 +65,11 @@ DECLARE
   v_role text;
 BEGIN
   v_user_id := event->>'user_id';
-  claims := event->'claims';
+  claims := COALESCE(event->'claims', '{}'::jsonb);
+  -- Single source of truth for role: public.customers.role (converged
+  -- 2026-06-30, migration 0037). The legacy auth.users app_metadata 'role'
+  -- bridge was removed — role is granted/revoked only via customers.role.
   SELECT role INTO v_role FROM public.customers WHERE auth_user_id = v_user_id LIMIT 1;
-  IF v_role IS NULL OR v_role = 'customer' THEN
-    SELECT COALESCE(raw_app_meta_data->>'role', v_role) INTO v_role
-    FROM auth.users WHERE id::text = v_user_id LIMIT 1;
-  END IF;
   IF v_role IS NULL THEN v_role := 'customer'; END IF;
   claims := jsonb_set(claims, '{user_role}', to_jsonb(v_role));
   event := jsonb_set(event, '{claims}', claims);
