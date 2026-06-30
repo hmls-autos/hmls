@@ -63,7 +63,7 @@ async function backfillShareTokenIfMissing(orderId: number): Promise<void> {
     await db
       .update(schema.orders)
       .set({ shareToken: crypto.randomUUID().replace(/-/g, "") })
-      .where(eq(schema.orders.id, orderId));
+      .where(eq(schema.orders.id, orderId)); // tenant-ok: orderId already verified by caller via orderInShop()
   }
 }
 
@@ -98,7 +98,7 @@ orders.get("/", zValidator("query", listOrdersQuery), async (c) => {
     whereShop(schema.orders.shopId, shopId),
   ];
   if (status) {
-    conditions.push(eq(schema.orders.status, status));
+    conditions.push(eq(schema.orders.status, status)); // tenant-ok: conditions[0] is whereShop(shopId) above
   }
   const searchTerm = search?.trim();
   if (searchTerm) {
@@ -112,7 +112,7 @@ orders.get("/", zValidator("query", listOrdersQuery), async (c) => {
       SELECT 1 FROM ${schema.orderIntake}
       WHERE ${schema.orderIntake.orderId} = ${schema.orders.id}
         AND ${schema.orderIntake.symptomDescription} ILIKE ${like}
-    )`;
+    )`; // tenant-ok: joined via orderId; outer query scoped by whereShop(shopId) in conditions[0]
     conditions.push(
       sql`(${schema.orders.contactName} ILIKE ${like}
         OR ${schema.orders.contactEmail} ILIKE ${like}
@@ -124,7 +124,7 @@ orders.get("/", zValidator("query", listOrdersQuery), async (c) => {
         OR ${schema.orders.vehicleInfo}->>'year' ILIKE ${like}${
         isNumericId ? sql` OR ${schema.orders.id} = ${numericId}` : sql``
       })`,
-    );
+    ); // tenant-ok: filter fragment added to conditions[]; conditions[0] is whereShop(shopId) above
   }
   if (conditions.length > 0) {
     query = query.where(and(...conditions));

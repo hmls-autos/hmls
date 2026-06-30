@@ -32,8 +32,8 @@ mechanic.get("/me", async (c) => {
   const providerId = c.get("providerId");
   const [provider] = await db
     .select()
-    .from(schema.providers)
-    .where(eq(schema.providers.id, providerId))
+    .from(schema.providers) // tenant-ok: providerId comes from authenticated session; mechanic reads only their own row
+    .where(eq(schema.providers.id, providerId)) // tenant-ok: scoped to authenticated mechanic's own record
     .limit(1);
 
   if (!provider) {
@@ -188,22 +188,22 @@ mechanic.get("/orders", zValidator("query", listMyOrdersQuery), async (c) => {
 
   const conditions = [eq(schema.orders.providerId, providerId), eq(schema.orders.shopId, shopId)];
   if (from && to) {
-    conditions.push(between(schema.orders.scheduledAt, new Date(from), new Date(to)));
+    conditions.push(between(schema.orders.scheduledAt, new Date(from), new Date(to))); // tenant-ok: conditions[1] is shopId
   } else if (from) {
-    conditions.push(gte(schema.orders.scheduledAt, new Date(from)));
+    conditions.push(gte(schema.orders.scheduledAt, new Date(from))); // tenant-ok: conditions[1] is shopId
   } else if (to) {
-    conditions.push(lte(schema.orders.scheduledAt, new Date(to)));
+    conditions.push(lte(schema.orders.scheduledAt, new Date(to))); // tenant-ok: conditions[1] is shopId
   }
 
   const rows = await db
-    .select({ order: schema.orders, intake: schema.orderIntake })
+    .select({ order: schema.orders, intake: schema.orderIntake }) // tenant-ok: conditions[1] is shopId
     .from(schema.orders)
     .leftJoin(
       schema.orderIntake,
-      eq(schema.orderIntake.orderId, schema.orders.id),
+      eq(schema.orderIntake.orderId, schema.orders.id), // tenant-ok: joined by orderId; outer query scoped by shopId in conditions
     )
     .where(and(...conditions))
-    .orderBy(asc(schema.orders.scheduledAt));
+    .orderBy(asc(schema.orders.scheduledAt)); // tenant-ok: conditions[1] is shopId
   const withIntake: OrderRowWithIntake[] = rows.map((r) => ({ ...r.order, intake: r.intake }));
   return c.json<OrderRowWithIntake[]>(withIntake);
 });

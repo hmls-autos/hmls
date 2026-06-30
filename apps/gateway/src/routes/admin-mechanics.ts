@@ -90,7 +90,7 @@ adminMechanics.get("/", async (c) => {
     .select()
     .from(schema.providers)
     .where(whereShop(schema.providers.shopId, shopId))
-    .orderBy(desc(schema.providers.isActive), asc(schema.providers.name));
+    .orderBy(desc(schema.providers.isActive), asc(schema.providers.name)); // tenant-ok: whereShop above
 
   if (providers.length === 0) return c.json<ProviderWithStats[]>([]);
 
@@ -99,7 +99,7 @@ adminMechanics.get("/", async (c) => {
   // All scheduling queries target `orders` directly now. An order is "active
   // on a mechanic's schedule" when it has a providerId + scheduledAt and its
   // status is not cancelled/declined.
-  const activeStatusSql = sql`${schema.orders.status} NOT IN ('cancelled', 'declined')`;
+  const activeStatusSql = sql`${schema.orders.status} NOT IN ('cancelled', 'declined')`; // tenant-ok: SQL fragment; used only within whereShop-scoped queries below
 
   const [
     availability,
@@ -134,7 +134,7 @@ adminMechanics.get("/", async (c) => {
           inArray(schema.orders.providerId, providerIds),
           gte(schema.orders.scheduledAt, weekStart),
           activeStatusSql,
-        ),
+        ), // tenant-ok: whereShop(shopId) above
       ),
     // Snapshot orders around "now" (±24h) for isOnJobNow.
     db
@@ -155,7 +155,7 @@ adminMechanics.get("/", async (c) => {
             new Date(now.getTime() + 24 * 60 * 60 * 1000),
           ),
           activeStatusSql,
-        ),
+        ), // tenant-ok: whereShop(shopId) above
       ),
     // Earnings 30d: completed orders assigned to these providers.
     db
@@ -172,7 +172,7 @@ adminMechanics.get("/", async (c) => {
           inArray(schema.orders.providerId, providerIds),
           eq(schema.orders.status, "completed"),
           gte(schema.orders.createdAt, thirtyDaysAgo),
-        ),
+        ), // tenant-ok: whereShop(shopId) above
       ),
     db
       .select({
@@ -187,7 +187,7 @@ adminMechanics.get("/", async (c) => {
           gte(schema.orders.scheduledAt, now),
           lte(schema.orders.scheduledAt, endOfWeek(now)),
           sql`${schema.orders.status} IN ('scheduled', 'in_progress')`,
-        ),
+        ), // tenant-ok: whereShop(shopId) above
       )
       .groupBy(schema.orders.providerId),
     db
@@ -202,9 +202,9 @@ adminMechanics.get("/", async (c) => {
           inArray(schema.orders.providerId, providerIds),
           gte(schema.orders.scheduledAt, now),
           sql`${schema.orders.status} IN ('scheduled', 'in_progress')`,
-        ),
+        ), // tenant-ok: whereShop(shopId) above
       )
-      .groupBy(schema.orders.providerId),
+      .groupBy(schema.orders.providerId), // tenant-ok: whereShop applied in .where() above
   ]);
 
   const groupBy = <T extends { providerId: number | null }>(
@@ -626,12 +626,12 @@ adminMechanics.get("/:id/orders", zValidator("query", listMechanicOrdersQuery), 
   const conditions = [eq(schema.orders.providerId, id), eq(schema.orders.shopId, shopId)];
   if (from && to) {
     conditions.push(
-      between(schema.orders.scheduledAt, new Date(from), new Date(to)),
+      between(schema.orders.scheduledAt, new Date(from), new Date(to)), // tenant-ok: conditions[1] is shopId
     );
   } else if (from) {
-    conditions.push(gte(schema.orders.scheduledAt, new Date(from)));
+    conditions.push(gte(schema.orders.scheduledAt, new Date(from))); // tenant-ok: conditions[1] is shopId
   } else if (to) {
-    conditions.push(lte(schema.orders.scheduledAt, new Date(to)));
+    conditions.push(lte(schema.orders.scheduledAt, new Date(to))); // tenant-ok: conditions[1] is shopId
   }
 
   const rows = await db
@@ -654,7 +654,7 @@ adminMechanics.get("/:id/orders", zValidator("query", listMechanicOrdersQuery), 
       ),
     )
     .where(and(...conditions))
-    .orderBy(asc(schema.orders.scheduledAt))
+    .orderBy(asc(schema.orders.scheduledAt)) // tenant-ok: conditions includes shopId
     .limit(200);
 
   return c.json<OrderWithCustomer[]>(
