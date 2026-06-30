@@ -41,7 +41,7 @@ async function resolveCustomer(
       existing = emailMatches[0];
       // Self-heal: stamp auth_user_id so the fallback is not needed next time.
       await db
-        .update(schema.customers)
+        .update(schema.customers) // tenant-ok: own-row update; id comes from the identity lookup above (resolved customer)
         .set({ authUserId: userInfo.authUserId })
         .where(eq(schema.customers.id, existing.id));
     }

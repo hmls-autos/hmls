@@ -188,22 +188,22 @@ mechanic.get("/orders", zValidator("query", listMyOrdersQuery), async (c) => {
 
   const conditions = [eq(schema.orders.providerId, providerId), eq(schema.orders.shopId, shopId)];
   if (from && to) {
-    conditions.push(between(schema.orders.scheduledAt, new Date(from), new Date(to))); // tenant-ok: conditions[1] is shopId
+    conditions.push(between(schema.orders.scheduledAt, new Date(from), new Date(to)));
   } else if (from) {
-    conditions.push(gte(schema.orders.scheduledAt, new Date(from))); // tenant-ok: conditions[1] is shopId
+    conditions.push(gte(schema.orders.scheduledAt, new Date(from)));
   } else if (to) {
-    conditions.push(lte(schema.orders.scheduledAt, new Date(to))); // tenant-ok: conditions[1] is shopId
+    conditions.push(lte(schema.orders.scheduledAt, new Date(to)));
   }
 
   const rows = await db
-    .select({ order: schema.orders, intake: schema.orderIntake }) // tenant-ok: conditions[1] is shopId
+    .select({ order: schema.orders, intake: schema.orderIntake })
     .from(schema.orders)
     .leftJoin(
       schema.orderIntake,
-      eq(schema.orderIntake.orderId, schema.orders.id), // tenant-ok: joined by orderId; outer query scoped by shopId in conditions
+      eq(schema.orderIntake.orderId, schema.orders.id),
     )
     .where(and(...conditions))
-    .orderBy(asc(schema.orders.scheduledAt)); // tenant-ok: conditions[1] is shopId
+    .orderBy(asc(schema.orders.scheduledAt));
   const withIntake: OrderRowWithIntake[] = rows.map((r) => ({ ...r.order, intake: r.intake }));
   return c.json<OrderRowWithIntake[]>(withIntake);
 });

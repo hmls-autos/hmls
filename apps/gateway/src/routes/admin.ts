@@ -80,7 +80,7 @@ admin.get("/dashboard", async (c) => {
       .select()
       .from(schema.customers)
       .where(whereShop(schema.customers.shopId, shopId))
-      .orderBy(desc(schema.customers.createdAt)) // tenant-ok: whereShop applied above
+      .orderBy(desc(schema.customers.createdAt))
       .limit(5),
   ]);
 
@@ -116,7 +116,7 @@ admin.get("/dashboard", async (c) => {
     .where(
       and(
         whereShop(schema.orders.shopId, shopId),
-        sql`${schema.orders.status} IN ('approved', 'scheduled', 'in_progress')`, // tenant-ok: whereShop above
+        sql`${schema.orders.status} IN ('approved', 'scheduled', 'in_progress')`,
       ),
     );
 
@@ -177,7 +177,7 @@ admin.get("/customers", zValidator("query", listCustomersQuery), async (c) => {
         } OR ${schema.customers.email} ILIKE ${
           "%" + search + "%"
         } OR ${schema.customers.phone} ILIKE ${"%" + search + "%"})`,
-      ), // tenant-ok: whereShop(shopId) in same and() above
+      ),
     );
   }
 
@@ -211,7 +211,7 @@ admin.get("/customers/:id", async (c) => {
     .select()
     .from(schema.orders)
     .where(and(eq(schema.orders.customerId, id), whereShop(schema.orders.shopId, shopId)))
-    .orderBy(desc(schema.orders.createdAt)); // tenant-ok: whereShop above
+    .orderBy(desc(schema.orders.createdAt));
 
   return c.json<{ customer: CustomerRow; orders: OrderRow[] }>({ customer, orders });
 });

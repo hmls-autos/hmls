@@ -88,7 +88,7 @@ orders.get("/", zValidator("query", listOrdersQuery), async (c) => {
 
   let query = db
     .select()
-    .from(schema.orders)
+    .from(schema.orders) // tenant-ok: $dynamic() base; scoped later by conditions[0]=whereShop(shopId) on line 98
     .orderBy(desc(schema.orders.createdAt))
     .$dynamic();
 
@@ -98,7 +98,7 @@ orders.get("/", zValidator("query", listOrdersQuery), async (c) => {
     whereShop(schema.orders.shopId, shopId),
   ];
   if (status) {
-    conditions.push(eq(schema.orders.status, status)); // tenant-ok: conditions[0] is whereShop(shopId) above
+    conditions.push(eq(schema.orders.status, status));
   }
   const searchTerm = search?.trim();
   if (searchTerm) {
@@ -112,7 +112,7 @@ orders.get("/", zValidator("query", listOrdersQuery), async (c) => {
       SELECT 1 FROM ${schema.orderIntake}
       WHERE ${schema.orderIntake.orderId} = ${schema.orders.id}
         AND ${schema.orderIntake.symptomDescription} ILIKE ${like}
-    )`; // tenant-ok: joined via orderId; outer query scoped by whereShop(shopId) in conditions[0]
+    )`;
     conditions.push(
       sql`(${schema.orders.contactName} ILIKE ${like}
         OR ${schema.orders.contactEmail} ILIKE ${like}
@@ -124,7 +124,7 @@ orders.get("/", zValidator("query", listOrdersQuery), async (c) => {
         OR ${schema.orders.vehicleInfo}->>'year' ILIKE ${like}${
         isNumericId ? sql` OR ${schema.orders.id} = ${numericId}` : sql``
       })`,
-    ); // tenant-ok: filter fragment added to conditions[]; conditions[0] is whereShop(shopId) above
+    );
   }
   if (conditions.length > 0) {
     query = query.where(and(...conditions));
