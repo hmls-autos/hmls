@@ -11,7 +11,9 @@ export type AdminEnv = Env & {
 };
 
 /**
- * Requires a valid JWT with admin role in app_metadata.
+ * Requires a valid JWT whose `user_role` claim is admin (or owner). That claim
+ * is injected by the custom_access_token_hook from customers.role (the single
+ * source of truth as of migration 0037) — NOT from auth app_metadata.
  * No DB query — checks the JWT claim directly.
  * Returns 401 if missing/invalid token, 403 if not admin.
  */
