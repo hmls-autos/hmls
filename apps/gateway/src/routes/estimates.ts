@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { db, dbAdmin, schema, withAdminScope } from "@hmls/agent/db";
+import { db, dbAdmin, schema, withAdminScope, withTenantScope } from "@hmls/agent/db";
 import { and, eq } from "drizzle-orm";
 import { EstimatePdf } from "@hmls/agent";
 import { transition } from "@hmls/agent/order-state";
@@ -28,11 +28,16 @@ estimates.get("/:id", requireAuth, async (c) => {
   }
 
   const customerId = c.get("customerId");
-  const [order] = await db
-    .select()
-    .from(schema.orders) // tenant-ok: customer-ownership checked post-fetch (order.customerId !== customerId below); requireShopContext intentionally not mounted on this router
-    .where(eq(schema.orders.id, id))
-    .limit(1);
+  // withTenantScope: authenticated customer reading their OWN order. Sets
+  // app.customer_id so the orders RLS policy admits their row (across shops).
+  // Per-handler wrap, NOT a router-wide withTenantTx — the sibling public
+  // token routes have no customerId and would throw under a router-wide scope.
+  // (The trailing tenant-ok annotation sits on the query line itself so the
+  // tenant-guard statement scan sees the scope was applied deliberately.)
+  const [order] = await withTenantScope(
+    { customerId },
+    () => db.select().from(schema.orders).where(eq(schema.orders.id, id)).limit(1), // tenant-ok: app.customer_id set by the withTenantScope wrap; RLS enforces ownership
+  );
 
   if (!order) throw Errors.notFound("Order", id);
   if (order.customerId !== customerId) {
