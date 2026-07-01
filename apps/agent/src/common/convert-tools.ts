@@ -1,3 +1,6 @@
+import { withAdminScope, withTenantScope } from "../db/client.ts";
+import { OWNER_ALL_SHOPS } from "../db/tenant.ts";
+
 export interface ToolContext {
   userId?: string;
   customerId?: number;
@@ -31,7 +34,22 @@ export function convertTools(existingTools: LegacyTool[], ctx?: ToolContext): Re
     result[t.name] = {
       description: t.description,
       inputSchema: t.schema,
-      execute: (input: unknown) => t.execute(input, ctx),
+      execute: (input: unknown) => {
+        // Owner viewing all shops → cross-shop read on the admin connection.
+        if (ctx?.shopId === OWNER_ALL_SHOPS) {
+          return withAdminScope(() => t.execute(input, ctx));
+        }
+        // A concrete shop (staff) or a customer → RLS-scoped transaction.
+        if (ctx?.customerId != null || ctx?.shopId) {
+          return withTenantScope(
+            { shopId: ctx.shopId, customerId: ctx.customerId },
+            () => t.execute(input, ctx),
+          );
+        }
+        // No tenant context (e.g. Fixo tools) → run unscoped on the base pool.
+        // Fixo tables are not RLS'd; tenant_app has grants on them.
+        return t.execute(input, ctx);
+      },
     };
   }
   return result;
