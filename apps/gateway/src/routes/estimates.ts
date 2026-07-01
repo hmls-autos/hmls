@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { db, schema } from "@hmls/agent/db";
+import { db, dbAdmin, schema } from "@hmls/agent/db";
 import { and, eq } from "drizzle-orm";
 import { EstimatePdf } from "@hmls/agent";
 import { transition } from "@hmls/agent/order-state";
@@ -62,7 +62,10 @@ estimates.get("/:id/pdf", async (c) => {
     return c.json({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
   }
 
-  const [order] = await db
+  // dbAdmin: a shareToken is a capability, not a shop scope — there is no
+  // requireShopContext on this router, so no tenant GUC would be set. The
+  // token-match WHERE clause below is the authorization proof.
+  const [order] = await dbAdmin
     .select()
     .from(schema.orders)
     .where(and(eq(schema.orders.id, id), eq(schema.orders.shareToken, token)))

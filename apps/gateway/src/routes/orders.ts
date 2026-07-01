@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { db, schema, whereShop } from "@hmls/agent/db";
+import { db, dbAdmin, schema, whereShop } from "@hmls/agent/db";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { type AdminEnv, requireAdmin } from "../middleware/admin.ts";
 import { OWNER_ALL_SHOPS, requireShopContext, type WithShop } from "../middleware/shop-context.ts";
@@ -673,7 +673,11 @@ ordersPdf.get("/:id/pdf", zValidator("query", orderPdfQuery), async (c) => {
     return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
   }
 
-  const [order] = await db
+  // dbAdmin: this router has no requireShopContext/withTenantTx (mounted
+  // standalone at /api/orders — see hmls-app.ts). A shareToken is a
+  // capability, not a shop scope; the token-match WHERE clause below is the
+  // authorization proof.
+  const [order] = await dbAdmin
     .select()
     .from(schema.orders)
     .where(and(eq(schema.orders.id, id), eq(schema.orders.shareToken, token)))

@@ -1,6 +1,6 @@
 import type { Env } from "hono";
 import { createMiddleware } from "hono/factory";
-import { db, schema } from "@hmls/agent/db";
+import { dbAdmin, schema } from "@hmls/agent/db";
 import { eq } from "drizzle-orm";
 import type { AuthUser } from "../lib/supabase.ts";
 
@@ -45,7 +45,7 @@ export function pickShopId(input: PickInput): PickResult {
 }
 
 async function loadValidShopIds(): Promise<string[]> {
-  const rows = await db.select({ id: schema.shops.id }).from(schema.shops);
+  const rows = await dbAdmin.select({ id: schema.shops.id }).from(schema.shops);
   return rows.map((r) => r.id);
 }
 
@@ -73,20 +73,20 @@ export const requireShopContext = createMiddleware<ShopCtx>(async (c, next) => {
 
   let homeShopId: string | null = null;
   if (role === "mechanic") {
-    const [p] = await db.select({ shopId: schema.providers.shopId })
+    const [p] = await dbAdmin.select({ shopId: schema.providers.shopId })
       .from(schema.providers).where(eq(schema.providers.authUserId, user.id)).limit(1);
     homeShopId = p?.shopId ?? null;
   } else if (role === "admin" || role === "customer") {
     // admin + customer are both `customers` rows. Match by auth_user_id, with an
     // email fallback (mirrors requireAuth) so guests who later sign in still resolve.
     let custId: number | undefined;
-    let [cust] = await db
+    let [cust] = await dbAdmin
       .select({ id: schema.customers.id, shopId: schema.customers.shopId })
       .from(schema.customers).where(eq(schema.customers.authUserId, user.id)).limit(1);
     if (!cust && user.email) {
       // Email fallback: only bind when EXACTLY ONE row matches — avoids cross-shop
       // mis-binding when multiple shops have a customer with the same email.
-      const emailMatches = await db
+      const emailMatches = await dbAdmin
         .select({ id: schema.customers.id, shopId: schema.customers.shopId })
         .from(schema.customers)
         .where(eq(schema.customers.email, user.email))
@@ -95,7 +95,7 @@ export const requireShopContext = createMiddleware<ShopCtx>(async (c, next) => {
         cust = emailMatches[0];
         custId = cust.id;
         // Self-heal: stamp auth_user_id so the fallback is not needed next time.
-        await db
+        await dbAdmin
           .update(schema.customers)
           .set({ authUserId: user.id })
           .where(eq(schema.customers.id, custId));
