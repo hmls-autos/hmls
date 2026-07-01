@@ -4,6 +4,7 @@ import { db, schema, whereShop } from "@hmls/agent/db";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { type AdminEnv, requireAdmin } from "../middleware/admin.ts";
 import { OWNER_ALL_SHOPS, requireShopContext, type WithShop } from "../middleware/shop-context.ts";
+import { withTenantTx } from "../middleware/with-tenant-tx.ts";
 import { EstimatePdf } from "@hmls/agent";
 import type { OrderItem } from "@hmls/agent/db";
 import {
@@ -71,6 +72,7 @@ const orders = new Hono<WithShop<AdminEnv>>();
 
 orders.use("*", requireAdmin);
 orders.use("*", requireShopContext);
+orders.use("*", withTenantTx("shop"));
 
 // GET /orders — list all orders (with pagination)
 orders.get("/", zValidator("query", listOrdersQuery), async (c) => {

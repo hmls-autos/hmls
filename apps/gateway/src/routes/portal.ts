@@ -5,6 +5,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { Errors } from "@hmls/shared/errors";
 import { type AuthEnv, requireAuth } from "../middleware/auth.ts";
 import { requireShopContext, type WithShop } from "../middleware/shop-context.ts";
+import { withTenantTx } from "../middleware/with-tenant-tx.ts";
 import { transition } from "@hmls/agent/order-state";
 import { sendOrderStateResult } from "../lib/order-state-http.ts";
 import { orderReasonInput, updateProfileInput } from "@hmls/shared/api/contracts/portal";
@@ -22,6 +23,7 @@ const portal = new Hono<WithShop<AuthEnv>>();
 
 portal.use("*", requireAuth);
 portal.use("*", requireShopContext);
+portal.use("*", withTenantTx("customer"));
 
 // GET /me — current customer profile
 portal.get("/me", async (c) => {

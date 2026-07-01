@@ -4,6 +4,7 @@ import { and, asc, between, eq, gte, lte } from "drizzle-orm";
 import { db, schema } from "@hmls/agent/db";
 import { type MechanicEnv, requireMechanic } from "../middleware/mechanic.ts";
 import { requireShopContext, type WithShop } from "../middleware/shop-context.ts";
+import { withTenantTx } from "../middleware/with-tenant-tx.ts";
 import {
   createMechanicOverrideInput,
   listMechanicOverridesQuery,
@@ -23,6 +24,7 @@ const mechanic = new Hono<WithShop<MechanicEnv>>();
 
 mechanic.use("*", requireMechanic);
 mechanic.use("*", requireShopContext);
+mechanic.use("*", withTenantTx("shop"));
 
 // ---------------------------------------------------------------------------
 // GET /me — current mechanic's provider record
