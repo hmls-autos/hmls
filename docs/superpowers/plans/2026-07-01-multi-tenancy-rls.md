@@ -5,7 +5,7 @@
 > checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a Postgres Row-Level-Security backstop under the existing app-layer tenant scoping, so
-a *forgotten* app scope leaks no cross-shop data — the isolation guarantee HMLS needs as it grows
+a _forgotten_ app scope leaks no cross-shop data — the isolation guarantee HMLS needs as it grows
 from two sites into a nationwide mechanic network (first external tenant ~1 month out).
 
 **Architecture:** A new non-`BYPASSRLS` role (`tenant_app`) becomes the default `db` connection;
@@ -30,9 +30,10 @@ migration.
   `scripts/dev-local.sh [api|web]`). Local DB is rebuilt from `schema.ts`, so raw SQL migrations are
   applied by hand: `psql "$LOCAL_DB_URL" -f <file>`. **Verify RLS locally (Task 7) before prod.**
 - **Deno code:** double quotes, 2-space indent, 100-char lines (`deno fmt`).
-- **Full local CI before any push:** `cd apps/hmls-web && bun run lint && bun run typecheck &&
-  bun run test && bun run build`; `deno task check`; `cd apps/gateway && deno test` and
-  `cd apps/agent && deno test`.
+- **Full local CI before any push:**
+  `cd apps/hmls-web && bun run lint && bun run typecheck &&
+  bun run test && bun run build`;
+  `deno task check`; `cd apps/gateway && deno test` and `cd apps/agent && deno test`.
 - **The two GUCs are mutually exclusive per request:** customer requests set ONLY `app.customer_id`
   (a customer sees own orders across shops); staff/owner-with-shop set ONLY `app.shop_id`. Setting
   both on a customer request would expose other customers' rows in that shop — do not.
@@ -51,12 +52,12 @@ migration.
   `withTenantTx("shop")` after `requireShopContext`.
 - `apps/gateway/src/routes/portal.ts` — **modify**. Mount `withTenantTx("customer")`.
 - `apps/agent/src/common/convert-tools.ts` — **modify**. Wrap each tool's `execute` in the right
-  scope (customer/shop → `withTenantScope`; owner-all → `withAdminScope`; no tenant ctx → passthrough
-  for Fixo).
+  scope (customer/shop → `withTenantScope`; owner-all → `withAdminScope`; no tenant ctx →
+  passthrough for Fixo).
 - `apps/gateway/src/middleware/shop-context.ts` — **modify**. Bootstrap reads → `dbAdmin`.
 - `apps/gateway/src/routes/chat.ts` — **modify**. `resolveCustomer` identity reads → `dbAdmin`.
-- `apps/gateway/src/routes/estimates.ts` + `orders.ts` (public PDF, ~line 594) — **modify**.
-  Public shareToken/PDF reads → `dbAdmin`.
+- `apps/gateway/src/routes/estimates.ts` + `orders.ts` (public PDF, ~line 594) — **modify**. Public
+  shareToken/PDF reads → `dbAdmin`.
 - `apps/agent/migrations/0038_tenant_app_role.sql` — **create**. Role + grants (RLS OFF).
 - `apps/agent/migrations/0039_enable_rls.sql` + `0039_disable_rls.sql` — **create**. Policies +
   ENABLE/FORCE, and the rollback.
@@ -67,17 +68,21 @@ migration.
 ### Task 1: Core primitive — ALS proxy, `dbAdmin`, `withTenantScope`, `withAdminScope`
 
 **Files:**
+
 - Modify: `packages/shared/src/db/client.ts` (currently 37 lines — full rewrite)
 - Create: `packages/shared/src/db/client_test.ts`
 - Modify: `apps/agent/src/db/client.ts` (the sole consumer of `createDbClient`)
 
 **Interfaces:**
+
 - Produces:
   - `pickScopeConfig(ctx: { shopId?: string; customerId?: number }): { setting: "app.customer_id" |
-    "app.shop_id"; value: string }` — pure; throws if neither is present (fail-closed).
+    "app.shop_id"; value: string }`
+    — pure; throws if neither is present (fail-closed).
   - `createDbClient<T>(schema: T): { db; dbAdmin; withTenantScope; withAdminScope }` where
     `withTenantScope<R>(ctx: { shopId?: string; customerId?: number }, fn: () => Promise<R>):
-    Promise<R>` and `withAdminScope<R>(fn: () => Promise<R>): Promise<R>`.
+    Promise<R>`
+    and `withAdminScope<R>(fn: () => Promise<R>): Promise<R>`.
   - Re-exported from `@hmls/agent/db`: `db`, `dbAdmin`, `withTenantScope`, `withAdminScope`,
     `schema`, and (via `./tenant.ts`) `OWNER_ALL_SHOPS`.
 
@@ -110,8 +115,8 @@ Deno.test("pickScopeConfig: empty context is fail-closed", () => {
 
 - [ ] **Step 2: Run it; confirm it fails**
 
-Run: `cd packages/shared && deno test src/db/client_test.ts`
-Expected: FAIL — `pickScopeConfig` is not exported.
+Run: `cd packages/shared && deno test src/db/client_test.ts` Expected: FAIL — `pickScopeConfig` is
+not exported.
 
 - [ ] **Step 3: Rewrite `packages/shared/src/db/client.ts`**
 
@@ -156,7 +161,9 @@ export function createDbClient<T extends Record<string, unknown>>(schema: T) {
       // Prefer the restricted role; fall back to service_role until the role +
       // TENANT_DATABASE_URL are provisioned (so rollout step 1 is behavior-neutral).
       const url = Deno.env.get("TENANT_DATABASE_URL") ?? Deno.env.get("DATABASE_URL");
-      if (!url) throw new Error("TENANT_DATABASE_URL/DATABASE_URL environment variable is required");
+      if (!url) {
+        throw new Error("TENANT_DATABASE_URL/DATABASE_URL environment variable is required");
+      }
       // deno-lint-ignore no-explicit-any
       _tenant = drizzle(postgres(url) as any, { schema });
     }
@@ -184,7 +191,9 @@ export function createDbClient<T extends Record<string, unknown>>(schema: T) {
   }
 
   // Default: ALS executor wins; else base tenant pool (fail-closed under RLS).
-  const db = proxy(() => (txStore.getStore()?.executor as ReturnType<typeof drizzle<T>>) ?? tenantDb());
+  const db = proxy(() =>
+    (txStore.getStore()?.executor as ReturnType<typeof drizzle<T>>) ?? tenantDb()
+  );
   // Admin: ALWAYS service_role, ignoring ALS. Bootstrap/system/owner-all/public-token.
   const dbAdmin = proxy(() => adminDb());
 
@@ -213,8 +222,7 @@ export function createDbClient<T extends Record<string, unknown>>(schema: T) {
 
 - [ ] **Step 4: Run the unit test; confirm green**
 
-Run: `cd packages/shared && deno test src/db/client_test.ts`
-Expected: PASS (3 tests).
+Run: `cd packages/shared && deno test src/db/client_test.ts` Expected: PASS (3 tests).
 
 - [ ] **Step 5: Update the consumer `apps/agent/src/db/client.ts`**
 
@@ -230,8 +238,8 @@ export * from "./tenant.ts";
 
 - [ ] **Step 6: Typecheck the whole workspace**
 
-Run: `deno task check`
-Expected: PASS (no consumer of `db` breaks — the proxy shape is unchanged; only new exports added).
+Run: `deno task check` Expected: PASS (no consumer of `db` breaks — the proxy shape is unchanged;
+only new exports added).
 
 - [ ] **Step 7: Commit**
 
@@ -246,6 +254,7 @@ git commit -m "feat(db): tenant/admin client split + ALS tenant-scope helpers (R
 ### Task 2: Gateway CRUD middleware — `withTenantTx`
 
 **Files:**
+
 - Create: `apps/gateway/src/middleware/with-tenant-tx.ts`
 - Modify: `apps/gateway/src/routes/admin.ts` (after `admin.use("*", requireShopContext)` — line 21)
 - Modify: `apps/gateway/src/routes/orders.ts` (after line 73)
@@ -254,6 +263,7 @@ git commit -m "feat(db): tenant/admin client split + ALS tenant-scope helpers (R
 - Modify: `apps/gateway/src/routes/portal.ts` (after line 24)
 
 **Interfaces:**
+
 - Consumes: `withTenantScope`, `withAdminScope` from `@hmls/agent/db`; `OWNER_ALL_SHOPS` from
   `./shop-context.ts`; `c.get("shopId")` (set by requireShopContext), `c.get("customerId")` (set by
   requireAuth on portal).
@@ -317,9 +327,9 @@ portal.use("*", withTenantTx("customer"));
 
 - [ ] **Step 4: Typecheck + run the gateway test suite (no-regression check)**
 
-Run: `deno task check && cd apps/gateway && deno test`
-Expected: PASS. With `TENANT_DATABASE_URL` unset and RLS still off, `withTenantScope` just opens a
-harmless transaction that sets a GUC no policy reads — behavior is identical to today.
+Run: `deno task check && cd apps/gateway && deno test` Expected: PASS. With `TENANT_DATABASE_URL`
+unset and RLS still off, `withTenantScope` just opens a harmless transaction that sets a GUC no
+policy reads — behavior is identical to today.
 
 - [ ] **Step 5: Commit**
 
@@ -335,9 +345,11 @@ git commit -m "feat(gateway): wrap scoped CRUD routes in tenant transactions"
 ### Task 3: Wrap agent tools in the tenant scope
 
 **Files:**
+
 - Modify: `apps/agent/src/common/convert-tools.ts` (the `convertTools` execute closure, lines 31-37)
 
 **Interfaces:**
+
 - Consumes: `withTenantScope`, `withAdminScope` from `../db/client.ts`; `OWNER_ALL_SHOPS` from
   `../db/tenant.ts`; the existing `ToolContext` (`{ customerId?, shopId?, fixoSessionId?, ... }`).
 - Produces: no new exports — behavior change to `convertTools`.
@@ -350,33 +362,32 @@ Replace the `convertTools` loop body (lines 31-37) with:
 import { withAdminScope, withTenantScope } from "../db/client.ts";
 import { OWNER_ALL_SHOPS } from "../db/tenant.ts";
 // ... inside convertTools, per tool:
-    result[t.name] = {
-      description: t.description,
-      inputSchema: t.schema,
-      execute: (input: unknown) => {
-        // Owner viewing all shops → cross-shop read on the admin connection.
-        if (ctx?.shopId === OWNER_ALL_SHOPS) {
-          return withAdminScope(() => t.execute(input, ctx));
-        }
-        // A concrete shop (staff) or a customer → RLS-scoped transaction.
-        if (ctx?.customerId != null || ctx?.shopId) {
-          return withTenantScope(
-            { shopId: ctx.shopId, customerId: ctx.customerId },
-            () => t.execute(input, ctx),
-          );
-        }
-        // No tenant context (e.g. Fixo tools) → run unscoped on the base pool.
-        // Fixo tables are not RLS'd; tenant_app has grants on them.
-        return t.execute(input, ctx);
-      },
-    };
+result[t.name] = {
+  description: t.description,
+  inputSchema: t.schema,
+  execute: (input: unknown) => {
+    // Owner viewing all shops → cross-shop read on the admin connection.
+    if (ctx?.shopId === OWNER_ALL_SHOPS) {
+      return withAdminScope(() => t.execute(input, ctx));
+    }
+    // A concrete shop (staff) or a customer → RLS-scoped transaction.
+    if (ctx?.customerId != null || ctx?.shopId) {
+      return withTenantScope(
+        { shopId: ctx.shopId, customerId: ctx.customerId },
+        () => t.execute(input, ctx),
+      );
+    }
+    // No tenant context (e.g. Fixo tools) → run unscoped on the base pool.
+    // Fixo tables are not RLS'd; tenant_app has grants on them.
+    return t.execute(input, ctx);
+  },
+};
 ```
 
 - [ ] **Step 2: Typecheck + agent tests (no-regression)**
 
-Run: `deno task check && cd apps/agent && deno test`
-Expected: PASS. RLS is still off, so scoping is behavior-neutral; Fixo tools take the passthrough
-branch and are unaffected.
+Run: `deno task check && cd apps/agent && deno test` Expected: PASS. RLS is still off, so scoping is
+behavior-neutral; Fixo tools take the passthrough branch and are unaffected.
 
 - [ ] **Step 3: Commit**
 
@@ -393,20 +404,22 @@ Under fail-closed RLS these paths must NOT be tenant-scoped: they either run bef
 (identity resolution) or authenticate by a capability token, not a shop.
 
 **Files:**
+
 - Modify: `apps/gateway/src/middleware/shop-context.ts` (the `db` reads at lines 76-105)
 - Modify: `apps/gateway/src/routes/chat.ts` (`resolveCustomer`, the `db` reads ~lines 23-90)
 - Modify: `apps/gateway/src/routes/estimates.ts` (public order read, ~line 33)
 - Modify: `apps/gateway/src/routes/orders.ts` (public/no-token PDF route, ~line 594+)
 
 **Interfaces:**
+
 - Consumes: `dbAdmin` from `@hmls/agent/db`.
 
 - [ ] **Step 1: `shop-context.ts` → `dbAdmin`**
 
-Import `dbAdmin` and replace the three `db` reads inside `requireShopContext` (providers lookup
-line 76-77, customers `authUserId` lookup 83-85, email-fallback select 89-93, and the self-heal
-`update` 98-101, plus `loadValidShopIds` at 47-50) with `dbAdmin`. These resolve *who* the caller is
-before a shop context exists — they cannot be shop-scoped.
+Import `dbAdmin` and replace the three `db` reads inside `requireShopContext` (providers lookup line
+76-77, customers `authUserId` lookup 83-85, email-fallback select 89-93, and the self-heal `update`
+98-101, plus `loadValidShopIds` at 47-50) with `dbAdmin`. These resolve _who_ the caller is before a
+shop context exists — they cannot be shop-scoped.
 
 ```ts
 import { dbAdmin, schema } from "@hmls/agent/db";
@@ -422,8 +435,10 @@ context. Change its `db` references (the two selects, the self-heal update, and 
 - [ ] **Step 3: Public shareToken/PDF reads → `dbAdmin`**
 
 - `estimates.ts` (~line 33): the public PDF route reads an order by `shareToken` with no
-  `requireShopContext`. A shareToken is a capability, not a shop scope. Switch that `db.select()
-  .from(schema.orders)` to `dbAdmin` (keep the existing post-fetch ownership/token check).
+  `requireShopContext`. A shareToken is a capability, not a shop scope. Switch that
+  `db.select()
+  .from(schema.orders)` to `dbAdmin` (keep the existing post-fetch ownership/token
+  check).
 - `orders.ts` (~line 594+): the no-token admin PDF route mounted under `/api/admin/orders`. Confirm
   whether it runs under `withTenantTx` (it is under `requireShopContext`, so it does). If it renders
   cross-shop for an owner via token, switch its order read to `dbAdmin`; otherwise leave it scoped.
@@ -435,14 +450,13 @@ A customer request sets only `app.customer_id`, so a direct read of `providers` 
 mechanic's name on a customer's order-detail) is denied under RLS. Grep the portal + customer chat
 paths:
 
-Run: `grep -rn "schema.providers" apps/gateway/src/routes/portal.ts apps/agent/src/hmls`
-For any hit that serves a customer, read that one field via `dbAdmin` (or accept it's staff-only).
-If there are no customer-facing provider reads, note it and move on.
+Run: `grep -rn "schema.providers" apps/gateway/src/routes/portal.ts apps/agent/src/hmls` For any hit
+that serves a customer, read that one field via `dbAdmin` (or accept it's staff-only). If there are
+no customer-facing provider reads, note it and move on.
 
 - [ ] **Step 5: Typecheck + full gateway/agent tests**
 
-Run: `deno task check && cd apps/gateway && deno test && cd ../agent && deno test`
-Expected: PASS.
+Run: `deno task check && cd apps/gateway && deno test && cd ../agent && deno test` Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
@@ -457,6 +471,7 @@ git commit -m "feat(gateway): route bootstrap + public-token reads to dbAdmin (R
 ### Task 5: Migration 0038 — `tenant_app` role + grants (RLS OFF)
 
 **Files:**
+
 - Create: `apps/agent/migrations/0038_tenant_app_role.sql`
 
 - [ ] **Step 1: Write the migration**
@@ -490,12 +505,13 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO tenant_a
 
 - [ ] **Step 2: Apply to LOCAL Supabase + verify the role exists**
 
-Ensure local Supabase is running (`supabase start`; if schema is stale, `scripts/db-local-reset.sh`).
+Ensure local Supabase is running (`supabase start`; if schema is stale,
+`scripts/db-local-reset.sh`).
 
-Run: `psql "$LOCAL_DB_URL" -f apps/agent/migrations/0038_tenant_app_role.sql`
-Then: `psql "$LOCAL_DB_URL" -c "\du tenant_app"` and
-`psql "$LOCAL_DB_URL" -c "ALTER ROLE tenant_app WITH PASSWORD 'localtest';"`
-Expected: role `tenant_app` listed (not BYPASSRLS, not superuser).
+Run: `psql "$LOCAL_DB_URL" -f apps/agent/migrations/0038_tenant_app_role.sql` Then:
+`psql "$LOCAL_DB_URL" -c "\du tenant_app"` and
+`psql "$LOCAL_DB_URL" -c "ALTER ROLE tenant_app WITH PASSWORD 'localtest';"` Expected: role
+`tenant_app` listed (not BYPASSRLS, not superuser).
 
 - [ ] **Step 3: Commit (file only — prod apply is gated in Task 8)**
 
@@ -509,6 +525,7 @@ git commit -m "feat(db): migration 0038 — tenant_app role + grants (RLS off)"
 ### Task 6: Migration 0039 — policies + ENABLE RLS + rollback
 
 **Files:**
+
 - Create: `apps/agent/migrations/0039_enable_rls.sql`
 - Create: `apps/agent/migrations/0039_disable_rls.sql` (rollback)
 
@@ -607,8 +624,8 @@ ALTER TABLE provider_schedule_overrides DISABLE ROW LEVEL SECURITY;
 
 - [ ] **Step 3: Apply to LOCAL + smoke-check policies exist**
 
-Run: `psql "$LOCAL_DB_URL" -f apps/agent/migrations/0039_enable_rls.sql`
-Then: `psql "$LOCAL_DB_URL" -c "SELECT tablename FROM pg_policies WHERE policyname LIKE '%_tenant' ORDER BY 1;"`
+Run: `psql "$LOCAL_DB_URL" -f apps/agent/migrations/0039_enable_rls.sql` Then:
+`psql "$LOCAL_DB_URL" -c "SELECT tablename FROM pg_policies WHERE policyname LIKE '%_tenant' ORDER BY 1;"`
 Expected: 7 rows (orders, customers, providers, order_intake, order_events, provider_availability,
 provider_schedule_overrides).
 
@@ -627,11 +644,13 @@ This is the proof RLS works independently of app code. Runs against LOCAL Supaba
 applied, `tenant_app` password set to `localtest`, `LOCAL_TENANT_DB_URL` pointing at it).
 
 **Files:**
+
 - Create: `apps/agent/src/db/tenant_rls_test.ts`
 
 **Interfaces:**
-- Consumes: `LOCAL_TENANT_DB_URL` env (a tenant_app connection string); `DATABASE_URL` (service_role,
-  to seed fixtures). Test is skipped when either is absent.
+
+- Consumes: `LOCAL_TENANT_DB_URL` env (a tenant_app connection string); `DATABASE_URL`
+  (service_role, to seed fixtures). Test is skipped when either is absent.
 
 - [ ] **Step 1: Write the isolation test**
 
@@ -659,18 +678,26 @@ Deno.test({
   fn: async () => {
     // Seed two shops + orders as service_role (bypass).
     const [a] = await db.insert(schema.shops).values({
-      name: `${MARK} A`, slug: `${MARK}-a-${crypto.randomUUID()}`,
+      name: `${MARK} A`,
+      slug: `${MARK}-a-${crypto.randomUUID()}`,
     }).returning();
     const [b] = await db.insert(schema.shops).values({
-      name: `${MARK} B`, slug: `${MARK}-b-${crypto.randomUUID()}`,
+      name: `${MARK} B`,
+      slug: `${MARK}-b-${crypto.randomUUID()}`,
     }).returning();
-    const [ca] = await db.insert(schema.customers).values({ name: `${MARK} ca`, shopId: a.id }).returning();
-    const [cb] = await db.insert(schema.customers).values({ name: `${MARK} cb`, shopId: b.id }).returning();
+    const [ca] = await db.insert(schema.customers).values({ name: `${MARK} ca`, shopId: a.id })
+      .returning();
+    const [cb] = await db.insert(schema.customers).values({ name: `${MARK} cb`, shopId: b.id })
+      .returning();
     const [oa] = await db.insert(schema.orders).values({
-      shopId: a.id, customerId: ca.id, shareToken: `${MARK}-oa-${crypto.randomUUID()}`,
+      shopId: a.id,
+      customerId: ca.id,
+      shareToken: `${MARK}-oa-${crypto.randomUUID()}`,
     }).returning();
     const [ob] = await db.insert(schema.orders).values({
-      shopId: b.id, customerId: cb.id, shareToken: `${MARK}-ob-${crypto.randomUUID()}`,
+      shopId: b.id,
+      customerId: cb.id,
+      shareToken: `${MARK}-ob-${crypto.randomUUID()}`,
     }).returning();
 
     // deno-lint-ignore no-explicit-any
@@ -717,13 +744,14 @@ Deno.test({
 
 - [ ] **Step 2: Run it against LOCAL (with the tenant_app connection)**
 
-Run: `cd apps/agent && LOCAL_TENANT_DB_URL="postgresql://tenant_app:localtest@127.0.0.1:54322/postgres" deno test src/db/tenant_rls_test.ts`
+Run:
+`cd apps/agent && LOCAL_TENANT_DB_URL="postgresql://tenant_app:localtest@127.0.0.1:54322/postgres" deno test src/db/tenant_rls_test.ts`
 Expected: PASS — proves cross-tenant reads/writes are DB-blocked and the no-GUC case is fail-closed.
 (If it FAILS on the cross-tenant assertions, a policy is wrong — STOP and fix 0039 before prod.)
 
 - [ ] **Step 3: Confirm nested transactions still work (create_order path)**
 
-The order-creation tool opens `db.transaction` (order.ts:795) *inside* the tool's `withTenantScope`
+The order-creation tool opens `db.transaction` (order.ts:795) _inside_ the tool's `withTenantScope`
 tx → a savepoint. Run the agent order tests locally against the RLS-enabled local DB with a seeded
 shop context to confirm inserts + child-row writes succeed under RLS.
 
@@ -750,18 +778,21 @@ cd apps/hmls-web && bun run lint && bun run typecheck && bun run test && bun run
 cd ../.. && deno task check && deno task lint && deno task fmt:check
 cd apps/gateway && deno test && cd ../agent && deno test
 ```
+
 Expected: all green.
 
 - [ ] **Step 2: FEASIBILITY GATE — Supabase pooler + custom role login (verify before prod)**
 
 Confirm the Supavisor pooler authenticates `tenant_app` via the `tenant_app.<project-ref>` username
 format. Test with a throwaway `psql` against the pooler host using a tenant_app connection string.
+
 - If it connects: `TENANT_DATABASE_URL` uses the pooler (same host as `DATABASE_URL`, tenant_app
   creds).
 - If REJECTED: fallbacks in order — (a) point `TENANT_DATABASE_URL` at the **direct** (non-pooler)
-  Supabase connection for the tenant pool; (b) last resort, single-connection `SET LOCAL ROLE
-  tenant_app` per shop-tx (degrades default to fail-open — must be flagged if taken).
-  **STOP and report to the user which path was taken.**
+  Supabase connection for the tenant pool; (b) last resort, single-connection
+  `SET LOCAL ROLE
+  tenant_app` per shop-tx (degrades default to fail-open — must be flagged if
+  taken). **STOP and report to the user which path was taken.**
 
 - [ ] **Step 3: Merge code (Tasks 1-7) to main → auto-deploys with RLS still OFF**
 
@@ -777,6 +808,7 @@ scripts/db-apply.sh dev apps/agent/migrations/0038_tenant_app_role.sql
 # add TENANT_DATABASE_URL to Infisical (dev) and push to Deno Deploy:
 scripts/sync-deno-env.sh dev   # or: deno deploy env add TENANT_DATABASE_URL <url> --app hmls-api --org spinsirr --secret
 ```
+
 Verify: gateway boots, `SELECT 1` works as tenant_app, app still fully functional (RLS off → reads
 everything). This flips the default `db` to the restricted role while it can still read everything.
 
@@ -785,11 +817,12 @@ everything). This flips the default `db` to the restricted role while it can sti
 ```bash
 scripts/db-apply.sh dev apps/agent/migrations/0039_enable_rls.sql
 ```
+
 Immediately smoke-test in the running app: an admin sees only their shop's orders; a customer sees
 their own; owner switcher spans shops. Watch logs for RLS-denied (fail-closed) errors on any missed
-path.
-**Rollback lever if anything breaks:** `scripts/db-apply.sh dev apps/agent/migrations/0039_disable_rls.sql`
-→ back to app-layer-only in seconds, no code change.
+path. **Rollback lever if anything breaks:**
+`scripts/db-apply.sh dev apps/agent/migrations/0039_disable_rls.sql` → back to app-layer-only in
+seconds, no code change.
 
 - [ ] **Step 6: Update memory**
 
@@ -801,6 +834,7 @@ tables under RLS, rollback via 0039_disable_rls. Note the pooler-role path actua
 ## Self-Review
 
 **Spec coverage:**
+
 - Roles + connection topology (spec §1) → Tasks 1, 4, 5.
 - GUC + ALS threading (spec §2) → Task 1.
 - Wrap points ~30-50 (spec §3) → Tasks 2 (CRUD), 3 (tools), 4 (bootstrap→dbAdmin).
@@ -813,7 +847,7 @@ tables under RLS, rollback via 0039_disable_rls. Note the pooler-role path actua
 - Deferred (Phase 2 external customer rows) → out of scope, unchanged.
 
 **Placeholder scan:** none — all steps carry runnable code/commands. The two acknowledged decisions
-(orders.ts:594 PDF scope; customer-facing provider reads) are explicit *audit* steps in Task 4 with
+(orders.ts:594 PDF scope; customer-facing provider reads) are explicit _audit_ steps in Task 4 with
 a decision rule, not deferred TODOs.
 
 **Type consistency:** `pickScopeConfig`, `withTenantScope(ctx, fn)`, `withAdminScope(fn)`,
@@ -823,8 +857,8 @@ names `app.shop_id` / `app.customer_id` identical across client.ts, middleware, 
 ## Known ponytail ceilings (noted, not fixed)
 
 - **Tool-level transaction span:** wrapping a whole tool `execute` in `withTenantScope` holds a
-  connection for the tool's full duration, incl. any external call it makes (e.g. create_order's
-  ~5s geocode). Fine at dogfood/N=2 scale. Upgrade path: move external calls outside the tx when
-  pool pressure appears. `// ponytail: tool-scoped tx; split out external calls if pool contends`
+  connection for the tool's full duration, incl. any external call it makes (e.g. create_order's ~5s
+  geocode). Fine at dogfood/N=2 scale. Upgrade path: move external calls outside the tx when pool
+  pressure appears. `// ponytail: tool-scoped tx; split out external calls if pool contends`
 - **Child-policy EXISTS subquery per row:** O(rows) parent lookups. Fine at current volume; add a
   denormalized `shop_id` to child tables if it shows up in query plans.

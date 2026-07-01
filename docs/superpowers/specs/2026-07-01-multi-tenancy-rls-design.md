@@ -1,19 +1,18 @@
 # Multi-tenancy Phase 2: Postgres RLS — Design Spec
 
-**Date:** 2026-07-01
-**Status:** Design — approved forks locked; pending user spec review → writing-plans
-**Predecessors:** `2026-06-17-multi-tenancy-design.md` (Phase 1, app-level scoping, LANDED PR #99),
-`2026-06-29-multitenancy-area-shop-bridge.md` (coverage flag + region↔shop bridge + per-query
-guard, LANDED).
+**Date:** 2026-07-01 **Status:** Design — approved forks locked; pending user spec review →
+writing-plans **Predecessors:** `2026-06-17-multi-tenancy-design.md` (Phase 1, app-level scoping,
+LANDED PR #99), `2026-06-29-multitenancy-area-shop-bridge.md` (coverage flag + region↔shop bridge +
+per-query guard, LANDED).
 
 ## Goal
 
-HMLS is being built into a nationwide network of mechanic shops (two sites today: San Jose +
-Orange County). Tenant isolation must survive that growth and the first external paying tenant
-(~1 month out). Phase 1 scoped every query at the **application layer** (399 tenant-table query
-sites, all carrying a `shopId`/`customerId`/`shareToken` predicate; a CI guard test enforces it).
-This spec adds the **database-layer backstop**: Postgres Row-Level Security so a *forgotten* app
-scope — the exact failure the guard test can miss — leaks nothing.
+HMLS is being built into a nationwide network of mechanic shops (two sites today: San Jose + Orange
+County). Tenant isolation must survive that growth and the first external paying tenant (~1 month
+out). Phase 1 scoped every query at the **application layer** (399 tenant-table query sites, all
+carrying a `shopId`/`customerId`/`shareToken` predicate; a CI guard test enforces it). This spec
+adds the **database-layer backstop**: Postgres Row-Level Security so a _forgotten_ app scope — the
+exact failure the guard test can miss — leaks nothing.
 
 **Non-goal (explicitly deferred to a later phase):** per-tenant customer rows / an external-tenant
 `customer → shop` entry model. Today a customer reads their own orders across any shop; the RLS
@@ -23,34 +22,32 @@ external tenant onboards.
 ## Why RLS is not optional here
 
 The gateway talks to Supabase over a single **`service_role`** connection
-(`packages/shared/src/db/client.ts`). `service_role` is `BYPASSRLS` — naive RLS policies do
-nothing against it. Real DB-level isolation therefore requires a **dedicated non-`BYPASSRLS`
-role** plus a mechanism to put per-request tenant context onto the connection. Both are designed
-below.
+(`packages/shared/src/db/client.ts`). `service_role` is `BYPASSRLS` — naive RLS policies do nothing
+against it. Real DB-level isolation therefore requires a **dedicated non-`BYPASSRLS` role** plus a
+mechanism to put per-request tenant context onto the connection. Both are designed below.
 
 ## Locked design decisions (from brainstorming)
 
-1. **Context mechanism — AsyncLocalStorage + short transactions.** Per-request shop context is
-   bound in an `AsyncLocalStorage` store; each DB-access unit opens a *short* transaction that sets
-   the tenant GUC as its first statement. The shared `db` proxy auto-routes to the ALS-bound
+1. **Context mechanism — AsyncLocalStorage + short transactions.** Per-request shop context is bound
+   in an `AsyncLocalStorage` store; each DB-access unit opens a _short_ transaction that sets the
+   tenant GUC as its first statement. The shared `db` proxy auto-routes to the ALS-bound
    transaction, so the 399 existing `db.x` query sites change **zero** lines. Connections are held
-   only for a unit's DB work — never across a streaming LLM turn. (Rejected: one big
-   per-request transaction — would pin a connection across 30s+ chat streams,
-   idle-in-transaction, pool exhaustion. Rejected: per-request session-`SET` connection — leak
-   risk on a shared pooler.)
+   only for a unit's DB work — never across a streaming LLM turn. (Rejected: one big per-request
+   transaction — would pin a connection across 30s+ chat streams, idle-in-transaction, pool
+   exhaustion. Rejected: per-request session-`SET` connection — leak risk on a shared pooler.)
 
 2. **Fail-closed default.** The default `db` connection uses the new restricted role. Any query to
-   an RLS table *not* wrapped in a shop-transaction is denied by the DB (0 rows / error), not
+   an RLS table _not_ wrapped in a shop-transaction is denied by the DB (0 rows / error), not
    silently bypassed. This is the only variant that actually delivers the defense-in-depth the
    deadline demands — a fail-open default would run a forgotten scope on a bypass connection and
    leak, which is precisely the failure RLS exists to catch.
 
 3. **Table scope — full tenant set (7 tables).**
    - Direct `shop_id`: `orders`, `customers`, `providers`.
-   - Child tables (no own `shop_id`, scoped by join-to-parent): `order_intake`, `order_events`
-     (→ `orders`), `provider_availability`, `provider_schedule_overrides` (→ `providers`).
-   - `pricing_config` has no `shop_id` (global; per-shop labor rate lives on `shops.hourly_rate`)
-     → **not** RLS'd. `shops` is the tenant registry, not tenant-owned → **not** RLS'd (readable).
+   - Child tables (no own `shop_id`, scoped by join-to-parent): `order_intake`, `order_events` (→
+     `orders`), `provider_availability`, `provider_schedule_overrides` (→ `providers`).
+   - `pricing_config` has no `shop_id` (global; per-shop labor rate lives on `shops.hourly_rate`) →
+     **not** RLS'd. `shops` is the tenant registry, not tenant-owned → **not** RLS'd (readable).
 
 ## Architecture
 
@@ -58,32 +55,32 @@ below.
 
 Two physical connections from the gateway:
 
-| Export | Role | BYPASSRLS | Used for |
-| --- | --- | --- | --- |
-| `db` (default; retargeted) | **new `tenant_app`** (LOGIN) | no | ALL tenant-data reads/writes. Subject to RLS on the 7 tables. |
-| `dbAdmin` (new export; = today's connection) | `service_role` | yes | Bootstrap/system: `requireShopContext` resolving user→shop, Stripe webhook, `owner` all-shops reads, migrations, the DB-resident `handle_new_user` trigger. |
+| Export                                       | Role                         | BYPASSRLS | Used for                                                                                                                                                    |
+| -------------------------------------------- | ---------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `db` (default; retargeted)                   | **new `tenant_app`** (LOGIN) | no        | ALL tenant-data reads/writes. Subject to RLS on the 7 tables.                                                                                               |
+| `dbAdmin` (new export; = today's connection) | `service_role`               | yes       | Bootstrap/system: `requireShopContext` resolving user→shop, Stripe webhook, `owner` all-shops reads, migrations, the DB-resident `handle_new_user` trigger. |
 
 - `tenant_app` receives full grants on **non-tenant** tables (`shops`, `olp_*`, `pricing_config`,
   `fixo_*`, `obd_codes`, `user_profiles`, `vehicles`, `credit_ledger`, `promo_*`, `funnel_events`)
   with **no RLS** → Fixo and every other subsystem that shares the `db` client keep working.
-  Fail-closed applies *only* to the 7 RLS tables.
+  Fail-closed applies _only_ to the 7 RLS tables.
 - `ENABLE` + `FORCE ROW LEVEL SECURITY` on the 7 tables (`FORCE` is belt-and-suspenders so even a
   future table-owner connection is subject).
 
-**Feasibility gate (plan step #1, before anything else):** confirm the Supabase pooler
-(Supavisor) authenticates a custom login role via the `tenant_app.<project-ref>` username format.
-If it does not, fallbacks in priority order: (a) point `TENANT_DATABASE_URL` at a **direct**
-(non-pooler) connection for the tenant pool; (b) fall back to a single connection with
-`SET LOCAL ROLE tenant_app` per shop-transaction — this preserves DB-level enforcement *inside*
-scoped transactions but degrades the default to fail-open (base connection stays `service_role`),
-so it is a last resort and must be called out if taken.
+**Feasibility gate (plan step #1, before anything else):** confirm the Supabase pooler (Supavisor)
+authenticates a custom login role via the `tenant_app.<project-ref>` username format. If it does
+not, fallbacks in priority order: (a) point `TENANT_DATABASE_URL` at a **direct** (non-pooler)
+connection for the tenant pool; (b) fall back to a single connection with
+`SET LOCAL ROLE tenant_app` per shop-transaction — this preserves DB-level enforcement _inside_
+scoped transactions but degrades the default to fail-open (base connection stays `service_role`), so
+it is a last resort and must be called out if taken.
 
 ### 2. GUC + ALS threading — `packages/shared/src/db/client.ts`
 
 - Add `const txStore = new AsyncLocalStorage<{ tx: TxHandle }>()` (Deno: `node:async_hooks`).
 - The existing proxy's `get` trap: if `txStore.getStore()` has a `tx`, resolve the property on the
-  transaction handle; otherwise resolve on the base pool (which, being `tenant_app` with no GUC
-  set, denies RLS-table access = fail-closed).
+  transaction handle; otherwise resolve on the base pool (which, being `tenant_app` with no GUC set,
+  denies RLS-table access = fail-closed).
 - New helper (exported from the shared db package):
 
   ```ts
@@ -98,7 +95,9 @@ so it is a last resort and must be called out if taken.
         await tx.execute(sql`select set_config('app.shop_id', ${ctx.shopId}, true)`);
       }
       if (ctx.customerId != null) {
-        await tx.execute(sql`select set_config('app.customer_id', ${String(ctx.customerId)}, true)`);
+        await tx.execute(
+          sql`select set_config('app.customer_id', ${String(ctx.customerId)}, true)`,
+        );
       }
       return await txStore.run({ tx }, fn);
     });
@@ -110,12 +109,12 @@ so it is a last resort and must be called out if taken.
   staff request (`app.shop_id` = selected shop). An `owner` with no shop (`OWNER_ALL_SHOPS`) does
   not use `withShopTx` at all — those reads go through `dbAdmin`.
 
-- `dbAdmin`: a second `createDbClient` over `DATABASE_URL` (today's `service_role` string),
-  exported for the explicit bootstrap/system/owner-all paths above.
+- `dbAdmin`: a second `createDbClient` over `DATABASE_URL` (today's `service_role` string), exported
+  for the explicit bootstrap/system/owner-all paths above.
 
 ### 3. Wrap points (~30–50, not 399)
 
-- **CRUD routes:** a Hono middleware `withTenantTx` mounted *after* `requireShopContext` opens a
+- **CRUD routes:** a Hono middleware `withTenantTx` mounted _after_ `requireShopContext` opens a
   shop-transaction around the handler's DB phase using the resolved `shopId`/`customerId`.
 - **Streaming chat routes:** do **not** wrap the whole handler (can't hold a transaction across the
   stream). Instead the **agent tool executor** wraps each tool invocation in `withShopTx(ctx)` —
@@ -165,24 +164,26 @@ CREATE POLICY order_intake_tenant ON order_intake FOR ALL
 
 `WITH CHECK` on write commands blocks writing a row into another tenant.
 
-**Open detail for the plan:** a customer request sets no `app.shop_id`, so a *direct* read of
+**Open detail for the plan:** a customer request sets no `app.shop_id`, so a _direct_ read of
 `providers` (e.g. showing the assigned mechanic's name on the customer's order-detail) is denied.
 Resolve by reading that one field via `dbAdmin`, or denormalizing the mechanic name onto the order.
 Decide during planning; not a blocker.
 
 ### 5. Rollout (dev == prod; a wrong policy locks out the live app — staged + instantly reversible)
 
-1. **Role + wiring, RLS OFF.** Create `tenant_app`, grants, `TENANT_DATABASE_URL` (Infisical +
-   Deno Deploy). Deploy code using the `db` (tenant_app) / `dbAdmin` split + `withShopTx` — but with
-   **no policies and RLS disabled**, `tenant_app` reads everything, so behavior is identical to
-   today. This shakes out grant/wiring bugs at **zero isolation risk**.
-2. **Policies + ENABLE.** One idempotent migration adds all policies and `ENABLE`/`FORCE ROW LEVEL
-   SECURITY` on the 7 tables. GUC threading is already live, so scoped queries work; a missed wrap
-   starts failing (fail-closed → 0 rows/500, safe, not a leak) → caught by logs + the L2 test.
+1. **Role + wiring, RLS OFF.** Create `tenant_app`, grants, `TENANT_DATABASE_URL` (Infisical + Deno
+   Deploy). Deploy code using the `db` (tenant_app) / `dbAdmin` split + `withShopTx` — but with **no
+   policies and RLS disabled**, `tenant_app` reads everything, so behavior is identical to today.
+   This shakes out grant/wiring bugs at **zero isolation risk**.
+2. **Policies + ENABLE.** One idempotent migration adds all policies and
+   `ENABLE`/`FORCE ROW LEVEL
+   SECURITY` on the 7 tables. GUC threading is already live, so scoped
+   queries work; a missed wrap starts failing (fail-closed → 0 rows/500, safe, not a leak) → caught
+   by logs + the L2 test.
 3. **Rollback lever.** An idempotent down migration `DISABLE ROW LEVEL SECURITY` reverts to
    app-layer-only in seconds with no code change (`tenant_app` retains grants).
 
-No staging DB exists, so step 1's "RLS-off" deploy *is* the safety net: the code-path split is
+No staging DB exists, so step 1's "RLS-off" deploy _is_ the safety net: the code-path split is
 validated in prod with isolation still off, then RLS flips on as an independent, second migration
 that is instantly reversible.
 
@@ -191,11 +192,10 @@ that is instantly reversible.
 - **Unit:** `withShopTx` / ALS-proxy routing — a query inside the wrapper runs on the tx (GUC set),
   a query outside uses the base pool. Pure-logic, no live DB.
 - **L2 real-DB (the proof, extends existing `tenant_db_test.ts`):** connect **as `tenant_app`**,
-  `set_config('app.shop_id', shopA)` → see only shopA rows; read a shopB order id → 0 rows;
-  `UPDATE` a shopB order → 0 rows affected; with `app.customer_id` → own orders across shops
-  visible, others invisible; child-table reads obey parent visibility. This proves RLS independent
-  of app code.
-- **Keep** the Phase-1 app-layer guard test (`tenant-guard_test.ts`) — RLS sits *behind* it; both
+  `set_config('app.shop_id', shopA)` → see only shopA rows; read a shopB order id → 0 rows; `UPDATE`
+  a shopB order → 0 rows affected; with `app.customer_id` → own orders across shops visible, others
+  invisible; child-table reads obey parent visibility. This proves RLS independent of app code.
+- **Keep** the Phase-1 app-layer guard test (`tenant-guard_test.ts`) — RLS sits _behind_ it; both
   layers stay.
 
 ## Files (anticipated — finalized in the plan)
