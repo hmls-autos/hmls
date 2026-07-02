@@ -41,7 +41,9 @@ export function createHmlsApp() {
         "http://localhost:3000",
       ],
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowHeaders: ["Content-Type", "Authorization", "X-Request-Id"],
+      // X-Shop-Id: owner shop-switcher sends it from the browser; without it
+      // the CORS preflight blocks every owner admin request.
+      allowHeaders: ["Content-Type", "Authorization", "X-Request-Id", "X-Shop-Id"],
       exposeHeaders: ["X-Request-Id"],
     }),
   );
