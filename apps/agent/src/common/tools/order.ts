@@ -88,6 +88,7 @@ type CustomerInfoInput = {
   email?: string;
   phone?: string;
   address?: string;
+  serviceZip?: string;
 };
 
 /** Trim and normalize empty / null inputs to undefined so we don't overwrite
@@ -374,10 +375,14 @@ export const createOrderTool = {
         email: z.string().optional(),
         phone: z.string().optional(),
         address: z.string().optional(),
+        serviceZip: z.string().optional().describe(
+          "Customer 5-digit US ZIP for the service location. Enough to price + route the " +
+            "estimate; the full street address is collected later at booking.",
+        ),
       })
       .optional()
       .describe(
-        "Two roles: (a) Staff walk-in fallback — name/email/phone/address to find-or-create a guest customer when no customerId is known. (b) Customer chat — supply phone or address here whenever the customer mentions a fresh value or the profile is blank; phone/address backfill the customers row only when previously empty (existing profile values are NEVER overwritten), and ALWAYS take precedence on this order's contactPhone/contactAddress snapshot. Customer chat REQUIRES that, after fallback to the customer profile, both phone and address are resolvable — otherwise the call fails with missingFields.",
+        "Two roles: (a) Staff walk-in fallback — name/email/phone/address to find-or-create a guest customer when no customerId is known. (b) Customer chat — supply phone or address/serviceZip here whenever the customer mentions a fresh value or the profile is blank; phone/address backfill the customers row only when previously empty (existing profile values are NEVER overwritten), and ALWAYS take precedence on this order's contactPhone/contactAddress snapshot. Customer chat REQUIRES that, after fallback to the customer profile, phone AND (address OR serviceZip) are resolvable — otherwise the call fails with missingFields. A 5-digit ZIP is enough for the estimate; the full street address is collected at booking.",
       ),
     vehicle: z
       .object({
@@ -644,6 +649,11 @@ export const createOrderTool = {
     //    this is the service address for the NEW order. Geocoding the address
     //    populates the order's locationLat/Lng regardless of which shop owns it.
     const addressIn = clean(params.customerInfo?.address) ?? null;
+    // 1b. ZIP fallback — customer chat may supply only a 5-digit ZIP (the
+    //     full address is collected later at booking). Used for routing/coords
+    //     when no address is available, and stored as `location` if that's all
+    //     we have.
+    const serviceZipIn = clean(params.customerInfo?.serviceZip) ?? null;
 
     // 2. Branch on caller. The shop-selection rule differs:
     //    - Customer agent (access.customerId != null): the order routes to the
@@ -684,7 +694,7 @@ export const createOrderTool = {
     let coords: Coords | null;
     let routingNote: string | null = null;
     if (isCustomerAgent) {
-      const routed = await routeOrderToShop(orderAddress);
+      const routed = await routeOrderToShop(orderAddress, serviceZipIn);
       orderShopId = routed.shopId; // nearest shop wins
       coords = routed.coords;
       // Coverage flag: surface a routing miss for staff review instead of
@@ -710,25 +720,22 @@ export const createOrderTool = {
       hourlyRateOverride: insertShopRate,
     });
 
-    // Customer-side requirement: after fallback to the profile, both phone
-    // and a service address must resolve. The agent must collect whatever
-    // is missing and pass via customerInfo. Staff side has no such
-    // restriction — walk-ins and orphan orders are still allowed.
+    // Customer-side requirement: after fallback to the profile, phone AND
+    // (address OR serviceZip) must resolve. The agent must collect whatever
+    // is missing and pass via customerInfo. A ZIP is enough for the estimate —
+    // the full street address is collected later at booking. Staff side has
+    // no such restriction — walk-ins and orphan orders are still allowed.
     if (isCustomerSide) {
       const missing: string[] = [];
       if (!orderPhone) missing.push("phone");
-      if (!orderAddress) missing.push("address");
+      if (!orderAddress && !serviceZipIn) missing.push("service ZIP (or full address)");
       if (missing.length > 0) {
         const fieldList = missing.join(" and ");
-        const infoExample = missing
-          .map((f) => `${f}: "..."`)
-          .join(", ");
         return toolResult({
           success: false,
-          error: `Cannot create the order yet — missing ${fieldList}. ` +
-            `Ask the customer for their ${fieldList} (phone is how the shop reaches ` +
-            `them, address is the service location for this job), then call create_order ` +
-            `again with customerInfo: { ${infoExample} }.`,
+          error: `Cannot create the order yet — missing ${fieldList}. Ask the customer for ` +
+            `their ${fieldList}. A 5-digit ZIP is enough for the estimate; the full street ` +
+            `address is collected when they book. Then call create_order again with customerInfo.`,
           missingFields: missing,
         });
       }
@@ -819,6 +826,12 @@ export const createOrderTool = {
           contactName: customer.name ?? null,
           contactEmail: customer.email ?? null,
           contactPhone: orderPhone,
+          // location is the booking/scheduling display field: the precise
+          // address when we have one, else the bare ZIP so mechanic/portal
+          // views still show a service area. contactAddress stays the
+          // precise per-order snapshot only — null when the customer gave
+          // just a ZIP (the full address is collected at booking).
+          location: orderAddress ?? serviceZipIn,
           contactAddress: orderAddress,
           locationLat,
           locationLng,
