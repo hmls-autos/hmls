@@ -70,13 +70,26 @@ export async function geocodeAddress(address: string): Promise<Coords | null> {
   }
 }
 
+/** Resolve routing coords: a geocodable address wins; else the ZIP centroid;
+ *  else null. Best-effort, never throws. */
+export async function resolveRoutingCoords(
+  address: string | null,
+  zip?: string | null,
+): Promise<Coords | null> {
+  const fromAddr = address ? await geocodeAddress(address) : null;
+  if (fromAddr) return fromAddr;
+  return zip ? zipToCoords(zip) : null;
+}
+
 /**
- * Resolve which shop an order belongs to from its service address.
+ * Resolve which shop an order belongs to from its service address (or, if no
+ * address geocodes, its ZIP centroid).
  * Best-effort: geocode failure or no match falls back to the primary shop
  * (san-jose) with autoRouted=false so staff can review.
  */
 export async function routeOrderToShop(
   address: string | null,
+  zip?: string | null,
 ): Promise<{ shopId: string; coords: Coords | null; autoRouted: boolean }> {
   const shops = await db.select({
     id: schema.shops.id,
@@ -89,7 +102,7 @@ export async function routeOrderToShop(
   const primary = shops.find((s) => s.slug === "san-jose") ?? shops[0];
   if (!primary) throw new Error("No shops configured in database");
 
-  const coords = address ? await geocodeAddress(address) : null;
+  const coords = await resolveRoutingCoords(address, zip);
   const matchedId = coords ? nearestShop(coords, shops) : null;
   if (matchedId) return { shopId: matchedId, coords, autoRouted: true };
   return { shopId: primary.id, coords, autoRouted: false };

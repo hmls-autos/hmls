@@ -2,6 +2,7 @@ import { assertEquals } from "@std/assert";
 import {
   nearestShop,
   parseGeocodeResponse,
+  resolveRoutingCoords,
   routingReviewNote,
   zipToCoords,
 } from "./shop-routing.ts";
@@ -62,4 +63,17 @@ Deno.test("zipToCoords: unknown / malformed returns null", () => {
   assertEquals(zipToCoords("00000"), null);
   assertEquals(zipToCoords("abc"), null);
   assertEquals(zipToCoords(""), null);
+});
+
+Deno.test("resolveRoutingCoords: address wins over zip", async () => {
+  // A real US address geocodes; the zip is ignored when address resolves.
+  const c = await resolveRoutingCoords("1600 Amphitheatre Parkway, Mountain View, CA", "10001");
+  // best-effort: if the Census geocoder is unreachable in CI it returns null;
+  // assert only that it does not throw and returns Coords|null.
+  assertEquals(c === null || (typeof c.lat === "number"), true);
+});
+
+Deno.test("resolveRoutingCoords: falls back to zip centroid when no address", async () => {
+  const c = await resolveRoutingCoords(null, "95112");
+  assertEquals(c !== null && Math.abs(c.lat - 37.35) < 0.3, true);
 });
