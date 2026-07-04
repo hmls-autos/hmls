@@ -9,6 +9,20 @@ export interface Coords {
   lng: number;
 }
 
+import zipCentroids from "./data/zip-centroids.json" with { type: "json" };
+
+const ZIP_TABLE = zipCentroids as unknown as Record<string, [number, number]>;
+
+/** Map a US ZIP (5-digit or ZIP+4) to its ZCTA centroid, or null on miss.
+ *  Precision is centroid-level — enough to route to the nearest shop, not to
+ *  dispatch a mechanic. */
+export function zipToCoords(zip: string): Coords | null {
+  const m = /^(\d{5})/.exec(zip.trim());
+  if (!m) return null;
+  const hit = ZIP_TABLE[m[1]];
+  return hit ? { lat: hit[0], lng: hit[1] } : null;
+}
+
 /** Equirectangular distance in km — fine for picking among shops. */
 function km(a: Coords, b: Coords): number {
   const dLat = a.lat - b.lat;
