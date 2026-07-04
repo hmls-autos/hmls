@@ -11,9 +11,10 @@
 // matching the existing modify_order_items semantics.
 
 import { z } from "zod";
-import { and, eq, ilike } from "drizzle-orm";
+import { and, eq, ilike, ne } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { db, schema } from "../../db/client.ts";
+import { db, dbAdmin, schema } from "../../db/client.ts";
+import { shouldClaimShop } from "./claim-shop.ts";
 import { type AccessCtx, canWrite, orderAccessible, OWNER_ALL_SHOPS } from "../../db/tenant.ts";
 import {
   buildFeeItems,
@@ -77,6 +78,7 @@ function toOrderItem(
 
 type CustomerRecord = {
   id: number;
+  shopId: string;
   name: string | null;
   email: string | null;
   phone: string | null;
@@ -860,6 +862,28 @@ export const createOrderTool = {
 
       return row;
     });
+
+    // First-order claiming: a customer's home shop is stamped by signup/chat
+    // defaults, not geography. On their FIRST order, adopt that order's shop so
+    // the customer lands in the right shop's book. System cross-shop write →
+    // dbAdmin (the RLS customer policy would block moving a row between shops).
+    // Best-effort: never break order creation.
+    if (isCustomerAgent && customer) {
+      try {
+        const prior = await dbAdmin
+          .select({ id: schema.orders.id })
+          .from(schema.orders)
+          .where(and(eq(schema.orders.customerId, customer.id), ne(schema.orders.id, order.id)))
+          .limit(1);
+        if (shouldClaimShop(prior.length > 0, customer.shopId, orderShopId)) {
+          await dbAdmin.update(schema.customers)
+            .set({ shopId: orderShopId })
+            .where(eq(schema.customers.id, customer.id));
+        }
+      } catch (e) {
+        console.error("first-order claim failed:", { customerId: customer.id, err: String(e) });
+      }
+    }
 
     return toolResult({
       success: true,
