@@ -7,7 +7,7 @@
  */
 
 import { eq } from "drizzle-orm";
-import { db, schema } from "../db/client.ts";
+import { dbAdmin, schema } from "../db/client.ts";
 
 const DEFAULT_NAME = Deno.env.get("SEED_PROVIDER_NAME") ?? "HMLS Mechanic";
 const DEFAULT_EMAIL = Deno.env.get("SEED_PROVIDER_EMAIL") ?? "mechanic@hmls.autos";
@@ -23,7 +23,8 @@ const WEEKLY_HOURS: Array<{ dayOfWeek: number; startTime: string; endTime: strin
 ];
 
 async function main() {
-  const [existing] = await db
+  // Dev seed script — runs outside any tenant scope, so bypass RLS.
+  const [existing] = await dbAdmin
     .select()
     .from(schema.providers)
     .where(eq(schema.providers.email, DEFAULT_EMAIL))
@@ -34,7 +35,7 @@ async function main() {
     providerId = existing.id;
     console.log(`[seed] Provider already exists: #${providerId} (${existing.name})`);
   } else {
-    const [created] = await db
+    const [created] = await dbAdmin
       .insert(schema.providers)
       .values({
         name: DEFAULT_NAME,
@@ -48,11 +49,11 @@ async function main() {
   }
 
   // Wipe and re-insert availability so re-runs keep schema in sync
-  await db
+  await dbAdmin
     .delete(schema.providerAvailability)
     .where(eq(schema.providerAvailability.providerId, providerId));
 
-  await db.insert(schema.providerAvailability).values(
+  await dbAdmin.insert(schema.providerAvailability).values(
     WEEKLY_HOURS.map((h) => ({ providerId, ...h })),
   );
   console.log(`[seed] Set weekly availability (${WEEKLY_HOURS.length} days)`);

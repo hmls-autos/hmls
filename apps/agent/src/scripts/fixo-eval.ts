@@ -343,9 +343,10 @@ interface RealPair {
  *  needs DATABASE_URL (Infisical injects it). Returns [] until mechanics
  *  actually fill confirmed_diagnosis (see Phase 0 plan, Task 2). */
 async function fetchRealPairs(limit: number): Promise<RealPair[]> {
-  const { db, schema } = await import("../db/client.ts");
+  const { dbAdmin, schema } = await import("../db/client.ts");
   const { and, eq, isNotNull } = await import("drizzle-orm");
-  const rows = await db
+  // Dev/eval script — no tenant scope in play, bypass RLS for the read.
+  const rows = await dbAdmin
     .select({
       orderId: schema.orders.id,
       symptom: schema.orderIntake.symptomDescription,

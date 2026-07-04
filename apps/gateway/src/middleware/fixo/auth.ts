@@ -1,5 +1,5 @@
 import { verifyToken } from "../../lib/supabase.ts";
-import { db, schema } from "@hmls/agent/db";
+import { db, dbAdmin, schema } from "@hmls/agent/db";
 import { grantMonthly, MONTHLY_GRANT, type Tier } from "@hmls/agent";
 import { eq } from "drizzle-orm";
 
@@ -55,8 +55,9 @@ export async function authenticateRequest(
     };
   }
 
-  // Fallback: legacy HMLS customer lookup
-  const [customer] = await db
+  // Fallback: legacy HMLS customer lookup. Identity resolution before any
+  // shop scope exists — no tenant GUC set yet, so use dbAdmin.
+  const [customer] = await dbAdmin
     .select()
     .from(schema.customers)
     .where(eq(schema.customers.email, authUser.email))

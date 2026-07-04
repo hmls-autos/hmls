@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { convertToModelMessages } from "ai";
 import { eq } from "drizzle-orm";
 import { runHmlsAgent, type UserContext } from "@hmls/agent";
-import { db, schema } from "@hmls/agent/db";
+import { dbAdmin, schema } from "@hmls/agent/db";
 import { routeOrderToShop } from "@hmls/agent/common/shop-routing";
 import { Errors } from "@hmls/shared/errors";
 import { getLogger } from "@logtape/logtape";
@@ -22,9 +22,9 @@ async function resolveCustomer(
   if (!userInfo.email) return undefined;
 
   // 1. Preferred: match by auth_user_id (fast, unambiguous).
-  let existing = await db
+  let existing = await dbAdmin
     .select()
-    .from(schema.customers) // tenant-ok: identity resolution by authUserId — one user owns one customer row
+    .from(schema.customers) // bootstrap: identity resolution by authUserId, before any shop context exists
     .where(eq(schema.customers.authUserId, userInfo.authUserId))
     .limit(1)
     .then((rows) => rows[0] ?? null);
@@ -32,16 +32,16 @@ async function resolveCustomer(
   // 2. Email fallback: only bind when EXACTLY ONE row matches — avoids cross-shop
   //    mis-binding when multiple shops have a customer with the same email.
   if (!existing) {
-    const emailMatches = await db
+    const emailMatches = await dbAdmin
       .select()
-      .from(schema.customers) // tenant-ok: email match is guarded to exactly-1 to prevent cross-shop mis-binding
-      .where(eq(schema.customers.email, userInfo.email)) // tenant-ok: guarded to exactly-1 match; see comment above
+      .from(schema.customers) // bootstrap: email match is guarded to exactly-1 to prevent cross-shop mis-binding
+      .where(eq(schema.customers.email, userInfo.email)) // bootstrap: guarded to exactly-1 match; see comment above
       .limit(2);
     if (emailMatches.length === 1) {
       existing = emailMatches[0];
       // Self-heal: stamp auth_user_id so the fallback is not needed next time.
-      await db
-        .update(schema.customers) // tenant-ok: own-row update; id comes from the identity lookup above (resolved customer)
+      await dbAdmin
+        .update(schema.customers) // bootstrap: own-row update; id comes from the identity lookup above (resolved customer)
         .set({ authUserId: userInfo.authUserId })
         .where(eq(schema.customers.id, existing.id));
     }
@@ -64,7 +64,7 @@ async function resolveCustomer(
   // 3. No match — create a new customer stamped with the primary shop.
   const { shopId } = await routeOrderToShop(null);
 
-  const [created] = await db
+  const [created] = await dbAdmin
     .insert(schema.customers)
     .values({
       name: userInfo.name || null,

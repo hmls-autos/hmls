@@ -2,7 +2,7 @@ import type { Env } from "hono";
 import { createMiddleware } from "hono/factory";
 import { withContext } from "@logtape/logtape";
 import { type AuthUser, verifyToken } from "../lib/supabase.ts";
-import { db, schema } from "@hmls/agent/db";
+import { dbAdmin, schema } from "@hmls/agent/db";
 import { eq } from "drizzle-orm";
 
 /** Env type for routes that require authentication. */
@@ -57,7 +57,9 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
     );
   }
 
-  let [customer] = await db
+  // Identity resolution before any shop scope exists — same bootstrap pattern
+  // as shop-context.ts. No tenant GUC is set yet, so use dbAdmin.
+  let [customer] = await dbAdmin
     .select({ id: schema.customers.id })
     .from(schema.customers)
     .where(eq(schema.customers.authUserId, user.id))
@@ -65,7 +67,7 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
   if (!customer && user.email) {
     // Email fallback: only bind when EXACTLY ONE row matches — avoids cross-shop
     // mis-binding when multiple shops have a customer with the same address.
-    const emailMatches = await db
+    const emailMatches = await dbAdmin
       .select({ id: schema.customers.id })
       .from(schema.customers)
       .where(eq(schema.customers.email, user.email))
@@ -73,7 +75,7 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
     if (emailMatches.length === 1) {
       customer = emailMatches[0];
       // Self-heal: stamp auth_user_id so the fallback is not needed next time.
-      await db
+      await dbAdmin
         .update(schema.customers)
         .set({ authUserId: user.id })
         .where(eq(schema.customers.id, customer.id));

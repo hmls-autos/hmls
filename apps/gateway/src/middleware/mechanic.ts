@@ -1,7 +1,7 @@
 import type { Env } from "hono";
 import { createMiddleware } from "hono/factory";
 import { eq } from "drizzle-orm";
-import { db, schema } from "@hmls/agent/db";
+import { dbAdmin, schema } from "@hmls/agent/db";
 import { type AuthUser, verifyToken } from "../lib/supabase.ts";
 
 /** Env type for mechanic routes. Guarantees `providerId` is set. */
@@ -59,7 +59,8 @@ export const requireMechanic = createMiddleware<MechanicEnv>(async (c, next) => 
     );
   }
 
-  const [row] = await db
+  // Identity resolution before any shop scope exists — no tenant GUC set yet.
+  const [row] = await dbAdmin
     .select({ id: schema.providers.id })
     .from(schema.providers)
     .where(eq(schema.providers.authUserId, user.id))

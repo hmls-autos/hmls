@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { db, schema } from "@hmls/agent/db";
+import { db, dbAdmin, schema, withAdminScope, withTenantScope } from "@hmls/agent/db";
 import { and, eq } from "drizzle-orm";
 import { EstimatePdf } from "@hmls/agent";
 import { transition } from "@hmls/agent/order-state";
@@ -28,11 +28,16 @@ estimates.get("/:id", requireAuth, async (c) => {
   }
 
   const customerId = c.get("customerId");
-  const [order] = await db
-    .select()
-    .from(schema.orders) // tenant-ok: customer-ownership checked post-fetch (order.customerId !== customerId below); requireShopContext intentionally not mounted on this router
-    .where(eq(schema.orders.id, id))
-    .limit(1);
+  // withTenantScope: authenticated customer reading their OWN order. Sets
+  // app.customer_id so the orders RLS policy admits their row (across shops).
+  // Per-handler wrap, NOT a router-wide withTenantTx — the sibling public
+  // token routes have no customerId and would throw under a router-wide scope.
+  // (The trailing tenant-ok annotation sits on the query line itself so the
+  // tenant-guard statement scan sees the scope was applied deliberately.)
+  const [order] = await withTenantScope(
+    { customerId },
+    () => db.select().from(schema.orders).where(eq(schema.orders.id, id)).limit(1), // tenant-ok: app.customer_id set by the withTenantScope wrap; RLS enforces ownership
+  );
 
   if (!order) throw Errors.notFound("Order", id);
   if (order.customerId !== customerId) {
@@ -62,7 +67,10 @@ estimates.get("/:id/pdf", async (c) => {
     return c.json({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
   }
 
-  const [order] = await db
+  // dbAdmin: a shareToken is a capability, not a shop scope — there is no
+  // requireShopContext on this router, so no tenant GUC would be set. The
+  // token-match WHERE clause below is the authorization proof.
+  const [order] = await dbAdmin
     .select()
     .from(schema.orders)
     .where(and(eq(schema.orders.id, id), eq(schema.orders.shareToken, token)))
@@ -117,7 +125,9 @@ estimates.get("/:id/review", async (c) => {
     return c.json({ error: { code: "BAD_REQUEST", message: "Token required" } }, 400);
   }
 
-  const [order] = await db
+  // dbAdmin: public share-token route (no requireShopContext on this router,
+  // so no tenant GUC would be set). The token-match WHERE clause is the auth.
+  const [order] = await dbAdmin
     .select()
     .from(schema.orders)
     .where(and(eq(schema.orders.id, id), eq(schema.orders.shareToken, token)))
@@ -153,7 +163,8 @@ async function assertTokenValid(
   token: string | undefined,
 ): Promise<boolean> {
   if (!token) return false;
-  const [row] = await db
+  // dbAdmin: public share-token capability check — no shop context to scope by.
+  const [row] = await dbAdmin
     .select({ id: schema.orders.id })
     .from(schema.orders)
     .where(and(eq(schema.orders.id, id), eq(schema.orders.shareToken, token)))
@@ -171,7 +182,12 @@ estimates.post("/:id/approve", async (c) => {
   if (!(await assertTokenValid(id, token))) {
     return c.json({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
   }
-  const result = await transition(id, "approved", { kind: "share_token", orderId: id });
+  // withAdminScope: share-token caller has no shop context, so transition()'s
+  // internal reads/writes would be denied under fail-closed RLS. The token was
+  // just validated above; run the state change on the admin (bypass) connection.
+  const result = await withAdminScope(() =>
+    transition(id, "approved", { kind: "share_token", orderId: id })
+  );
   if (!result.ok) return sendOrderStateResult(c, result);
   return c.json({ success: true, order: result.value });
 });
@@ -189,9 +205,13 @@ estimates.post("/:id/decline", async (c) => {
   const body = await c.req.json<{ reason?: string }>().catch(
     () => ({} as { reason?: string }),
   );
-  const result = await transition(id, "declined", { kind: "share_token", orderId: id }, {
-    reason: body.reason,
-  });
+  // withAdminScope: see the /approve handler — token-authed, no shop context,
+  // so transition()'s reads/writes run on the admin (bypass) connection.
+  const result = await withAdminScope(() =>
+    transition(id, "declined", { kind: "share_token", orderId: id }, {
+      reason: body.reason,
+    })
+  );
   if (!result.ok) return sendOrderStateResult(c, result);
   return c.json({ success: true, order: result.value });
 });

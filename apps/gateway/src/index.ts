@@ -1,5 +1,5 @@
 import { getLogger } from "@logtape/logtape";
-import { db } from "@hmls/agent/db";
+import { dbAdmin } from "@hmls/agent/db";
 import { sql } from "drizzle-orm";
 import { createHmlsApp } from "./hmls-app.ts";
 import { createFixoApp } from "./fixo-app.ts";
@@ -68,9 +68,12 @@ if (isDenoDeploy) {
   // Deploy-only on purpose: local dev points at the prod DB, so we never reap
   // from a laptop. The actual cancel logic lives in the `cancel_abandoned_drafts`
   // SQL function (migration 0034).
+  // Uses dbAdmin (service_role, bypasses RLS): this is a system job reaping
+  // abandoned drafts across ALL shops, and it runs with no tenant GUC set, so
+  // the bare `db` would match 0 rows once fail-closed RLS is enabled.
   Deno.cron("cancel-abandoned-drafts", "0 3 * * *", async () => {
     try {
-      const rows = await db.execute(sql`SELECT cancel_abandoned_drafts(14) AS n`);
+      const rows = await dbAdmin.execute(sql`SELECT cancel_abandoned_drafts(14) AS n`);
       const n = (rows as unknown as Array<{ n: number }>)[0]?.n ?? 0;
       serverLogger.info("cancel-abandoned-drafts: cancelled {n} order(s)", { n });
     } catch (err) {

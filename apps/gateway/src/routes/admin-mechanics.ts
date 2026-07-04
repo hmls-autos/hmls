@@ -5,6 +5,7 @@ import { db, schema, whereShop } from "@hmls/agent/db";
 import { type Actor, assignProvider } from "@hmls/agent/order-state";
 import { type AdminEnv, requireAdmin } from "../middleware/admin.ts";
 import { OWNER_ALL_SHOPS, requireShopContext, type WithShop } from "../middleware/shop-context.ts";
+import { withTenantTx } from "../middleware/with-tenant-tx.ts";
 import { sendOrderStateResult } from "../lib/order-state-http.ts";
 import {
   availableMinutesForWeek,
@@ -77,6 +78,7 @@ const adminMechanics = new Hono<WithShop<AdminEnv>>();
 
 adminMechanics.use("*", requireAdmin);
 adminMechanics.use("*", requireShopContext);
+adminMechanics.use("*", withTenantTx("shop"));
 
 // GET / — list mechanics with aggregate stats
 adminMechanics.get("/", async (c) => {

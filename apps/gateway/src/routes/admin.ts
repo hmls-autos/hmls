@@ -4,6 +4,7 @@ import { db, schema, whereShop } from "@hmls/agent/db";
 import { and, count, desc, eq, gte, sql } from "drizzle-orm";
 import { type AdminEnv, requireAdmin } from "../middleware/admin.ts";
 import { OWNER_ALL_SHOPS, requireShopContext, type WithShop } from "../middleware/shop-context.ts";
+import { withTenantTx } from "../middleware/with-tenant-tx.ts";
 import {
   createCustomerInput,
   listCustomersQuery,
@@ -19,6 +20,7 @@ const admin = new Hono<WithShop<AdminEnv>>();
 // All admin routes require admin role
 admin.use("*", requireAdmin);
 admin.use("*", requireShopContext);
+admin.use("*", withTenantTx("shop"));
 
 // GET /shops — list shops visible to this admin.
 // Owner sees all shops; admin sees only their own shop.

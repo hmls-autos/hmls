@@ -1,5 +1,5 @@
 import { getLogger } from "@logtape/logtape";
-import { db } from "../db/client.ts";
+import { dbAdmin } from "../db/client.ts";
 import * as schema from "@hmls/shared/db/schema";
 import { eq } from "drizzle-orm";
 
@@ -477,7 +477,10 @@ export async function notifyOrderStatusChange(
   newStatus: string,
 ): Promise<void> {
   try {
-    const [order] = await db
+    // Fire-and-forget (see order-state.ts caller) — runs after the caller's
+    // transaction has committed, so the ALS-bound tx (and its tenant GUC) is
+    // gone. Read-only system lookup for an order already authorized upstream.
+    const [order] = await dbAdmin
       .select()
       .from(schema.orders)
       .where(eq(schema.orders.id, orderId))
@@ -493,7 +496,7 @@ export async function notifyOrderStatusChange(
     let customerName = order.contactName || "there";
 
     if (!toEmail && order.customerId) {
-      const [customer] = await db
+      const [customer] = await dbAdmin
         .select()
         .from(schema.customers)
         .where(eq(schema.customers.id, order.customerId))

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { db, schema, whereShop } from "../../db/client.ts";
+import { dbAdmin, schema, whereShop } from "../../db/client.ts";
 import { toolResult } from "@hmls/shared/tool-result";
 import type { ToolContext } from "../../common/convert-tools.ts";
 
@@ -192,8 +192,14 @@ const getAvailabilityTool = {
     })();
 
     // 2. Find all active providers, scoped to this chat session's shop.
+    // dbAdmin: this tool is called from both the customer and staff agents.
+    // A customer's tenant transaction sets app.customer_id (not app.shop_id;
+    // see pickScopeConfig's precedence), so under RLS a customer-context call
+    // would be denied by the providers/orders shop-scoped policies even
+    // though it's the customer's own shop's availability. The shop boundary
+    // is enforced explicitly by shopFilter/whereShop below, not by RLS.
     const shopFilter = shopId ? whereShop(schema.providers.shopId, shopId) : undefined;
-    const providers = await db
+    const providers = await dbAdmin
       .select({
         id: schema.providers.id,
         name: schema.providers.name,
@@ -214,7 +220,7 @@ const getAvailabilityTool = {
     const providerIds = providers.map((p) => p.id);
 
     // 4a. Batch-fetch weekly availability for all providers
-    const weeklyAvail = await db
+    const weeklyAvail = await dbAdmin
       .select()
       .from(schema.providerAvailability)
       .where(inArray(schema.providerAvailability.providerId, providerIds));
@@ -235,7 +241,7 @@ const getAvailabilityTool = {
     }
 
     // 4b. Batch-fetch schedule overrides in the date range (M8: use <=)
-    const overrides = await db
+    const overrides = await dbAdmin
       .select()
       .from(schema.providerScheduleOverrides)
       .where(
@@ -265,7 +271,7 @@ const getAvailabilityTool = {
     // Add a day buffer to the end to catch bookings that span midnight
     rangeEndTs.setUTCDate(rangeEndTs.getUTCDate() + 1);
 
-    const bookingsResult = await db.execute(
+    const bookingsResult = await dbAdmin.execute(
       sql`SELECT provider_id, lower(blocked_range) as range_start, upper(blocked_range) as range_end
           FROM orders
           WHERE provider_id = ANY(ARRAY[${

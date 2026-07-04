@@ -9,7 +9,7 @@
 
 import { eq } from "drizzle-orm";
 import { getLogger } from "@logtape/logtape";
-import { db, schema } from "../db/client.ts";
+import { db, dbAdmin, schema } from "../db/client.ts";
 import { diagnoseStructured } from "./diagnose-structured.ts";
 import {
   type BrainService,
@@ -58,14 +58,17 @@ export async function openPrediction(req: DiagnoseRequest, apiKeyId?: string): P
 
 /** Fill an existing prediction row with the expert structured diagnosis.
  *  Called fire-and-forget from create_order so the ~5s agent run does not
- *  block order creation. */
+ *  block order creation. Uses dbAdmin: this runs detached, after the caller's
+ *  tenant-scoped transaction has already committed, so the ALS-inherited
+ *  executor would be a closed tx — dbAdmin always opens its own connection and
+ *  fixo_predictions is a non-RLS'd system table, so bypass is correct here. */
 export async function fillPrediction(predictionId: string, req: DiagnoseRequest): Promise<void> {
   const structured = await diagnoseStructured({
     vehicle: toOnceVehicle(req),
     symptom: req.symptom,
     dtcs: req.dtcs,
   });
-  await db
+  await dbAdmin
     .update(schema.fixoPredictions)
     .set({ predictedDiagnosis: structured })
     .where(eq(schema.fixoPredictions.id, predictionId));
@@ -122,10 +125,16 @@ export const diagnose: BrainService["diagnose"] = async (req) => {
  *
  *  callerKeyId: when set (MCP path), ownership is enforced — a prediction that
  *  was opened by a different key is rejected (logged + no write). NULL-owner
- *  predictions (in-process/legacy) always fall through unchanged. */
+ *  predictions (in-process/legacy) always fall through unchanged.
+ *
+ *  Uses dbAdmin: called fire-and-forget from PATCH /orders/:id after that
+ *  request's tenant-scoped transaction has already committed, so the
+ *  ALS-inherited executor would be a closed tx — dbAdmin always opens its own
+ *  connection and fixo_predictions is a non-RLS'd system table, so bypass is
+ *  correct here. */
 export async function recordOutcome(req: OutcomeRequest, callerKeyId?: string): Promise<void> {
   // Ownership check: fetch the prediction's apiKeyId before writing.
-  const rows = await db
+  const rows = await dbAdmin
     .select({ apiKeyId: schema.fixoPredictions.apiKeyId })
     .from(schema.fixoPredictions)
     .where(eq(schema.fixoPredictions.id, req.predictionId));
@@ -142,7 +151,7 @@ export async function recordOutcome(req: OutcomeRequest, callerKeyId?: string): 
     }
   }
 
-  const updated = await db
+  const updated = await dbAdmin
     .update(schema.fixoPredictions)
     .set({
       confirmedDiagnosis: req.confirmedDiagnosis,
@@ -162,10 +171,15 @@ export async function recordOutcome(req: OutcomeRequest, callerKeyId?: string): 
 /** Attach the priced estimate to a prediction row for estimate-vs-actual
  *  calibration. Pricing is the shared OLP engine (skills/estimate/pricing.ts);
  *  this only records the result. Idempotent; logs (never throws) on a missing
- *  row, same as recordOutcome. */
+ *  row, same as recordOutcome.
+ *
+ *  Uses dbAdmin: called fire-and-forget from create_order after that tool's
+ *  tenant-scoped transaction has already committed, so the ALS-inherited
+ *  executor would be a closed tx — dbAdmin always opens its own connection and
+ *  fixo_predictions is a non-RLS'd system table, so bypass is correct here. */
 export const recordEstimate: BrainService["recordEstimate"] = async (req) => {
   const { predictionId, ...estimate } = req;
-  const updated = await db
+  const updated = await dbAdmin
     .update(schema.fixoPredictions)
     .set({ predictedEstimate: estimate })
     .where(eq(schema.fixoPredictions.id, predictionId))
