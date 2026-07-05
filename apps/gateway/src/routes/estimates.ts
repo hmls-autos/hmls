@@ -161,6 +161,7 @@ estimates.get("/:id/review", async (c) => {
     customerName: order.contactName,
     orderId: order.id,
     orderStatus: order.status,
+    needsAddress: needsAddress(order),
   });
 });
 
