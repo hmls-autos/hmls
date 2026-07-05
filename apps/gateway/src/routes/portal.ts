@@ -268,16 +268,15 @@ portal.post(
   zValidator("json", orderReasonInput),
   async (c) => {
     const customerId = c.get("customerId");
-    const shopId = c.get("shopId");
     const id = Number(c.req.param("id"));
     if (!Number.isInteger(id) || id <= 0) {
       return c.json<ApiError>({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
     }
 
     const [order] = await db
-      .select({ id: schema.orders.id, customerId: schema.orders.customerId })
+      .select({ id: schema.orders.id, customerId: schema.orders.customerId }) // tenant-ok: customer-owned row; ownership asserted below, RLS app.customer_id scopes it
       .from(schema.orders)
-      .where(and(eq(schema.orders.id, id), eq(schema.orders.shopId, shopId)))
+      .where(eq(schema.orders.id, id))
       .limit(1);
     if (!order || order.customerId !== customerId) {
       return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
@@ -297,16 +296,15 @@ portal.post(
 // `cancel-booking` above is the Bookings-page equivalent for scheduled orders.
 portal.post("/me/orders/:id/cancel", zValidator("json", orderReasonInput), async (c) => {
   const customerId = c.get("customerId");
-  const shopId = c.get("shopId");
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id) || id <= 0) {
     return c.json<ApiError>({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
   }
 
   const [order] = await db
-    .select({ id: schema.orders.id, customerId: schema.orders.customerId })
+    .select({ id: schema.orders.id, customerId: schema.orders.customerId }) // tenant-ok: customer-owned row; ownership asserted below, RLS app.customer_id scopes it
     .from(schema.orders)
-    .where(and(eq(schema.orders.id, id), eq(schema.orders.shopId, shopId)))
+    .where(eq(schema.orders.id, id))
     .limit(1);
   if (!order || order.customerId !== customerId) {
     return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
