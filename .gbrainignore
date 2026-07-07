@@ -1,0 +1,9 @@
+# gbrain sync excludes — these docs are curated in gbrain's `default` source;
+# don't re-ingest the repo copies (avoids cross-source duplicate slugs).
+docs/superpowers/
+docs/designs/
+docs/order-lifecycle-refactor.md
+docs/repair-db/
+README.md
+TODOS.md
+CLAUDE.md
