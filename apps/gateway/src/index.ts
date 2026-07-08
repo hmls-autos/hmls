@@ -1,5 +1,5 @@
 import { getLogger } from "@logtape/logtape";
-import { dbAdmin } from "@hmls/agent/db";
+import { assertTenantRole, dbAdmin } from "@hmls/agent/db";
 import { sql } from "drizzle-orm";
 import { createHmlsApp } from "./hmls-app.ts";
 import { createFixoApp } from "./fixo-app.ts";
@@ -27,6 +27,16 @@ if (isDenoDeploy && Deno.env.get("SKIP_AUTH") === "true") {
   // SKIP_AUTH bypasses every auth middleware (see auth.ts / mechanic.ts /
   // shop-context.ts) for local dev only. Never let it reach a deployment.
   throw new Error("SKIP_AUTH must never be set in a deployed environment");
+}
+if (isDenoDeploy && !Deno.env.get("TENANT_DATABASE_URL")) {
+  // Without it, packages/shared/src/db/client.ts's tenantDb() falls back to
+  // DATABASE_URL — the BYPASSRLS service_role connection — and RLS is
+  // silently defeated for every tenant-scoped query. Fine in local/CI
+  // (see client.ts's warn-once fallback); never fine on a deployment.
+  throw new Error(
+    "TENANT_DATABASE_URL is required in a deployed environment — without it the default db " +
+      "falls back to the BYPASSRLS service_role and RLS is silently defeated",
+  );
 }
 
 // Warn on optional vars
@@ -68,6 +78,14 @@ function handler(request: Request): Response | Promise<Response> {
 
 // Start server
 if (isDenoDeploy) {
+  if (Deno.env.get("TENANT_DATABASE_URL")) {
+    // Best-effort post-boot check that the tenant role isn't superuser/
+    // BYPASSRLS (RLS would be silently defeated). Fire-and-forget: never
+    // blocks boot, and assertTenantRole() catches its own errors — a
+    // transient DB blip here shouldn't crash the app. The hard gate for a
+    // missing TENANT_DATABASE_URL is the env guard above.
+    void assertTenantRole();
+  }
   // Daily reap of abandoned draft orders. Replaces the pg_cron job from
   // migration 0017, which never applied (pg_cron isn't installed on Supabase).
   // Deploy-only on purpose: local dev points at the prod DB, so we never reap
