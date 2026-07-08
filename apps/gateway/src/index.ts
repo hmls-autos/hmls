@@ -12,6 +12,7 @@ const serverLogger = getLogger(["hmls", "gateway", "server"]);
 const DATABASE_URL = Deno.env.get("DATABASE_URL");
 const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
+const isDenoDeploy = Deno.env.get("DENO_DEPLOYMENT_ID") !== undefined;
 
 if (!DATABASE_URL) {
   throw new Error("DATABASE_URL is required but not set");
@@ -21,6 +22,11 @@ if (!GOOGLE_API_KEY) {
 }
 if (!DEEPSEEK_API_KEY) {
   throw new Error("DEEPSEEK_API_KEY is required but not set");
+}
+if (isDenoDeploy && Deno.env.get("SKIP_AUTH") === "true") {
+  // SKIP_AUTH bypasses every auth middleware (see auth.ts / mechanic.ts /
+  // shop-context.ts) for local dev only. Never let it reach a deployment.
+  throw new Error("SKIP_AUTH must never be set in a deployed environment");
 }
 
 // Warn on optional vars
@@ -61,7 +67,6 @@ function handler(request: Request): Response | Promise<Response> {
 }
 
 // Start server
-const isDenoDeploy = Deno.env.get("DENO_DEPLOYMENT_ID") !== undefined;
 if (isDenoDeploy) {
   // Daily reap of abandoned draft orders. Replaces the pg_cron job from
   // migration 0017, which never applied (pg_cron isn't installed on Supabase).
