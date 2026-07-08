@@ -298,7 +298,7 @@ orders.patch("/:id", zValidator("json", updateOrderInput), async (c) => {
     const [current] = await db
       .select({ items: schema.orders.items })
       .from(schema.orders)
-      .where(and(eq(schema.orders.id, id), eq(schema.orders.shopId, shopId)))
+      .where(and(eq(schema.orders.id, id), whereShop(schema.orders.shopId, shopId)))
       .limit(1);
     if (!current) {
       return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
@@ -347,7 +347,7 @@ orders.patch("/:id", zValidator("json", updateOrderInput), async (c) => {
     await db
       .update(schema.orders)
       .set(directUpdates)
-      .where(and(eq(schema.orders.id, id), eq(schema.orders.shopId, shopId)));
+      .where(and(eq(schema.orders.id, id), whereShop(schema.orders.shopId, shopId)));
   }
 
   // Return the freshly-read row so clients see the consistent post-write
@@ -355,7 +355,7 @@ orders.patch("/:id", zValidator("json", updateOrderInput), async (c) => {
   const [latest] = await db
     .select()
     .from(schema.orders)
-    .where(and(eq(schema.orders.id, id), eq(schema.orders.shopId, shopId)))
+    .where(and(eq(schema.orders.id, id), whereShop(schema.orders.shopId, shopId)))
     .limit(1);
   if (!latest) {
     return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
