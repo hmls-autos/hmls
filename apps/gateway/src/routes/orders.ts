@@ -208,6 +208,7 @@ orders.post("/", zValidator("json", createOrderInput), async (c) => {
       contactEmail: customer.email ?? null,
       contactPhone: customer.phone ?? null,
       contactAddress: customer.address ?? null,
+      contactPreferred: customer.preferredContact ?? null,
     })
     .returning();
 
