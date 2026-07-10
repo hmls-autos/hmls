@@ -21,3 +21,15 @@ ALTER TABLE customers ADD COLUMN IF NOT EXISTS preferred_contact contact_method;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS contact_preferred contact_method;
 
 ALTER TYPE order_event_type ADD VALUE IF NOT EXISTS 'customer_contacted';
+
+-- Migration 0041 revoked table-level UPDATE on orders/customers from
+-- tenant_app and re-granted column-by-column, so every new column needs its
+-- own grant or prod writes fail with "permission denied" (0041's own
+-- contract). Role-guarded: tenant_app only exists in staging/prod.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tenant_app') THEN
+    GRANT UPDATE (preferred_contact) ON customers TO tenant_app;
+    GRANT UPDATE (contact_preferred) ON orders TO tenant_app;
+  END IF;
+END $$;
