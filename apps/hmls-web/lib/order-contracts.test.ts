@@ -24,6 +24,17 @@ describe("logContactInput", () => {
     expect(logContactInput.safeParse({ method: "fax" }).success).toBe(false);
     expect(logContactInput.safeParse({}).success).toBe(false);
   });
+
+  it("caps note length at 500", () => {
+    expect(
+      logContactInput.safeParse({ method: "call", note: "x".repeat(500) })
+        .success,
+    ).toBe(true);
+    expect(
+      logContactInput.safeParse({ method: "call", note: "x".repeat(501) })
+        .success,
+    ).toBe(false);
+  });
 });
 
 describe("updateOrderInput.contact_preferred", () => {

@@ -1,5 +1,6 @@
 "use client";
 
+import type { ContactMethod } from "@hmls/shared/api/contracts/orders";
 import { useState } from "react";
 
 /** Formats the card's fields into the next user message. The agent re-extracts
@@ -14,7 +15,7 @@ export function buildContactMessage({
   phone: string;
   address: string;
   access: string;
-  preferred: "text" | "call" | "email" | null;
+  preferred: ContactMethod | null;
 }): string {
   const parts = [
     `Contact phone: ${phone.trim()}.`,
@@ -50,9 +51,7 @@ export function ContactIntakeCard({
   const [address, setAddress] = useState("");
   const [access, setAccess] = useState("");
   // Exact lowercase tokens — create_order validates z.enum(["text","call","email"])
-  const [preferred, setPreferred] = useState<"text" | "call" | "email" | null>(
-    null,
-  );
+  const [preferred, setPreferred] = useState<ContactMethod | null>(null);
 
   if (isAnswered) {
     return (
@@ -115,13 +114,14 @@ export function ContactIntakeCard({
               <button
                 key={method}
                 type="button"
+                aria-pressed={preferred === method}
                 onClick={() =>
                   setPreferred(preferred === method ? null : method)
                 }
-                className={`flex-1 rounded-lg border px-3 py-1.5 text-sm capitalize transition-colors ${
+                className={`flex-1 rounded-lg border px-3 py-1.5 text-sm capitalize transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
                   preferred === method
                     ? "border-primary bg-primary/10 font-medium text-primary"
-                    : "border-border bg-background text-muted-foreground"
+                    : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:bg-primary/10"
                 }`}
               >
                 {method}

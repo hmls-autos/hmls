@@ -1,11 +1,11 @@
+import type { ContactMethod } from "@hmls/shared/api/contracts/orders";
+import { CONTACT_METHODS } from "@hmls/shared/api/contracts/orders";
 import { Save } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { OrderContactPatch } from "@/hooks/useOrderMutations";
-
-type ContactMethod = "text" | "call" | "email";
 
 type ContactSnapshot = {
   contactName: string | null;
@@ -71,13 +71,14 @@ export function CustomerEditor({
       />
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground">Prefers</span>
-        {(["text", "call", "email"] as const).map((method) => (
+        {CONTACT_METHODS.map((method) => (
           <Button
             key={method}
             type="button"
             variant={preferred === method ? "secondary" : "ghost"}
             size="xs"
             className="capitalize"
+            aria-pressed={preferred === method}
             onClick={() => setPreferred(preferred === method ? null : method)}
           >
             {method}

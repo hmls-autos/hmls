@@ -55,14 +55,28 @@ describe("eventDescription — customer_contacted", () => {
     ).toBe("Called customer — left voicemail");
   });
 
-  // ponytail: missing method falls through to "Emailed" — pinned so a future
-  // metadata-shape change surfaces here instead of rendering silently wrong.
-  it("falls back to Emailed when method is missing", () => {
+  it("falls back to neutral Contacted when method is missing or unknown", () => {
     expect(
       eventDescription(
         event({ eventType: "customer_contacted", metadata: {} }),
       ),
-    ).toBe("Emailed customer");
+    ).toBe("Contacted customer");
+    expect(
+      eventDescription(
+        event({ eventType: "customer_contacted", metadata: { method: "fax" } }),
+      ),
+    ).toBe("Contacted customer");
+  });
+
+  it("tolerates null metadata", () => {
+    expect(
+      eventDescription(
+        event({
+          eventType: "customer_contacted",
+          metadata: null as unknown as OrderEvent["metadata"],
+        }),
+      ),
+    ).toBe("Contacted customer");
   });
 });
 

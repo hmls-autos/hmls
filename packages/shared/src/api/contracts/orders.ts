@@ -58,6 +58,13 @@ export const createOrderInput = z.object({
  *  maintaining a duplicate of the DB type here. */
 export const orderItemPatchInput = z.record(z.string(), z.unknown());
 
+/** Canonical contact-method list — single definition, mirrors the
+ *  contact_method pg enum in db/schema.ts. Reuse wherever a preferred-contact
+ *  field appears; never inline the literals. */
+export const CONTACT_METHODS = ["text", "call", "email"] as const;
+export const contactMethodInput = z.enum(CONTACT_METHODS);
+export type ContactMethod = (typeof CONTACT_METHODS)[number];
+
 export const updateOrderInput = z.object({
   items: z.array(orderItemPatchInput).optional(),
   notes: z.string().nullish(),
@@ -69,7 +76,7 @@ export const updateOrderInput = z.object({
   contact_email: z.string().nullish(),
   contact_phone: z.string().nullish(),
   contact_address: z.string().nullish(),
-  contact_preferred: z.enum(["text", "call", "email"]).nullish(),
+  contact_preferred: contactMethodInput.nullish(),
 });
 
 // ---------------------------------------------------------------------------
@@ -77,8 +84,8 @@ export const updateOrderInput = z.object({
 // ---------------------------------------------------------------------------
 
 export const logContactInput = z.object({
-  method: z.enum(["text", "call", "email"]),
-  note: z.string().optional(),
+  method: contactMethodInput,
+  note: z.string().max(500).optional(),
 });
 
 // ---------------------------------------------------------------------------

@@ -1,24 +1,34 @@
 "use client";
 
+import type { ContactMethod } from "@hmls/shared/api/contracts/orders";
+import { CONTACT_METHODS } from "@hmls/shared/api/contracts/orders";
+import { Mail, Phone, Smartphone } from "lucide-react";
 import { useState } from "react";
+import { CONTACT_VERB } from "@/components/order/ActivityTimeline";
 import { CustomerEditor } from "@/components/order/CustomerEditor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useOrderMutations } from "@/hooks/useOrderMutations";
 import type { SectionProps } from "./types";
 
-const PREFERRED_LABEL = {
-  text: "📱 Prefers: Text",
-  call: "📞 Prefers: Call",
-  email: "✉️ Prefers: Email",
-} as const;
+const PREFERRED_ICON: Record<ContactMethod, typeof Smartphone> = {
+  text: Smartphone,
+  call: Phone,
+  email: Mail,
+};
+
+const PREFERRED_LABEL: Record<ContactMethod, string> = {
+  text: "Prefers: Text",
+  call: "Prefers: Call",
+  email: "Prefers: Email",
+};
 
 export function CustomerSection({
   order,
   readOnly,
   revalidate,
   profilePreferred,
-}: SectionProps & { profilePreferred?: "text" | "call" | "email" | null }) {
+}: SectionProps & { profilePreferred?: ContactMethod | null }) {
   const [editing, setEditing] = useState(false);
   // Order snapshot wins (per-order intent); fall back to the customer's
   // stable profile default so manual/legacy orders still show a badge.
@@ -69,7 +79,11 @@ export function CustomerSection({
         <p className="text-muted-foreground">{order.contactEmail ?? "—"}</p>
         <p className="text-muted-foreground">{order.contactAddress ?? "—"}</p>
         {preferred && (
-          <p className="pt-1 font-medium text-foreground">
+          <p className="flex items-center gap-1.5 pt-1 font-medium text-foreground">
+            {(() => {
+              const Icon = PREFERRED_ICON[preferred];
+              return <Icon className="w-3.5 h-3.5" />;
+            })()}
             {PREFERRED_LABEL[preferred]}
           </p>
         )}
@@ -77,7 +91,7 @@ export function CustomerSection({
             confirming a scheduled visit) — logging it is never read-only. */}
         <div className="flex items-center gap-1 pt-2">
           <span className="text-muted-foreground">Log contact:</span>
-          {(["text", "call", "email"] as const).map((method) => (
+          {CONTACT_METHODS.map((method) => (
             <Button
               key={method}
               variant="ghost"
@@ -85,11 +99,7 @@ export function CustomerSection({
               disabled={loggingContact}
               onClick={() => logContact(method)}
             >
-              {method === "text"
-                ? "Texted"
-                : method === "call"
-                  ? "Called"
-                  : "Emailed"}
+              {CONTACT_VERB[method]}
             </Button>
           ))}
         </div>

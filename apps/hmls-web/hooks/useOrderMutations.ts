@@ -1,3 +1,4 @@
+import type { ContactMethod } from "@hmls/shared/api/contracts/orders";
 import type { Order, OrderItem } from "@hmls/shared/db/types";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -9,7 +10,7 @@ export type OrderContactPatch = {
   contact_email: string;
   contact_phone: string;
   contact_address: string;
-  contact_preferred: "text" | "call" | "email" | null;
+  contact_preferred: ContactMethod | null;
 };
 
 /** Mirrors scheduleOrderInput schema from @hmls/shared/api/contracts/orders */
@@ -79,15 +80,16 @@ export function useOrderMutations(
     }
   }
 
-  async function logContact(method: "text" | "call" | "email"): Promise<void> {
+  async function logContact(method: ContactMethod): Promise<void> {
     setLoggingContact(true);
     try {
       await api.post(adminPaths.orderContactLog(id), { method });
       toast.success(`Logged: contacted by ${method}`);
       revalidate();
     } catch (e) {
+      // No rethrow: the only caller is a fire-and-forget onClick — the toast
+      // IS the error contract; rethrowing would just be an unhandled rejection.
       toast.error(e instanceof Error ? e.message : "Failed to log contact");
-      throw e;
     } finally {
       setLoggingContact(false);
     }

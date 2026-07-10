@@ -1,9 +1,28 @@
 "use client";
 
+import type { ContactMethod } from "@hmls/shared/api/contracts/orders";
 import type { OrderEvent } from "@hmls/shared/db/types";
 import { isOrderStatus } from "@hmls/shared/order/status";
-import { ClipboardEdit, MessageSquare, Tag, User } from "lucide-react";
+import {
+  ClipboardEdit,
+  MessageSquare,
+  PhoneCall,
+  Tag,
+  User,
+} from "lucide-react";
 import { ORDER_STEP_LABELS_ADMIN } from "@/lib/status-display";
+
+/** Past-tense verb per contact method — shared by the timeline description and
+ * the Log-contact buttons so the button label always matches the event it logs. */
+export const CONTACT_VERB: Record<ContactMethod, string> = {
+  text: "Texted",
+  call: "Called",
+  email: "Emailed",
+};
+
+function isContactMethod(v: unknown): v is ContactMethod {
+  return v === "text" || v === "call" || v === "email";
+}
 
 function relativeTime(dateStr: string): string {
   const now = Date.now();
@@ -49,8 +68,8 @@ export function eventDescription(event: OrderEvent): string {
         method?: string;
         note?: string;
       };
-      const verb =
-        method === "text" ? "Texted" : method === "call" ? "Called" : "Emailed";
+      // Unknown/missing method → neutral "Contacted", never a wrong verb.
+      const verb = isContactMethod(method) ? CONTACT_VERB[method] : "Contacted";
       return note ? `${verb} customer — ${note}` : `${verb} customer`;
     }
     default:
@@ -84,6 +103,13 @@ function EventIcon({ eventType }: { eventType: string }) {
     return (
       <div className="w-6 h-6 rounded-full bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center shrink-0">
         <MessageSquare className="w-3 h-3 text-yellow-400" />
+      </div>
+    );
+  }
+  if (eventType === "customer_contacted") {
+    return (
+      <div className="w-6 h-6 rounded-full bg-sky-500/10 border border-sky-500/30 flex items-center justify-center shrink-0">
+        <PhoneCall className="w-3 h-3 text-sky-400" />
       </div>
     );
   }

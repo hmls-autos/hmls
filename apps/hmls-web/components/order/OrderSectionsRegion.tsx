@@ -1,5 +1,6 @@
 "use client";
 
+import type { ContactMethod } from "@hmls/shared/api/contracts/orders";
 import type { Order } from "@hmls/shared/db/types";
 import {
   type EditableSection,
@@ -19,7 +20,7 @@ type Props = {
   onSetTime(): void;
   onReassign(): void;
   /** Customer profile default for the Prefers badge fallback. */
-  profilePreferred?: "text" | "call" | "email" | null;
+  profilePreferred?: ContactMethod | null;
 };
 
 export function OrderSectionsRegion({

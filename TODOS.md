@@ -255,11 +255,16 @@ kill criteria fire, OR if Speed Wedge succeeds but you want a second wedge to co
 
 ## Preferred-contact follow-ups (from /qa on spinsirr/customer-contact-preference-9f6871, 2026-07-09)
 
-- [ ] **Cap `logContactInput.note` length** — `POST /orders/:id/contact-log` accepts an unbounded
-      `note` string (no UI sends it today). Add `.max(500)` in
-      `packages/shared/src/api/contracts/orders.ts` when a note field ships. Severity: low.
+- [x] **Cap `logContactInput.note` length** — `.max(500)` added in
+      `packages/shared/src/api/contracts/orders.ts` + test. Fixed by /ship pre-landing review on
+      this branch, 2026-07-10.
 - [ ] **Portal leaks `note_added` internal notes** — pre-existing (NOT introduced by this branch):
       `GET /me/orders/:id` in `apps/gateway/src/routes/portal.ts` returns `note_added` events whose
-      metadata carries internal staff notes. `customer_contacted` is now filtered (ISSUE-004 fix);
-      consider the same treatment for `note_added` or an explicit customer-visible flag. Severity:
-      medium.
+      metadata carries internal staff notes. `customer_contacted` is now filtered (ISSUE-004 fix); 3
+      review specialists converged on inverting to an allowlist (`CUSTOMER_VISIBLE_EVENT_TYPES` next
+      to the enum in `packages/shared/src/db/schema.ts`) so future internal event types are
+      private-by-default. Do that as part of this fix. Severity: medium.
+- [ ] **Index `order_events(order_id, created_at)`** — FK columns aren't auto-indexed; the event
+      feed (admin + portal) filters/orders by these and `customer_contacted` grows the table faster.
+      Add in a follow-up migration; optionally LIMIT the event fetch. Severity: low (dogfood scale
+      today). From /ship performance specialist, 2026-07-10.
