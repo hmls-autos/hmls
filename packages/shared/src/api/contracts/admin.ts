@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { contactMethodInput } from "./orders.ts";
 
 // ---------------------------------------------------------------------------
 // GET /admin/customers — query string
@@ -30,4 +31,6 @@ export const updateCustomerInput = z.object({
   email: z.string().optional(),
   address: z.string().optional(),
   vehicleInfo: z.record(z.string(), z.unknown()).optional(),
+  // Nullable so an admin can revoke a stale preference ("stop calling me").
+  preferredContact: contactMethodInput.nullish(),
 });

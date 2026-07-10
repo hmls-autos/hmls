@@ -29,6 +29,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { getLogger } from "@logtape/logtape";
 import { db, dbAdmin, schema } from "../db/client.ts";
 import type { OrderItem } from "@hmls/shared/db/schema";
+import type { ContactMethod } from "@hmls/shared/api/contracts/orders";
 import { notifyOrderStatusChange } from "../lib/notifications.ts";
 import { hasIntakeFields, upsertOrderIntake } from "./order-intake.ts";
 import {
@@ -236,7 +237,7 @@ export interface ItemsPatch {
    *  null/undefined semantics as the fields above. */
   contactPhone?: string | null;
   contactAddress?: string | null;
-  contactPreferred?: "text" | "call" | "email" | null;
+  contactPreferred?: ContactMethod | null;
   /** Booking/scheduling display location + coords. Re-geocoded by the
    *  caller when contactAddress changes on a revise, so the map pin never
    *  goes stale vs. the address the order now claims. */
@@ -848,7 +849,7 @@ export async function addNote(
 
 export async function logContact(
   orderId: number,
-  method: "text" | "call" | "email",
+  method: ContactMethod,
   actor: Actor,
   note?: string,
 ): Promise<OrderStateResult<{ eventId: string }>> {

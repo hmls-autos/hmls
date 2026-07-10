@@ -30,6 +30,7 @@ import {
   routingReviewNote,
 } from "../shop-routing.ts";
 import { toolResult } from "@hmls/shared/tool-result";
+import { type ContactMethod, contactMethodInput } from "@hmls/shared/api/contracts/orders";
 import type { DiscountType, LineItem, ServiceInput } from "../../hmls/skills/estimate/types.ts";
 import type { OrderItem, RepairTechPrep } from "@hmls/shared/db/schema";
 import { getRepairJobs } from "../../hmls/tools/olp-client.ts";
@@ -75,8 +76,6 @@ function toOrderItem(
     ...(opts?.techPrep ? { techPrep: opts.techPrep } : {}),
   };
 }
-
-type ContactMethod = "text" | "call" | "email";
 
 type CustomerRecord = {
   id: number;
@@ -389,7 +388,7 @@ export const createOrderTool = {
           "Customer 5-digit US ZIP for the service location. Enough to price + route the " +
             "estimate; the full street address is collected later at booking.",
         ),
-        preferredContact: z.enum(["text", "call", "email"]).optional().describe(
+        preferredContact: contactMethodInput.optional().describe(
           "How the customer wants the shop to reach them for follow-up. Pass the exact " +
             "lowercase token from the collect_contact form ('Preferred contact: <method>') or " +
             "the customer's stated preference. Backfills the profile only when empty; always " +
