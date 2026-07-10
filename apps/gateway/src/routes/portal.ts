@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { db, schema } from "@hmls/agent/db";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { Errors } from "@hmls/shared/errors";
 import { type AuthEnv, requireAuth } from "../middleware/auth.ts";
 import { requireShopContext, type WithShop } from "../middleware/shop-context.ts";
@@ -130,7 +130,12 @@ portal.get("/me/orders/:id", async (c) => {
     db
       .select()
       .from(schema.orderEvents)
-      .where(eq(schema.orderEvents.orderId, id))
+      // customer_contacted is the shop's internal outreach log (metadata may
+      // carry staff notes; actor is the admin's email) — never customer-facing.
+      .where(and(
+        eq(schema.orderEvents.orderId, id),
+        ne(schema.orderEvents.eventType, "customer_contacted"),
+      ))
       .orderBy(desc(schema.orderEvents.createdAt)),
     db
       .select()

@@ -30,6 +30,7 @@ import {
   routingReviewNote,
 } from "../shop-routing.ts";
 import { toolResult } from "@hmls/shared/tool-result";
+import { type ContactMethod, contactMethodInput } from "@hmls/shared/api/contracts/orders";
 import type { DiscountType, LineItem, ServiceInput } from "../../hmls/skills/estimate/types.ts";
 import type { OrderItem, RepairTechPrep } from "@hmls/shared/db/schema";
 import { getRepairJobs } from "../../hmls/tools/olp-client.ts";
@@ -83,6 +84,7 @@ type CustomerRecord = {
   email: string | null;
   phone: string | null;
   address: string | null;
+  preferredContact: ContactMethod | null;
 };
 
 type CustomerInfoInput = {
@@ -91,6 +93,7 @@ type CustomerInfoInput = {
   phone?: string;
   address?: string;
   serviceZip?: string;
+  preferredContact?: ContactMethod;
 };
 
 /** Trim and normalize empty / null inputs to undefined so we don't overwrite
@@ -127,6 +130,7 @@ async function resolveCustomer(
   const addressIn = clean(customerInfo?.address);
   const nameIn = clean(customerInfo?.name);
   const emailIn = clean(customerInfo?.email);
+  const preferredIn = customerInfo?.preferredContact;
 
   const id = ctxCustomerId ?? paramCustomerId;
   if (id) {
@@ -149,6 +153,7 @@ async function resolveCustomer(
     const patch: Partial<typeof schema.customers.$inferInsert> = {};
     if (phoneIn && !found.phone) patch.phone = phoneIn;
     if (addressIn && !found.address) patch.address = addressIn;
+    if (preferredIn && !found.preferredContact) patch.preferredContact = preferredIn;
     if (Object.keys(patch).length > 0) {
       const [updated] = await db
         .update(schema.customers)
@@ -185,6 +190,7 @@ async function resolveCustomer(
       const patch: Partial<typeof schema.customers.$inferInsert> = {};
       if (phoneIn && !existing.phone) patch.phone = phoneIn;
       if (addressIn && !existing.address) patch.address = addressIn;
+      if (preferredIn && !existing.preferredContact) patch.preferredContact = preferredIn;
       if (Object.keys(patch).length > 0) {
         const [updated] = await db
           .update(schema.customers)
@@ -208,6 +214,7 @@ async function resolveCustomer(
       email: emailIn ?? null,
       phone: phoneIn ?? null,
       address: addressIn ?? null,
+      preferredContact: preferredIn ?? null,
     })
     .returning();
   return created ?? null;
@@ -380,6 +387,12 @@ export const createOrderTool = {
         serviceZip: z.string().optional().describe(
           "Customer 5-digit US ZIP for the service location. Enough to price + route the " +
             "estimate; the full street address is collected later at booking.",
+        ),
+        preferredContact: contactMethodInput.optional().describe(
+          "How the customer wants the shop to reach them for follow-up. Pass the exact " +
+            "lowercase token from the collect_contact form ('Preferred contact: <method>') or " +
+            "the customer's stated preference. Backfills the profile only when empty; always " +
+            "lands on this order's snapshot.",
         ),
       })
       .optional()
@@ -587,6 +600,7 @@ export const createOrderTool = {
       );
       const phoneIn = clean(params.customerInfo?.phone);
       const addressIn = clean(params.customerInfo?.address);
+      const preferredIn = params.customerInfo?.preferredContact;
 
       // Re-geocode when the revise carries a new address. geocodeAddress is
       // best-effort (never throws — returns null on miss/timeout), so a
@@ -625,6 +639,7 @@ export const createOrderTool = {
           // an existing snapshot with a missing customerInfo field.
           contactPhone: phoneIn,
           contactAddress: addressIn,
+          contactPreferred: preferredIn,
           ...locationPatch,
         },
         actor,
@@ -868,6 +883,8 @@ export const createOrderTool = {
           contactName: customer.name ?? null,
           contactEmail: customer.email ?? null,
           contactPhone: orderPhone,
+          contactPreferred: params.customerInfo?.preferredContact ?? customer.preferredContact ??
+            null,
           // location is the booking/scheduling display field: the precise
           // address when we have one, else the bare ZIP so mechanic/portal
           // views still show a service area. contactAddress stays the

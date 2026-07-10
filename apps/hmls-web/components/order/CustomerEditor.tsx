@@ -1,3 +1,5 @@
+import type { ContactMethod } from "@hmls/shared/api/contracts/orders";
+import { CONTACT_METHODS } from "@hmls/shared/api/contracts/orders";
 import { Save } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +12,7 @@ type ContactSnapshot = {
   contactEmail: string | null;
   contactPhone: string | null;
   contactAddress: string | null;
+  contactPreferred: ContactMethod | null;
 };
 
 export function CustomerEditor({
@@ -27,6 +30,9 @@ export function CustomerEditor({
   const [email, setEmail] = useState(order.contactEmail ?? "");
   const [phone, setPhone] = useState(order.contactPhone ?? "");
   const [address, setAddress] = useState(order.contactAddress ?? "");
+  const [preferred, setPreferred] = useState<ContactMethod | null>(
+    order.contactPreferred,
+  );
 
   return (
     <div className="border border-border rounded-lg p-4 bg-muted space-y-3">
@@ -63,6 +69,22 @@ export function CustomerEditor({
         rows={2}
         className="text-xs min-h-0 resize-y"
       />
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">Prefers</span>
+        {CONTACT_METHODS.map((method) => (
+          <Button
+            key={method}
+            type="button"
+            variant={preferred === method ? "secondary" : "ghost"}
+            size="xs"
+            className="capitalize"
+            aria-pressed={preferred === method}
+            onClick={() => setPreferred(preferred === method ? null : method)}
+          >
+            {method}
+          </Button>
+        ))}
+      </div>
       <div className="flex justify-end gap-2">
         <Button
           type="button"
@@ -82,6 +104,7 @@ export function CustomerEditor({
               contact_email: email,
               contact_phone: phone,
               contact_address: address,
+              contact_preferred: preferred,
             })
           }
           disabled={saving}

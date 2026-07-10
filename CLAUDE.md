@@ -201,7 +201,8 @@ Subsequent revisions in the same chat re-call `create_order` with the captured `
   - Lifecycle: `status`, `statusHistory`, `revisionNumber`, `cancellationReason`
   - Content: `items` (jsonb), `notes`, `adminNotes`, `subtotalCents`, `priceRangeLow/HighCents`
   - Vehicle + symptoms: `vehicleInfo`, `symptomDescription`, `photoUrls`, `customerNotes`
-  - Contact snapshot: `contactName/Email/Phone/Address`
+  - Contact snapshot: `contactName/Email/Phone/Address` + `contactPreferred` (text/call/email — how
+    the customer wants manual follow-up; guides humans, automated notifications stay email)
   - Scheduling: `scheduledAt`, `appointmentEnd`, `durationMinutes`, `providerId`, `location`,
     `locationLat/Lng`, `accessInstructions`, `blockedRange` (tstzrange, auto-computed by trigger)
   - Sharing: `shareToken`, `validDays`, `expiresAt`
@@ -237,6 +238,9 @@ Subsequent revisions in the same chat re-call `create_order` with the captured `
   submitted intake via chat. Walk-in / direct admin orders have NO row.
 - `0020` - Lock `orders.customer_id` to NOT NULL; backfill 8 orphan dev rows to a "Walk-in
   (unlinked)" placeholder customer (email `walkin-unlinked@hmls.local`)
+- `0042` - Preferred contact: `contact_method` enum, `customers.preferred_contact`,
+  `orders.contact_preferred`, `customer_contacted` event type, tenant_app column grants (0041
+  contract: every new orders/customers column needs its own `GRANT UPDATE (col)`)
 
 ## Pre-Push CI
 

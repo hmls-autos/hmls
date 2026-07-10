@@ -28,6 +28,8 @@ export const adminPaths = {
   orderStatus: (id: number | string) => `/api/admin/orders/${id}/status`,
   orderSchedule: (id: number | string) => `/api/admin/orders/${id}/schedule`,
   orderPayment: (id: number | string) => `/api/admin/orders/${id}/payment`,
+  orderContactLog: (id: number | string) =>
+    `/api/admin/orders/${id}/contact-log`,
 
   // --- admin-mechanics.ts (mounted at /api/admin/mechanics) ---
   mechanics: () => "/api/admin/mechanics",

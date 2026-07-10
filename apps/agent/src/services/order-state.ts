@@ -29,6 +29,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { getLogger } from "@logtape/logtape";
 import { db, dbAdmin, schema } from "../db/client.ts";
 import type { OrderItem } from "@hmls/shared/db/schema";
+import type { ContactMethod } from "@hmls/shared/api/contracts/orders";
 import { notifyOrderStatusChange } from "../lib/notifications.ts";
 import { hasIntakeFields, upsertOrderIntake } from "./order-intake.ts";
 import {
@@ -236,6 +237,7 @@ export interface ItemsPatch {
    *  null/undefined semantics as the fields above. */
   contactPhone?: string | null;
   contactAddress?: string | null;
+  contactPreferred?: ContactMethod | null;
   /** Booking/scheduling display location + coords. Re-geocoded by the
    *  caller when contactAddress changes on a revise, so the map pin never
    *  goes stale vs. the address the order now claims. */
@@ -339,6 +341,9 @@ export async function patchItems(
   }
   if (patch.contactAddress !== undefined) {
     updateFields.contactAddress = patch.contactAddress;
+  }
+  if (patch.contactPreferred !== undefined) {
+    updateFields.contactPreferred = patch.contactPreferred;
   }
   if (patch.location !== undefined) updateFields.location = patch.location;
   if (patch.locationLat !== undefined) updateFields.locationLat = patch.locationLat;
@@ -832,6 +837,39 @@ export async function addNote(
       eventType: "note_added",
       actor: actorString(actor),
       metadata: { note },
+    })
+    .returning({ id: schema.orderEvents.id });
+
+  return { ok: true, value: { eventId: event.id } };
+}
+
+// ---------------------------------------------------------------------------
+// logContact — manual-outreach audit entry, no state mutation
+// ---------------------------------------------------------------------------
+
+export async function logContact(
+  orderId: number,
+  method: ContactMethod,
+  actor: Actor,
+  note?: string,
+): Promise<OrderStateResult<{ eventId: string }>> {
+  const [order] = await db
+    .select({ id: schema.orders.id })
+    .from(schema.orders)
+    .where(eq(schema.orders.id, orderId))
+    .limit(1);
+
+  if (!order) {
+    return { ok: false, error: { code: "not_found", orderId } };
+  }
+
+  const [event] = await db
+    .insert(schema.orderEvents)
+    .values({
+      orderId,
+      eventType: "customer_contacted",
+      actor: actorString(actor),
+      metadata: { method, ...(note?.trim() ? { note: note.trim() } : {}) },
     })
     .returning({ id: schema.orderEvents.id });
 

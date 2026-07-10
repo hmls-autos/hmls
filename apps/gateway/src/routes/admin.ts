@@ -240,6 +240,7 @@ admin.patch("/customers/:id", zValidator("json", updateCustomerInput), async (c)
   if (body.email !== undefined) updates.email = body.email;
   if (body.address !== undefined) updates.address = body.address;
   if (body.vehicleInfo !== undefined) updates.vehicleInfo = body.vehicleInfo;
+  if (body.preferredContact !== undefined) updates.preferredContact = body.preferredContact;
 
   if (Object.keys(updates).length === 0) {
     return c.json<ApiError>(

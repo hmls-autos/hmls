@@ -208,6 +208,7 @@ export default function OrderDetailPage() {
             revalidate={mutate}
             onSetTime={() => invoker.openDialog("set_time")}
             onReassign={() => invoker.openDialog("reassign")}
+            profilePreferred={data.customer?.preferredContact ?? null}
           />
 
           <TechPrepCard order={order} />

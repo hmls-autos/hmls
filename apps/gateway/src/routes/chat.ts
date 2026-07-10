@@ -56,6 +56,7 @@ async function resolveCustomer(
         name: existing.name ?? userInfo.name ?? "",
         email: existing.email ?? userInfo.email,
         phone: existing.phone ?? userInfo.phone ?? "",
+        preferredContact: existing.preferredContact ?? null,
       },
       shopId: existing.shopId,
     };

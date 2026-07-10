@@ -252,3 +252,35 @@ averages, ChatGPT can't either. fixo can.
 
 **Depends on / blocked by:** Speed Wedge 30-day plan completing first. Pick up only if Speed Wedge
 kill criteria fire, OR if Speed Wedge succeeds but you want a second wedge to compound retention.
+
+## Preferred-contact follow-ups (from /qa on spinsirr/customer-contact-preference-9f6871, 2026-07-09)
+
+- [x] **Cap `logContactInput.note` length** — `.max(500)` added in
+      `packages/shared/src/api/contracts/orders.ts` + test. Fixed by /ship pre-landing review on
+      this branch, 2026-07-10.
+- [ ] **Portal leaks `note_added` internal notes** — pre-existing (NOT introduced by this branch):
+      `GET /me/orders/:id` in `apps/gateway/src/routes/portal.ts` returns `note_added` events whose
+      metadata carries internal staff notes. `customer_contacted` is now filtered (ISSUE-004 fix); 3
+      review specialists converged on inverting to an allowlist (`CUSTOMER_VISIBLE_EVENT_TYPES` next
+      to the enum in `packages/shared/src/db/schema.ts`) so future internal event types are
+      private-by-default. Do that as part of this fix. Severity: medium.
+- [ ] **Index `order_events(order_id, created_at)`** — FK columns aren't auto-indexed; the event
+      feed (admin + portal) filters/orders by these and `customer_contacted` grows the table faster.
+      Add in a follow-up migration; optionally LIMIT the event fetch. Severity: low (dogfood scale
+      today). From /ship performance specialist, 2026-07-10.
+
+## Preferred-contact follow-ups (from /ship red team + Codex, 2026-07-10)
+
+- [ ] **显式清除订单偏好会被 profile fallback 盖回来** — CustomerEditor 把 `contact_preferred` 置
+      null 后,徽章 fallback 到 `customers.preferred_contact`,NULL 无法区分「未设置」和
+      「明确清除」。要支持 per-order 明确清除需要 'none' 哨兵值(enum 加值 + UI)。当下缓解: admin
+      现在可以直接改 profile 偏好(PATCH /admin/customers/:id 已支持,含置 null)。 Severity:
+      low(实际场景更多是改成另一渠道而非清除)。
+- [ ] **Agent 只回填不覆盖 profile 偏好 — 是否应改为「最新明确表述获胜」** — 设计前提③锁了
+      「仅空时回填」(与 phone 一致),但 red team 指出偏好是 consent 语义:客户说「别打电话了」
+      应更新默认值。当前缓解:订单快照永远是最新意图 + admin 可改 profile。若要改语义,动
+      `resolveCustomer`(order.ts)三处 backfill 守卫。founder 拍板。Severity: medium(语义决策)。
+- [ ] **CustomerEditor 全量覆写五个联系字段(无脏字段跟踪/并发守卫)** — 编辑器打开期间 agent revise
+      写入的 contact_preferred 会被 open-at-time 的旧值静默覆盖。pre-existing 模式
+      (另外四个字段同样),nullable 字段让误覆盖更易发生。修法:只发 dirty 字段,或 PATCH direct-updates
+      加 updatedAt 乐观并发检查。Severity: low-medium。

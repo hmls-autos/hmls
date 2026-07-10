@@ -11,6 +11,7 @@ import {
   type Actor,
   addNote,
   attachSchedule,
+  logContact,
   type OrderStatus,
   patchItems,
   recordPayment,
@@ -24,6 +25,7 @@ import {
   addOrderNoteInput,
   createOrderInput,
   listOrdersQuery,
+  logContactInput,
   orderPdfQuery,
   recordPaymentInput,
   scheduleOrderInput,
@@ -206,6 +208,7 @@ orders.post("/", zValidator("json", createOrderInput), async (c) => {
       contactEmail: customer.email ?? null,
       contactPhone: customer.phone ?? null,
       contactAddress: customer.address ?? null,
+      contactPreferred: customer.preferredContact ?? null,
     })
     .returning();
 
@@ -328,6 +331,7 @@ orders.patch("/:id", zValidator("json", updateOrderInput), async (c) => {
   if (body.contact_email !== undefined) directUpdates.contactEmail = body.contact_email;
   if (body.contact_phone !== undefined) directUpdates.contactPhone = body.contact_phone;
   if (body.contact_address !== undefined) directUpdates.contactAddress = body.contact_address;
+  if (body.contact_preferred !== undefined) directUpdates.contactPreferred = body.contact_preferred;
   if (body.confirmedDiagnosis !== undefined) {
     directUpdates.confirmedDiagnosis = body.confirmedDiagnosis;
   }
@@ -545,6 +549,28 @@ orders.post("/:id/events", zValidator("json", addOrderNoteInput), async (c) => {
 
   const authUser = c.get("authUser");
   const result = await addNote(id, body.note, adminActor(authUser.email));
+  if (!result.ok) return sendOrderStateResult(c, result);
+  return c.json<{ eventId: string }>(result.value, 201);
+});
+
+// POST /orders/:id/contact-log — record that staff manually reached out to
+// the customer (called / texted / emailed). Audit-only, no state mutation;
+// goes through the order-state harness like all structured events.
+orders.post("/:id/contact-log", zValidator("json", logContactInput), async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id <= 0) {
+    return c.json<ApiError>({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
+  }
+
+  const shopId = c.get("shopId");
+  if (!(await orderInShop(id, shopId))) {
+    return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
+  }
+
+  const body = c.req.valid("json");
+
+  const authUser = c.get("authUser");
+  const result = await logContact(id, body.method, adminActor(authUser.email), body.note);
   if (!result.ok) return sendOrderStateResult(c, result);
   return c.json<{ eventId: string }>(result.value, 201);
 });
