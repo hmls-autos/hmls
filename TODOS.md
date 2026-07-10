@@ -256,9 +256,10 @@ kill criteria fire, OR if Speed Wedge succeeds but you want a second wedge to co
 ## Preferred-contact follow-ups (from /qa on spinsirr/customer-contact-preference-9f6871, 2026-07-09)
 
 - [ ] **Cap `logContactInput.note` length** — `POST /orders/:id/contact-log` accepts an unbounded
-  `note` string (no UI sends it today). Add `.max(500)` in
-  `packages/shared/src/api/contracts/orders.ts` when a note field ships. Severity: low.
+      `note` string (no UI sends it today). Add `.max(500)` in
+      `packages/shared/src/api/contracts/orders.ts` when a note field ships. Severity: low.
 - [ ] **Portal leaks `note_added` internal notes** — pre-existing (NOT introduced by this branch):
-  `GET /me/orders/:id` in `apps/gateway/src/routes/portal.ts` returns `note_added` events whose
-  metadata carries internal staff notes. `customer_contacted` is now filtered (ISSUE-004 fix);
-  consider the same treatment for `note_added` or an explicit customer-visible flag. Severity: medium.
+      `GET /me/orders/:id` in `apps/gateway/src/routes/portal.ts` returns `note_added` events whose
+      metadata carries internal staff notes. `customer_contacted` is now filtered (ISSUE-004 fix);
+      consider the same treatment for `note_added` or an explicit customer-visible flag. Severity:
+      medium.
