@@ -13,8 +13,16 @@ const PREFERRED_LABEL = {
   email: "✉️ Prefers: Email",
 } as const;
 
-export function CustomerSection({ order, readOnly, revalidate }: SectionProps) {
+export function CustomerSection({
+  order,
+  readOnly,
+  revalidate,
+  profilePreferred,
+}: SectionProps & { profilePreferred?: "text" | "call" | "email" | null }) {
   const [editing, setEditing] = useState(false);
+  // Order snapshot wins (per-order intent); fall back to the customer's
+  // stable profile default so manual/legacy orders still show a badge.
+  const preferred = order.contactPreferred ?? profilePreferred ?? null;
   const { saveCustomer, savingCustomer, logContact, loggingContact } =
     useOrderMutations(order.id, revalidate);
 
@@ -60,31 +68,31 @@ export function CustomerSection({ order, readOnly, revalidate }: SectionProps) {
         <p className="text-muted-foreground">{order.contactPhone ?? "—"}</p>
         <p className="text-muted-foreground">{order.contactEmail ?? "—"}</p>
         <p className="text-muted-foreground">{order.contactAddress ?? "—"}</p>
-        {order.contactPreferred && (
+        {preferred && (
           <p className="pt-1 font-medium text-foreground">
-            {PREFERRED_LABEL[order.contactPreferred]}
+            {PREFERRED_LABEL[preferred]}
           </p>
         )}
-        {!readOnly && (
-          <div className="flex items-center gap-1 pt-2">
-            <span className="text-muted-foreground">Log contact:</span>
-            {(["text", "call", "email"] as const).map((method) => (
-              <Button
-                key={method}
-                variant="ghost"
-                size="xs"
-                disabled={loggingContact}
-                onClick={() => logContact(method)}
-              >
-                {method === "text"
-                  ? "Texted"
-                  : method === "call"
-                    ? "Called"
-                    : "Emailed"}
-              </Button>
-            ))}
-          </div>
-        )}
+        {/* Outreach happens in every status (chasing an estimated quote,
+            confirming a scheduled visit) — logging it is never read-only. */}
+        <div className="flex items-center gap-1 pt-2">
+          <span className="text-muted-foreground">Log contact:</span>
+          {(["text", "call", "email"] as const).map((method) => (
+            <Button
+              key={method}
+              variant="ghost"
+              size="xs"
+              disabled={loggingContact}
+              onClick={() => logContact(method)}
+            >
+              {method === "text"
+                ? "Texted"
+                : method === "call"
+                  ? "Called"
+                  : "Emailed"}
+            </Button>
+          ))}
+        </div>
       </CardContent>
     </Card>
   );

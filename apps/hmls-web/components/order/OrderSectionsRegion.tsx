@@ -18,6 +18,8 @@ type Props = {
   /** Forwarded from the page so ScheduleSection can request the same dialogs OrderOpsPanel mounts. */
   onSetTime(): void;
   onReassign(): void;
+  /** Customer profile default for the Prefers badge fallback. */
+  profilePreferred?: "text" | "call" | "email" | null;
 };
 
 export function OrderSectionsRegion({
@@ -25,6 +27,7 @@ export function OrderSectionsRegion({
   revalidate,
   onSetTime,
   onReassign,
+  profilePreferred,
 }: Props) {
   const profile = isOrderStatus(order.status)
     ? STATUS_PROFILES[order.status]
@@ -42,6 +45,7 @@ export function OrderSectionsRegion({
         order={order}
         readOnly={!can("customer")}
         revalidate={revalidate}
+        profilePreferred={profilePreferred}
       />
       <ScheduleSection
         order={order}
