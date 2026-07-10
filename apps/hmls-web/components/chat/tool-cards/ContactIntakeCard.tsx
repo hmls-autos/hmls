@@ -2,6 +2,29 @@
 
 import { useState } from "react";
 
+/** Formats the card's fields into the next user message. The agent re-extracts
+ * these values, so the format is a contract: `Preferred contact:` must carry
+ * the exact lowercase token — create_order validates z.enum(["text","call","email"]). */
+export function buildContactMessage({
+  phone,
+  address,
+  access,
+  preferred,
+}: {
+  phone: string;
+  address: string;
+  access: string;
+  preferred: "text" | "call" | "email" | null;
+}): string {
+  const parts = [
+    `Contact phone: ${phone.trim()}.`,
+    `Service address: ${address.trim()}.`,
+  ];
+  if (access.trim()) parts.push(`Access notes: ${access.trim()}.`);
+  if (preferred) parts.push(`Preferred contact: ${preferred}.`);
+  return parts.join(" ");
+}
+
 /** Interactive form that mirrors the `collect_contact` tool. The agent calls
  * the tool when it needs the customer's phone + service address + access notes;
  * this card renders discrete fields instead of a plain-text question, so the
@@ -48,13 +71,7 @@ export function ContactIntakeCard({
 
   const submit = () => {
     if (!canSubmit) return;
-    const parts = [
-      `Contact phone: ${phone.trim()}.`,
-      `Service address: ${address.trim()}.`,
-    ];
-    if (access.trim()) parts.push(`Access notes: ${access.trim()}.`);
-    if (preferred) parts.push(`Preferred contact: ${preferred}.`);
-    onSubmit(parts.join(" "));
+    onSubmit(buildContactMessage({ phone, address, access, preferred }));
   };
 
   return (

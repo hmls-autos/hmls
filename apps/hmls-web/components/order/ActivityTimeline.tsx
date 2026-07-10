@@ -23,7 +23,7 @@ function relativeTime(dateStr: string): string {
   });
 }
 
-function eventDescription(event: OrderEvent): string {
+export function eventDescription(event: OrderEvent): string {
   switch (event.eventType) {
     case "status_change":
       if (event.fromStatus && event.toStatus) {
