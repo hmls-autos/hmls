@@ -1,6 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
+import {
+  PREFERRED_ICON,
+  PREFERRED_LABEL,
+} from "@/components/order/sections/CustomerSection";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -80,6 +84,27 @@ function OrderCard({ order }: { order: MechanicOrder }) {
           <p className="text-sm text-foreground truncate">
             {order.contactName ?? "Customer"}
           </p>
+          {/* The mechanic is the one actually calling/texting before arrival —
+              show the number AND how the customer asked to be reached. */}
+          {order.contactPhone && (
+            <p className="text-xs mt-0.5 flex items-center gap-2">
+              <a
+                href={`tel:${order.contactPhone}`}
+                className="font-medium text-foreground underline underline-offset-2"
+              >
+                {order.contactPhone}
+              </a>
+              {order.contactPreferred && (
+                <span className="flex items-center gap-1 text-muted-foreground">
+                  {(() => {
+                    const Icon = PREFERRED_ICON[order.contactPreferred];
+                    return <Icon className="w-3 h-3" />;
+                  })()}
+                  {PREFERRED_LABEL[order.contactPreferred]}
+                </span>
+              )}
+            </p>
+          )}
           <p className="text-xs text-muted-foreground mt-0.5">{firstItem}</p>
           {vehicle && (
             <p className="text-xs text-muted-foreground">{vehicle}</p>

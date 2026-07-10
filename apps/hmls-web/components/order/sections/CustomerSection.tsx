@@ -11,13 +11,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useOrderMutations } from "@/hooks/useOrderMutations";
 import type { SectionProps } from "./types";
 
-const PREFERRED_ICON: Record<ContactMethod, typeof Smartphone> = {
+export const PREFERRED_ICON: Record<ContactMethod, typeof Smartphone> = {
   text: Smartphone,
   call: Phone,
   email: Mail,
 };
 
-const PREFERRED_LABEL: Record<ContactMethod, string> = {
+export const PREFERRED_LABEL: Record<ContactMethod, string> = {
   text: "Prefers: Text",
   call: "Prefers: Call",
   email: "Prefers: Email",
