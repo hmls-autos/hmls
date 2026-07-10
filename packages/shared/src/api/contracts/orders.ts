@@ -69,6 +69,16 @@ export const updateOrderInput = z.object({
   contact_email: z.string().nullish(),
   contact_phone: z.string().nullish(),
   contact_address: z.string().nullish(),
+  contact_preferred: z.enum(["text", "call", "email"]).nullish(),
+});
+
+// ---------------------------------------------------------------------------
+// POST /orders/:id/contact-log — record a manual customer outreach
+// ---------------------------------------------------------------------------
+
+export const logContactInput = z.object({
+  method: z.enum(["text", "call", "email"]),
+  note: z.string().optional(),
 });
 
 // ---------------------------------------------------------------------------

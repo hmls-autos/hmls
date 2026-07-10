@@ -9,6 +9,7 @@ export type OrderContactPatch = {
   contact_email: string;
   contact_phone: string;
   contact_address: string;
+  contact_preferred: "text" | "call" | "email" | null;
 };
 
 /** Mirrors scheduleOrderInput schema from @hmls/shared/api/contracts/orders */
@@ -28,6 +29,7 @@ export function useOrderMutations(
   const [transitioning, setTransitioning] = useState(false);
   const [savingItems, setSavingItems] = useState(false);
   const [savingCustomer, setSavingCustomer] = useState(false);
+  const [loggingContact, setLoggingContact] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [savingPayment, setSavingPayment] = useState(false);
   const [savingDiagnosis, setSavingDiagnosis] = useState(false);
@@ -74,6 +76,20 @@ export function useOrderMutations(
       throw e;
     } finally {
       setSavingCustomer(false);
+    }
+  }
+
+  async function logContact(method: "text" | "call" | "email"): Promise<void> {
+    setLoggingContact(true);
+    try {
+      await api.post(adminPaths.orderContactLog(id), { method });
+      toast.success(`Logged: contacted by ${method}`);
+      revalidate();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to log contact");
+      throw e;
+    } finally {
+      setLoggingContact(false);
     }
   }
 
@@ -137,12 +153,14 @@ export function useOrderMutations(
     transitionStatus,
     saveItems,
     saveCustomer,
+    logContact,
     setSchedule,
     markPaid,
     saveConfirmedDiagnosis,
     transitioning,
     savingItems,
     savingCustomer,
+    loggingContact,
     savingSchedule,
     savingPayment,
     savingDiagnosis,

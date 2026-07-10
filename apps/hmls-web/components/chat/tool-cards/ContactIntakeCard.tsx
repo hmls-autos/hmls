@@ -26,6 +26,10 @@ export function ContactIntakeCard({
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [access, setAccess] = useState("");
+  // Exact lowercase tokens — create_order validates z.enum(["text","call","email"])
+  const [preferred, setPreferred] = useState<"text" | "call" | "email" | null>(
+    null,
+  );
 
   if (isAnswered) {
     return (
@@ -49,6 +53,7 @@ export function ContactIntakeCard({
       `Service address: ${address.trim()}.`,
     ];
     if (access.trim()) parts.push(`Access notes: ${access.trim()}.`);
+    if (preferred) parts.push(`Preferred contact: ${preferred}.`);
     onSubmit(parts.join(" "));
   };
 
@@ -84,6 +89,29 @@ export function ContactIntakeCard({
           rows={2}
           className="resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
         />
+        <div>
+          <div className="mb-1.5 text-xs text-muted-foreground">
+            How should we reach you? (optional)
+          </div>
+          <div className="flex gap-1.5">
+            {(["text", "call", "email"] as const).map((method) => (
+              <button
+                key={method}
+                type="button"
+                onClick={() =>
+                  setPreferred(preferred === method ? null : method)
+                }
+                className={`flex-1 rounded-lg border px-3 py-1.5 text-sm capitalize transition-colors ${
+                  preferred === method
+                    ? "border-primary bg-primary/10 font-medium text-primary"
+                    : "border-border bg-background text-muted-foreground"
+                }`}
+              >
+                {method}
+              </button>
+            ))}
+          </div>
+        </div>
         <button
           type="button"
           disabled={!canSubmit}

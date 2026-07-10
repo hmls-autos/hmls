@@ -44,6 +44,15 @@ function eventDescription(event: OrderEvent): string {
       const note = (event.metadata as { note?: string })?.note;
       return note ? `Note: ${note}` : "Note added";
     }
+    case "customer_contacted": {
+      const { method, note } = (event.metadata ?? {}) as {
+        method?: string;
+        note?: string;
+      };
+      const verb =
+        method === "text" ? "Texted" : method === "call" ? "Called" : "Emailed";
+      return note ? `${verb} customer — ${note}` : `${verb} customer`;
+    }
     default:
       return event.eventType.replace(/_/g, " ");
   }

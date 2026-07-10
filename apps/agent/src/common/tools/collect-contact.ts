@@ -5,7 +5,10 @@ export const collectContactTool = {
   name: "collect_contact",
   description:
     "Show the customer a short form to collect their contact phone, the service address we " +
-    "should come to, and any access notes (gate code, parking, unit #). Call this ONCE when you " +
+    "should come to, and any access notes (gate code, parking, unit #). The form also lets them " +
+    "pick a preferred contact method (text / call / email); if their answer includes " +
+    "'Preferred contact: <method>', pass it to create_order as customerInfo.preferredContact " +
+    "verbatim (lowercase). Call this ONCE when you " +
     "need the customer's contact + location for a mobile service — do NOT also ask for these in " +
     "plain text. The customer fills the form and their answer comes back as the next message. " +
     "Pass `note` for a one-line context (e.g. the service being booked).",

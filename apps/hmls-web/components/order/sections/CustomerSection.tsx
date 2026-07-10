@@ -7,12 +7,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useOrderMutations } from "@/hooks/useOrderMutations";
 import type { SectionProps } from "./types";
 
+const PREFERRED_LABEL = {
+  text: "📱 Prefers: Text",
+  call: "📞 Prefers: Call",
+  email: "✉️ Prefers: Email",
+} as const;
+
 export function CustomerSection({ order, readOnly, revalidate }: SectionProps) {
   const [editing, setEditing] = useState(false);
-  const { saveCustomer, savingCustomer } = useOrderMutations(
-    order.id,
-    revalidate,
-  );
+  const { saveCustomer, savingCustomer, logContact, loggingContact } =
+    useOrderMutations(order.id, revalidate);
 
   if (editing && !readOnly) {
     return (
@@ -27,6 +31,7 @@ export function CustomerSection({ order, readOnly, revalidate }: SectionProps) {
               contactEmail: order.contactEmail ?? null,
               contactPhone: order.contactPhone ?? null,
               contactAddress: order.contactAddress ?? null,
+              contactPreferred: order.contactPreferred ?? null,
             }}
             saving={savingCustomer}
             onSave={async (patch) => {
@@ -55,6 +60,31 @@ export function CustomerSection({ order, readOnly, revalidate }: SectionProps) {
         <p className="text-muted-foreground">{order.contactPhone ?? "—"}</p>
         <p className="text-muted-foreground">{order.contactEmail ?? "—"}</p>
         <p className="text-muted-foreground">{order.contactAddress ?? "—"}</p>
+        {order.contactPreferred && (
+          <p className="pt-1 font-medium text-foreground">
+            {PREFERRED_LABEL[order.contactPreferred]}
+          </p>
+        )}
+        {!readOnly && (
+          <div className="flex items-center gap-1 pt-2">
+            <span className="text-muted-foreground">Log contact:</span>
+            {(["text", "call", "email"] as const).map((method) => (
+              <Button
+                key={method}
+                variant="ghost"
+                size="xs"
+                disabled={loggingContact}
+                onClick={() => logContact(method)}
+              >
+                {method === "text"
+                  ? "Texted"
+                  : method === "call"
+                    ? "Called"
+                    : "Emailed"}
+              </Button>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

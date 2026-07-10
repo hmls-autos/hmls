@@ -46,6 +46,10 @@ export const shops = pgTable("shops", {
 
 export const userRoleEnum = pgEnum("user_role", ["customer", "admin", "mechanic", "owner"]);
 
+// How the customer wants the shop to reach them for manual follow-up.
+// Guides humans only — automated notifications stay email regardless.
+export const contactMethodEnum = pgEnum("contact_method", ["text", "call", "email"]);
+
 export const customers = pgTable("customers", {
   id: serial("id").primaryKey(),
   shopId: uuid("shop_id").references(() => shops.id).notNull(),
@@ -53,6 +57,7 @@ export const customers = pgTable("customers", {
   phone: varchar("phone", { length: 20 }),
   email: varchar("email", { length: 255 }),
   address: text("address"),
+  preferredContact: contactMethodEnum("preferred_contact"),
   vehicleInfo: jsonb("vehicle_info").$type<VehicleInfo | null>(),
   stripeCustomerId: varchar("stripe_customer_id", { length: 100 }),
   authUserId: varchar("auth_user_id", { length: 255 }).unique(),
@@ -233,6 +238,7 @@ export const orders = pgTable("orders", {
   contactEmail: varchar("contact_email", { length: 255 }),
   contactPhone: varchar("contact_phone", { length: 20 }),
   contactAddress: text("contact_address"),
+  contactPreferred: contactMethodEnum("contact_preferred"),
   // Scheduling (absorbed from bookings — Layer 3)
   scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
   appointmentEnd: timestamp("appointment_end", { withTimezone: true }),
@@ -286,6 +292,9 @@ export const orderEventTypeEnum = pgEnum("order_event_type", [
   // 13 legacy dev rows survive the cast in migration 0018. The admin/portal
   // event-feed default branch formats unrecognized types automatically.
   "contact_edited",
+  // Manual outreach log — admin recorded contacting the customer
+  // (metadata: { method: "text"|"call"|"email", note? }).
+  "customer_contacted",
 ]);
 
 export const orderEvents = pgTable("order_events", {
