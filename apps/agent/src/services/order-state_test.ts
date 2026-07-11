@@ -14,8 +14,10 @@ import {
   allowedTransitions,
   availableActions,
   canActorTransition,
+  evaluateAuthorizationFence,
   isTerminal,
   type OrderStatus,
+  requiresCustomerAuthorization,
   TRANSITIONS,
 } from "@hmls/shared/order/status";
 
@@ -354,6 +356,91 @@ Deno.test("agent delegation depth guard throws on pathological chains", () => {
     Error,
     "Actor delegation chain too deep",
   );
+});
+
+// ---------------------------------------------------------------------------
+// Compliance fence — customer-authorization evidence
+// ---------------------------------------------------------------------------
+
+Deno.test("fence: fenced edges are exactly →approved and draft→scheduled", () => {
+  for (const from of ALL_STATUSES) {
+    for (const to of ALL_STATUSES) {
+      const expected = to === "approved" || (from === "draft" && to === "scheduled");
+      assertEquals(requiresCustomerAuthorization(from, to), expected, `${from}->${to}`);
+    }
+  }
+});
+
+Deno.test("fence: admin without evidence is rejected on fenced edges", () => {
+  for (
+    const [from, to] of [["estimated", "approved"], ["draft", "scheduled"]] as const
+  ) {
+    const r = evaluateAuthorizationFence(from, to, ADMIN);
+    assertStrictEquals(r.ok, false, `${from}->${to} should require evidence`);
+  }
+});
+
+Deno.test("fence: admin with evidence passes and the evidence is preserved", () => {
+  const provided = { channel: "call" as const, note: "spoke with owner" };
+  const r = evaluateAuthorizationFence("estimated", "approved", ADMIN, provided);
+  assertStrictEquals(r.ok, true);
+  if (r.ok) assertEquals(r.authorization, provided);
+});
+
+Deno.test("fence: staff agent (actingAs admin) is fenced identically to admin", () => {
+  const staffAgent: Actor = { kind: "agent", surface: "staff_chat", actingAs: ADMIN };
+  const rejected = evaluateAuthorizationFence("estimated", "approved", staffAgent);
+  assertStrictEquals(rejected.ok, false, "resolveAuthority must fence the staff agent");
+
+  const passed = evaluateAuthorizationFence("draft", "scheduled", staffAgent, {
+    channel: "text",
+  });
+  assertStrictEquals(passed.ok, true);
+  if (passed.ok) assertEquals(passed.authorization?.channel, "text");
+});
+
+Deno.test("fence: customer auto-injects channel=portal without input", () => {
+  const r = evaluateAuthorizationFence("estimated", "approved", CUSTOMER);
+  assertStrictEquals(r.ok, true);
+  if (r.ok) assertEquals(r.authorization, { channel: "portal" });
+});
+
+Deno.test("fence: share_token auto-injects channel=portal without input", () => {
+  const r = evaluateAuthorizationFence("estimated", "approved", SHARE_TOKEN);
+  assertStrictEquals(r.ok, true);
+  if (r.ok) assertEquals(r.authorization, { channel: "portal" });
+});
+
+Deno.test("fence: customer-chat agent (actingAs customer) auto-injects portal", () => {
+  const customerAgent: Actor = {
+    kind: "agent",
+    surface: "customer_chat",
+    actingAs: CUSTOMER,
+  };
+  const r = evaluateAuthorizationFence("estimated", "approved", customerAgent);
+  assertStrictEquals(r.ok, true);
+  if (r.ok) assertEquals(r.authorization, { channel: "portal" });
+});
+
+Deno.test("fence: customer-supplied evidence cannot spoof another channel", () => {
+  const r = evaluateAuthorizationFence("estimated", "approved", CUSTOMER, {
+    channel: "call",
+    note: "forged",
+  });
+  assertStrictEquals(r.ok, true);
+  if (r.ok) assertEquals(r.authorization, { channel: "portal" });
+});
+
+Deno.test("fence: non-fenced transitions carry no authorization even when supplied", () => {
+  const r = evaluateAuthorizationFence("draft", "estimated", ADMIN, { channel: "call" });
+  assertStrictEquals(r.ok, true);
+  if (r.ok) assertStrictEquals(r.authorization, undefined);
+});
+
+Deno.test("fence: approved→scheduled is not fenced (approval already evidenced)", () => {
+  const r = evaluateAuthorizationFence("approved", "scheduled", ADMIN);
+  assertStrictEquals(r.ok, true);
+  if (r.ok) assertStrictEquals(r.authorization, undefined);
 });
 
 // ---------------------------------------------------------------------------

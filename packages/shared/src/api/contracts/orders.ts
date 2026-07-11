@@ -1,5 +1,9 @@
 import { z } from "zod";
-import type { OrderStatus } from "@hmls/shared/order/status";
+import {
+  AUTHORIZATION_CHANNELS,
+  type OrderAuthorization,
+  type OrderStatus,
+} from "@hmls/shared/order/status";
 
 // ---------------------------------------------------------------------------
 // Shared: order status enum (canonical list — single definition for this
@@ -102,10 +106,19 @@ export const scheduleOrderInput = z.object({
 // PATCH /orders/:id/status — generic status transition
 // ---------------------------------------------------------------------------
 
+/** Customer-authorization evidence for fenced transitions (→approved and the
+ *  draft→scheduled walk-in shortcut). One contract shared by web, gateway,
+ *  and agent tools — see requiresCustomerAuthorization in order/status. */
+export const orderAuthorizationInput = z.object({
+  channel: z.enum(AUTHORIZATION_CHANNELS),
+  note: z.string().max(500).optional(),
+}) satisfies z.ZodType<OrderAuthorization>;
+
 export const transitionOrderInput = z.object({
   status: orderStatusEnum,
   notes: z.string().optional(),
   cancellationReason: z.string().optional(),
+  authorization: orderAuthorizationInput.optional(),
 });
 
 // ---------------------------------------------------------------------------

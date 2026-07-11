@@ -30,6 +30,7 @@ function makeCtx(overrides: Partial<ActionContext> = {}): ActionContext {
     saveConfirmedDiagnosis: mock(async () => {}),
     openDialog: mock(() => {}),
     askReason: mock(async () => "reason"),
+    askAuthorization: mock(async () => ({ channel: "call" as const })),
     mutate: mock(() => {}),
     ...overrides,
   };
@@ -114,10 +115,47 @@ describe("ACTION_REGISTRY.invoke behavior", () => {
     expect(ctx.transitionStatus).toHaveBeenCalledWith("estimated");
   });
 
-  test("confirm_booking transitions to scheduled", async () => {
+  test("confirm_booking transitions to scheduled without an evidence prompt", async () => {
+    // approved→scheduled is NOT a fenced edge — no authorization dialog.
     const ctx = makeCtx();
     await ACTION_REGISTRY.confirm_booking.invoke(ctx);
+    expect(ctx.askAuthorization).not.toHaveBeenCalled();
     expect(ctx.transitionStatus).toHaveBeenCalledWith("scheduled");
+  });
+
+  test("approve_estimate collects evidence and forwards it", async () => {
+    const auth = { channel: "text" as const, note: "customer texted OK" };
+    const ctx = makeCtx({ askAuthorization: mock(async () => auth) });
+    await ACTION_REGISTRY.approve_estimate.invoke(ctx);
+    expect(ctx.askAuthorization).toHaveBeenCalled();
+    expect(ctx.transitionStatus).toHaveBeenCalledWith(
+      "approved",
+      undefined,
+      auth,
+    );
+  });
+
+  test("approve_estimate aborts when the evidence dialog is cancelled", async () => {
+    const ctx = makeCtx({ askAuthorization: mock(async () => null) });
+    await ACTION_REGISTRY.approve_estimate.invoke(ctx);
+    expect(ctx.transitionStatus).not.toHaveBeenCalled();
+  });
+
+  test("confirm_tentative_booking collects evidence and forwards it", async () => {
+    const auth = { channel: "in_person" as const };
+    const ctx = makeCtx({ askAuthorization: mock(async () => auth) });
+    await ACTION_REGISTRY.confirm_tentative_booking.invoke(ctx);
+    expect(ctx.transitionStatus).toHaveBeenCalledWith(
+      "scheduled",
+      undefined,
+      auth,
+    );
+  });
+
+  test("confirm_tentative_booking aborts when the evidence dialog is cancelled", async () => {
+    const ctx = makeCtx({ askAuthorization: mock(async () => null) });
+    await ACTION_REGISTRY.confirm_tentative_booking.invoke(ctx);
+    expect(ctx.transitionStatus).not.toHaveBeenCalled();
   });
 
   test("reject_booking asks for reason and cancels", async () => {

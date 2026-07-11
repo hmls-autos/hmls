@@ -473,6 +473,9 @@ orders.patch("/:id/status", zValidator("json", transitionOrderInput), async (c) 
 
   const result = await transition(id, newStatus, adminActor(authUser.email), {
     reason: body.cancellationReason,
+    // Customer-authorization evidence — required by the harness fence on
+    // →approved and the draft→scheduled walk-in shortcut.
+    authorization: body.authorization,
   });
   return sendOrderStateResult(c, result);
 });

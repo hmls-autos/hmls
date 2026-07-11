@@ -190,6 +190,62 @@ export function isOrderStatus(s: string): s is OrderStatus {
 }
 
 // ---------------------------------------------------------------------------
+// Compliance fence — customer-authorization evidence (CA BAR / BPC)
+// ---------------------------------------------------------------------------
+
+/** How the customer authorized the work. `portal` is auto-injected when the
+ *  customer (or a share-token holder) acts directly — their portal action IS
+ *  the evidence. Shop-driven transitions must say which out-of-band channel
+ *  carried the approval. */
+export const AUTHORIZATION_CHANNELS = ["portal", "text", "call", "in_person"] as const;
+export type AuthorizationChannel = (typeof AUTHORIZATION_CHANNELS)[number];
+
+export interface OrderAuthorization {
+  channel: AuthorizationChannel;
+  note?: string;
+}
+
+/** Fenced edges: any transition into `approved`, plus the draft→scheduled
+ *  walk-in shortcut that bypasses `approved` entirely. A predicate rather
+ *  than an edge list so a future rewrite of the shortcut edge (e.g. to
+ *  draft→approved) stays fenced without edits. */
+export function requiresCustomerAuthorization(from: OrderStatus, to: OrderStatus): boolean {
+  return to === "approved" || (from === "draft" && to === "scheduled");
+}
+
+export type AuthorizationFenceResult =
+  | { ok: true; authorization?: OrderAuthorization }
+  | { ok: false; message: string };
+
+/** Resolve the evidence requirement for a transition. Judged on the RESOLVED
+ *  authority — an agent acting for an admin is fenced exactly like the admin
+ *  (never on actor.kind, or the staff agent would slip through). Customer /
+ *  share-token authorities auto-inject `{ channel: "portal" }`; any provided
+ *  evidence is ignored for them so a portal action can't claim another
+ *  channel. When `ok` and `authorization` is set, the caller must persist it
+ *  as audit evidence. */
+export function evaluateAuthorizationFence(
+  from: OrderStatus,
+  to: OrderStatus,
+  actor: Actor,
+  provided?: OrderAuthorization,
+): AuthorizationFenceResult {
+  if (!requiresCustomerAuthorization(from, to)) return { ok: true };
+  const authority = resolveAuthority(actor);
+  if (authority.kind === "customer" || authority.kind === "share_token") {
+    return { ok: true, authorization: { channel: "portal" } };
+  }
+  if (!provided) {
+    return {
+      ok: false,
+      message: `Transition ${from}->${to} requires customer-authorization evidence ` +
+        `(channel: ${AUTHORIZATION_CHANNELS.join("|")}, optional note)`,
+    };
+  }
+  return { ok: true, authorization: provided };
+}
+
+// ---------------------------------------------------------------------------
 // Read helpers — safe to import from any layer (UI, auth, middleware)
 // ---------------------------------------------------------------------------
 

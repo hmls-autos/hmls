@@ -2,8 +2,9 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { db, schema } from "@hmls/agent/db";
-import { and, desc, eq, ne } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { Errors } from "@hmls/shared/errors";
+import { filterCustomerVisibleEvents } from "@hmls/shared/db/schema";
 import { type AuthEnv, requireAuth } from "../middleware/auth.ts";
 import { requireShopContext, type WithShop } from "../middleware/shop-context.ts";
 import { withTenantTx } from "../middleware/with-tenant-tx.ts";
@@ -12,8 +13,8 @@ import { sendOrderStateResult } from "../lib/order-state-http.ts";
 import { geocodeAddress } from "@hmls/agent/common/shop-routing";
 import { orderReasonInput, updateProfileInput } from "@hmls/shared/api/contracts/portal";
 import type {
+  CustomerOrderEventRow,
   CustomerRow,
-  OrderEventRow,
   OrderIntakeRow,
   OrderRow,
   OrderRowWithIntake,
@@ -126,16 +127,11 @@ portal.get("/me/orders/:id", async (c) => {
     return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
   }
 
-  const [events, intake] = await Promise.all([
+  const [rawEvents, intake] = await Promise.all([
     db
       .select()
       .from(schema.orderEvents)
-      // customer_contacted is the shop's internal outreach log (metadata may
-      // carry staff notes; actor is the admin's email) — never customer-facing.
-      .where(and(
-        eq(schema.orderEvents.orderId, id),
-        ne(schema.orderEvents.eventType, "customer_contacted"),
-      ))
+      .where(eq(schema.orderEvents.orderId, id))
       .orderBy(desc(schema.orderEvents.createdAt)),
     db
       .select()
@@ -145,11 +141,16 @@ portal.get("/me/orders/:id", async (c) => {
       .then((r) => r[0] ?? null),
   ]);
 
+  // Allowlist + strip: internal event types (note_added, customer_contacted,
+  // ...) never reach the portal, and metadata/actor (staff notes, admin
+  // emails, authorization evidence) are removed from what does.
+  const events = filterCustomerVisibleEvents(rawEvents);
+
   return c.json<
     {
       order: OrderRow;
       intake: OrderIntakeRow | null;
-      events: OrderEventRow[];
+      events: CustomerOrderEventRow[];
       needsAddress: boolean;
     }
   >({

@@ -297,6 +297,34 @@ export const orderEventTypeEnum = pgEnum("order_event_type", [
   "customer_contacted",
 ]);
 
+export type OrderEventType = (typeof orderEventTypeEnum.enumValues)[number];
+
+/** Order-event types a customer may see in their portal timeline. This is an
+ *  ALLOWLIST — new event types are private-by-default until added here.
+ *  note_added / customer_contacted / contact_edited carry internal staff
+ *  context and must never reach the portal. */
+export const CUSTOMER_VISIBLE_EVENT_TYPES = [
+  "status_change",
+  "items_edited",
+  "schedule_attached",
+  "provider_assigned",
+  "payment_recorded",
+] as const satisfies readonly OrderEventType[];
+
+/** Project an event feed down to what a customer may see: allowlisted types
+ *  only, with `metadata` (authorization evidence, staff notes) and `actor`
+ *  (staff emails) stripped. */
+export function filterCustomerVisibleEvents<
+  T extends { eventType: string; metadata?: unknown; actor?: unknown },
+>(events: readonly T[]): Omit<T, "metadata" | "actor">[] {
+  return events
+    .filter((e) => (CUSTOMER_VISIBLE_EVENT_TYPES as readonly string[]).includes(e.eventType))
+    .map((e) => {
+      const { metadata: _metadata, actor: _actor, ...safe } = e;
+      return safe;
+    });
+}
+
 export const orderEvents = pgTable("order_events", {
   id: uuid("id").primaryKey().defaultRandom(),
   orderId: integer("order_id").references(() => orders.id, { onDelete: "cascade" }).notNull(),

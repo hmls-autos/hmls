@@ -4,6 +4,7 @@ import { STATUS_PROFILES } from "@hmls/shared/order/profiles";
 import {
   completionMissingDiagnosis,
   isOrderStatus,
+  type OrderAuthorization,
   type OrderStatus,
 } from "@hmls/shared/order/status";
 import { useState } from "react";
@@ -16,7 +17,11 @@ export type DialogId = "reassign" | "set_time" | "mark_paid";
 
 export type ActionContext = {
   order: Order;
-  transitionStatus(next: OrderStatus, reason?: string): Promise<void>;
+  transitionStatus(
+    next: OrderStatus,
+    reason?: string,
+    authorization?: OrderAuthorization,
+  ): Promise<void>;
   setSchedule(
     scheduledAt: string,
     durationMinutes: number,
@@ -34,6 +39,12 @@ export type ActionContext = {
     title: string;
     description?: string;
   }): Promise<string | null>;
+  /** Collect customer-authorization evidence (channel + optional note) for
+   *  fenced transitions. Resolves `null` when the admin cancels. */
+  askAuthorization(opts: {
+    title: string;
+    description?: string;
+  }): Promise<OrderAuthorization | null>;
   mutate(): Promise<void> | void;
 };
 
@@ -67,7 +78,17 @@ export const ACTION_REGISTRY: Readonly<Record<ActionId, ActionDescriptor>> = {
     variant: () => "secondary",
     visible: () => true,
     enabled: () => true,
-    invoke: (ctx) => ctx.transitionStatus("approved"),
+    // Fenced transition (→approved): the server rejects it without
+    // customer-authorization evidence, so collect it up front.
+    invoke: async (ctx) => {
+      const auth = await ctx.askAuthorization({
+        title: "Approve estimate",
+        description:
+          "How did the customer authorize this work? Recorded in the audit log.",
+      });
+      if (auth === null) return;
+      await ctx.transitionStatus("approved", undefined, auth);
+    },
   },
   decline_estimate: {
     id: "decline_estimate",
@@ -98,7 +119,17 @@ export const ACTION_REGISTRY: Readonly<Record<ActionId, ActionDescriptor>> = {
     variant: () => "primary",
     visible: (o) => o.scheduledAt != null && o.providerId != null,
     enabled: () => true,
-    invoke: (ctx) => ctx.transitionStatus("scheduled"),
+    // Fenced transition (draft→scheduled walk-in shortcut bypasses
+    // `approved`): same evidence requirement as approve_estimate.
+    invoke: async (ctx) => {
+      const auth = await ctx.askAuthorization({
+        title: "Approve & confirm booking",
+        description:
+          "How did the customer authorize this work? Recorded in the audit log.",
+      });
+      if (auth === null) return;
+      await ctx.transitionStatus("scheduled", undefined, auth);
+    },
   },
   confirm_booking: {
     id: "confirm_booking",
@@ -245,6 +276,11 @@ export type ReasonAsker = (opts: {
   description?: string;
 }) => Promise<string | null>;
 
+export type AuthorizationAsker = (opts: {
+  title: string;
+  description?: string;
+}) => Promise<OrderAuthorization | null>;
+
 export type OrderInvoker = {
   invoke(action: ActionDescriptor): Promise<void>;
   dialog: DialogId | null;
@@ -276,6 +312,7 @@ export function useActionInvoker(
   orderId: number | string,
   revalidate: () => void,
   askReason: ReasonAsker,
+  askAuthorization: AuthorizationAsker,
 ): OrderInvoker {
   const m = useOrderMutations(orderId, revalidate);
   const [dialog, setDialog] = useState<DialogId | null>(null);
@@ -293,6 +330,7 @@ export function useActionInvoker(
       saveConfirmedDiagnosis: m.saveConfirmedDiagnosis,
       openDialog: setDialog,
       askReason,
+      askAuthorization,
       mutate: revalidate,
     };
     try {

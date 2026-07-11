@@ -39,8 +39,10 @@ import {
   allowedTransitions,
   canActorTransition,
   EDITABLE_STATUSES,
+  evaluateAuthorizationFence,
   isOrderStatus,
   isTerminal,
+  type OrderAuthorization,
   type OrderStatus,
   PAYMENT_ALLOWED_STATUSES,
   resolveAuthority,
@@ -60,7 +62,9 @@ export {
   availableActions,
   canActorTransition,
   isTerminal,
+  type OrderAuthorization,
   type OrderStatus,
+  requiresCustomerAuthorization,
   type TerminalStatus,
   TRANSITIONS,
 } from "@hmls/shared/order/status";
@@ -104,6 +108,12 @@ function fireNotification(orderId: number, to: OrderStatus): void {
 export interface TransitionOptions {
   reason?: string;
   metadata?: Record<string, unknown>;
+  /** Customer-authorization evidence. Required when the RESOLVED authority is
+   *  shop-side (admin / staff agent) and the transition is fenced (→approved,
+   *  or the draft→scheduled walk-in shortcut). Customer / share-token
+   *  authorities auto-inject `{ channel: "portal" }` — do not pass this for
+   *  them. */
+  authorization?: OrderAuthorization;
   /** Optimistic guard: require the row to still be in this status when the
    *  UPDATE fires. Defaults to the status read from the DB. */
   expectedFrom?: OrderStatus;
@@ -149,6 +159,15 @@ export async function transition(
     };
   }
 
+  // Compliance fence: transitions that represent the customer's authorization
+  // to proceed must carry evidence of HOW they authorized. Judged on the
+  // resolved authority, so the staff agent is fenced exactly like the admin;
+  // customer / share-token portal actions auto-inject their own evidence.
+  const fence = evaluateAuthorizationFence(from, to, actor, options.authorization);
+  if (!fence.ok) {
+    return { ok: false, error: { code: "invalid_input", message: fence.message } };
+  }
+
   const actorStr = actorString(actor);
   const now = new Date();
   const history = Array.isArray(current.statusHistory) ? current.statusHistory : [];
@@ -189,6 +208,21 @@ export async function transition(
       metadata: {
         ...(options.reason ? { reason: options.reason } : {}),
         ...(options.metadata ?? {}),
+        // Last spread wins — caller metadata cannot forge the evidence key.
+        ...(fence.authorization
+          ? {
+            authorization: {
+              channel: fence.authorization.channel,
+              ...(fence.authorization.note?.trim()
+                ? { note: fence.authorization.note.trim() }
+                : {}),
+              // Bind the evidence to the exact quote version being authorized
+              // — captured from the row, never caller-supplied.
+              revisionNumber: current.revisionNumber ?? 1,
+              subtotalCents: current.subtotalCents ?? 0,
+            },
+          }
+          : {}),
       },
     });
 

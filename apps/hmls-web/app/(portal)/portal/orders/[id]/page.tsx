@@ -1,6 +1,6 @@
 "use client";
 
-import type { OrderEvent, OrderItem } from "@hmls/shared/db/types";
+import type { CustomerOrderEvent, OrderItem } from "@hmls/shared/db/types";
 import { ArrowLeft, Check, Printer, X as XIcon } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -21,7 +21,7 @@ import { isTentativeBooking, statusDisplay } from "@/lib/status-display";
 
 /* ── Timeline helpers ─────────────────────────────────────────────────── */
 
-function eventDescription(event: OrderEvent): string {
+function eventDescription(event: CustomerOrderEvent): string {
   switch (event.eventType) {
     case "status_change":
       if (event.toStatus) {
@@ -36,7 +36,7 @@ function eventDescription(event: OrderEvent): string {
   }
 }
 
-function StatusTimeline({ events }: { events: OrderEvent[] }) {
+function StatusTimeline({ events }: { events: CustomerOrderEvent[] }) {
   if (events.length === 0) {
     return <p className="text-xs text-text-secondary py-2">No activity yet.</p>;
   }

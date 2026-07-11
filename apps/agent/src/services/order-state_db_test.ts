@@ -507,6 +507,143 @@ Deno.test({
     });
 
     // -------------------------------------------------------------------
+    // Compliance fence: fenced transitions (→approved, draft→scheduled)
+    // require customer-authorization evidence from shop-side authorities
+    // and stamp it — bound to revisionNumber + subtotalCents — into the
+    // status_change event metadata.
+    // -------------------------------------------------------------------
+
+    await t.step("fence: admin estimated -> approved without evidence rejected", async () => {
+      const order = await insertTestOrder({ shopId, status: "estimated", customerId });
+      try {
+        const result = await transition(order.id, "approved", ADMIN_ACTOR, {
+          suppressNotification: true,
+        });
+        assertStrictEquals(result.ok, false);
+        if (!result.ok) assertEquals(result.error.code, "invalid_input");
+
+        const after = await reloadOrder(order.id);
+        assertEquals(after.status, "estimated", "status must not change");
+        const events = await getEvents(order.id);
+        assertEquals(events.length, 0, "no event on rejected fenced transition");
+      } finally {
+        await deleteOrder(order.id);
+      }
+    });
+
+    await t.step("fence: admin approve with evidence stamps bound metadata", async () => {
+      const order = await insertTestOrder({
+        shopId,
+        status: "estimated",
+        customerId,
+        revisionNumber: 3,
+        items: [sampleItem("Brake job", 12300)],
+      });
+      try {
+        const result = await transition(order.id, "approved", ADMIN_ACTOR, {
+          suppressNotification: true,
+          authorization: { channel: "call", note: "spoke with owner" },
+        });
+        assertEquals(result.ok, true);
+
+        const events = await getEvents(order.id);
+        const statusChange = events.find((e) => e.eventType === "status_change");
+        const meta = statusChange?.metadata as { authorization?: Record<string, unknown> };
+        assertEquals(meta?.authorization, {
+          channel: "call",
+          note: "spoke with owner",
+          revisionNumber: 3,
+          subtotalCents: 12300,
+        });
+      } finally {
+        await deleteOrder(order.id);
+      }
+    });
+
+    await t.step("fence: draft -> scheduled walk-in edge fenced the same", async () => {
+      const order = await insertTestOrder({ shopId, status: "draft", customerId });
+      try {
+        const rejected = await transition(order.id, "scheduled", ADMIN_ACTOR, {
+          suppressNotification: true,
+        });
+        assertStrictEquals(rejected.ok, false);
+        if (!rejected.ok) assertEquals(rejected.error.code, "invalid_input");
+
+        const passed = await transition(order.id, "scheduled", ADMIN_ACTOR, {
+          suppressNotification: true,
+          authorization: { channel: "in_person" },
+        });
+        assertEquals(passed.ok, true);
+
+        const events = await getEvents(order.id);
+        const statusChange = events.find((e) => e.eventType === "status_change");
+        const meta = statusChange?.metadata as { authorization?: { channel?: string } };
+        assertEquals(meta?.authorization?.channel, "in_person");
+      } finally {
+        await deleteOrder(order.id);
+      }
+    });
+
+    await t.step("fence: customer approve auto-injects channel=portal", async () => {
+      const order = await insertTestOrder({
+        shopId,
+        status: "estimated",
+        customerId,
+        items: [sampleItem("Oil change", 9900)],
+      });
+      try {
+        const result = await transition(
+          order.id,
+          "approved",
+          { kind: "customer", customerId },
+          { suppressNotification: true },
+        );
+        assertEquals(result.ok, true, "customer approval needs no evidence input");
+
+        const events = await getEvents(order.id);
+        const statusChange = events.find((e) => e.eventType === "status_change");
+        const meta = statusChange?.metadata as { authorization?: Record<string, unknown> };
+        assertEquals(meta?.authorization, {
+          channel: "portal",
+          revisionNumber: 1,
+          subtotalCents: 9900,
+        });
+      } finally {
+        await deleteOrder(order.id);
+      }
+    });
+
+    await t.step("fence: staff-agent path fenced via resolved authority", async () => {
+      const order = await insertTestOrder({ shopId, status: "estimated", customerId });
+      try {
+        const staffAgent: Actor = {
+          kind: "agent",
+          surface: "staff_chat",
+          actingAs: ADMIN_ACTOR,
+        };
+        const rejected = await transition(order.id, "approved", staffAgent, {
+          suppressNotification: true,
+        });
+        assertStrictEquals(rejected.ok, false, "staff agent must not bypass the fence");
+        if (!rejected.ok) assertEquals(rejected.error.code, "invalid_input");
+
+        const passed = await transition(order.id, "approved", staffAgent, {
+          suppressNotification: true,
+          authorization: { channel: "text" },
+        });
+        assertEquals(passed.ok, true);
+
+        const events = await getEvents(order.id);
+        const statusChange = events.find((e) => e.eventType === "status_change");
+        assertEquals(statusChange?.actor, "agent(staff_chat)->admin:l2test@shop.com");
+        const meta = statusChange?.metadata as { authorization?: { channel?: string } };
+        assertEquals(meta?.authorization?.channel, "text");
+      } finally {
+        await deleteOrder(order.id);
+      }
+    });
+
+    // -------------------------------------------------------------------
     // Chat-flow shortcut: draft -> scheduled (admin Confirm) +
     // auto-dispatch behavior. Exercises the new lifecycle path shipped
     // in the one-shot booking change.
@@ -529,8 +666,10 @@ Deno.test({
         assertEquals(after.scheduledAt != null, true);
 
         // Admin's "Confirm booking" — the only state mutation in the
-        // chat-flow path.
-        const result = await transition(order.id, "scheduled", ADMIN_ACTOR);
+        // chat-flow path. Fenced edge: needs authorization evidence.
+        const result = await transition(order.id, "scheduled", ADMIN_ACTOR, {
+          authorization: { channel: "portal" },
+        });
         assertEquals(result.ok, true, "draft -> scheduled allowed for admin");
 
         const final = await reloadOrder(order.id);

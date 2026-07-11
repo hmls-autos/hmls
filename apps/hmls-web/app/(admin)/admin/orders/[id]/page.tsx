@@ -12,6 +12,7 @@ import { OrderDocumentCard } from "@/components/order/OrderDocumentCard";
 import { OrderOpsPanel } from "@/components/order/OrderOpsPanel";
 import { OrderSectionsRegion } from "@/components/order/OrderSectionsRegion";
 import { TechPrepCard } from "@/components/order/TechPrepCard";
+import { askAuthorization } from "@/components/ui/AuthorizeDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -90,6 +91,7 @@ export default function OrderDetailPage() {
     orderId,
     mutate,
     askReason,
+    askAuthorization,
   );
 
   if (isLoading) {

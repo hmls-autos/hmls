@@ -10,6 +10,7 @@ import {
   type OrderStatus,
   transition,
 } from "../../services/order-state.ts";
+import { AUTHORIZATION_CHANNELS, type OrderAuthorization } from "@hmls/shared/order/status";
 import {
   customerAgentActor,
   staffAgentActor,
@@ -47,12 +48,29 @@ const transitionOrderStatusTool = {
       .string()
       .optional()
       .describe("Optional reason (stored on cancelled/declined orders, otherwise audit-only)"),
+    authorization: z
+      .object({
+        channel: z
+          .enum(AUTHORIZATION_CHANNELS)
+          .describe("How the customer authorized: portal, text, call, or in_person"),
+        note: z
+          .string()
+          .optional()
+          .describe("Optional context, e.g. 'spoke with owner at 10:30am'"),
+      })
+      .optional()
+      .describe(
+        "Customer-authorization evidence. REQUIRED when transitioning to 'approved' or from " +
+          "'draft' to 'scheduled' — these edges record how the customer approved the work. If " +
+          "you do not know which channel the customer used, ASK the user first; never guess.",
+      ),
   }),
   execute: async (
     params: {
       orderId: string;
       newStatus: (typeof ORDER_STATUSES)[number];
       reason?: string;
+      authorization?: OrderAuthorization;
     },
     ctx: ToolContext | undefined,
   ) => {
@@ -74,6 +92,7 @@ const transitionOrderStatusTool = {
 
     const result = await transition(id, params.newStatus as OrderStatus, actor, {
       reason: params.reason,
+      authorization: params.authorization,
     });
     return toolResultFromOrderState(result, (row) => ({
       orderId: row.id,
