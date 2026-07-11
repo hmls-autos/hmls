@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import { OrderProgressBar } from "@/components/OrderProgressBar";
 import { ActivityTimeline } from "@/components/order/ActivityTimeline";
 import { DraftBanner } from "@/components/order/DraftBanner";
+import { OrderChatPanel } from "@/components/order/OrderChatPanel";
 import { OrderDetailsCard } from "@/components/order/OrderDetailsCard";
 import { OrderDocumentCard } from "@/components/order/OrderDocumentCard";
 import { OrderOpsPanel } from "@/components/order/OrderOpsPanel";
@@ -226,6 +227,10 @@ export default function OrderDetailPage() {
           />
 
           <TechPrepCard order={order} />
+
+          {/* Embedded staff chat scoped to this order (PR 6). Agent tool
+              mutations revalidate the page via SWR mutate. */}
+          <OrderChatPanel orderId={order.id} revalidate={mutate} />
 
           {order.cancellationReason && (
             <Card className="gap-0 py-0 border-destructive/50">

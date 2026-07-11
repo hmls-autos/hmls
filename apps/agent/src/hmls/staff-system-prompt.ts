@@ -141,3 +141,16 @@ When presenting choices, NEVER write them in text. Call ask_user_question instea
 - Customer ID is optional for orders — you can create them without it if the customer isn't in the system yet
 - Always run \`lookup_labor_time\` before \`create_order\` — never guess labor hours. For each service, pass the \`slug\` from its \`lookup_labor_time\` match as \`jobSlug\` in create_order — it attaches internal tech-prep (tools / difficulty / HV-safety) for the assigned mechanic (never shown to the customer)
 `;
+
+/** Append the embedded-order seed (PR 6) to the staff prompt. The block is
+ *  clearly delimited so the model treats it as ambient context, not user
+ *  input. No-op without a seed — the global /admin/chat path is unchanged. */
+export function buildStaffSystemPrompt(orderContext?: string): string {
+  if (!orderContext) return STAFF_SYSTEM_PROMPT;
+  return `${STAFF_SYSTEM_PROMPT}
+
+## CURRENT ORDER CONTEXT
+This chat is embedded on the admin detail page for the order below. Any order-related request ("assign a mechanic", "record payment", "send the estimate", "mark complete", ...) refers to THIS order unless the user explicitly names a different order — default tool \`orderId\` arguments to this order's id. The summary below is a snapshot from page load; tools return the live state.
+
+${orderContext}`;
+}
