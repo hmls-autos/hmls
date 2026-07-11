@@ -474,6 +474,109 @@ export async function notifyPaymentFailed(opts: {
   return await sendEmail(opts.toEmail, subject, text);
 }
 
+// --- Mechanic notifications ---
+
+export type MechanicNotifyEvent = "assigned" | "rescheduled" | "cancelled";
+
+/** Outcome of recipient resolution — returned so callers/tests can see which
+ *  path was taken without inspecting logs. "sent" = a provider email was
+ *  resolved and dispatched to sendEmail (dispatch success depends on Resend
+ *  config, which is orthogonal). */
+export type MechanicNotifyResult = "sent" | "no-recipient" | "not-found";
+
+/** Email the assigned mechanic when their job is assigned, rescheduled, or
+ *  cancelled. Self-contained recipient resolution like notifyOrderStatusChange:
+ *  order.providerId → provider.email (via Resend). No-op (logged) when the
+ *  order has no assigned mechanic or the mechanic has no email on file. Called
+ *  fire-and-forget from the order-state mutation points — a send failure never
+ *  affects the committed DB write. */
+export async function notifyMechanic(
+  orderId: number,
+  event: MechanicNotifyEvent,
+): Promise<MechanicNotifyResult> {
+  try {
+    const [order] = await dbAdmin
+      .select()
+      .from(schema.orders)
+      .where(eq(schema.orders.id, orderId))
+      .limit(1);
+
+    if (!order) {
+      logger.warn("notifyMechanic: order {orderId} not found", { orderId });
+      return "not-found";
+    }
+    if (order.providerId == null) return "no-recipient"; // no mechanic assigned
+
+    const [provider] = await dbAdmin
+      .select()
+      .from(schema.providers)
+      .where(eq(schema.providers.id, order.providerId))
+      .limit(1);
+
+    if (!provider?.email) {
+      logger.warn("notifyMechanic: no email for provider {providerId} on order {orderId}", {
+        orderId,
+        providerId: order.providerId,
+      });
+      return "no-recipient";
+    }
+
+    const vehicle = order.vehicleInfo
+      ? [order.vehicleInfo.year, order.vehicleInfo.make, order.vehicleInfo.model]
+        .filter(Boolean).join(" ")
+      : "";
+    const work = (order.items ?? []).map((i) => i.name).filter(Boolean).join(", ");
+    const when = order.scheduledAt
+      ? order.scheduledAt.toLocaleString("en-US", {
+        timeZone: provider.timezone,
+        dateStyle: "full",
+        timeStyle: "short",
+      })
+      : "Time TBD";
+    const customer = order.contactName || "Customer";
+    const phone = order.contactPhone || "";
+    const jobsUrl = `${BASE_URL}/mechanic`;
+
+    let subject: string;
+    let intro: string;
+    const lines: string[] = [];
+    switch (event) {
+      case "assigned":
+        subject = `New job assigned — Order #${orderId}`;
+        intro = "You've been assigned a new job.";
+        break;
+      case "rescheduled":
+        subject = `Appointment time updated — Order #${orderId}`;
+        intro = "The appointment time for one of your jobs was updated.";
+        break;
+      case "cancelled":
+        subject = `Job cancelled — Order #${orderId}`;
+        intro = "A job assigned to you was cancelled — you don't need to go.";
+        break;
+    }
+
+    lines.push(intro, "", `Order #${orderId}`);
+    if (vehicle) lines.push(`Vehicle: ${vehicle}`);
+    if (work) lines.push(`Work: ${work}`);
+    if (event !== "cancelled") {
+      lines.push(`When: ${when}`);
+      if (order.location) lines.push(`Where: ${order.location}`);
+      lines.push(`Customer: ${customer}${phone ? ` (${phone})` : ""}`);
+    }
+    lines.push("", `Your jobs: ${jobsUrl}`);
+
+    await sendEmail(provider.email, subject, lines.join("\n"));
+    return "sent";
+  } catch (err) {
+    logger.error("notifyMechanic failed for order {orderId}", {
+      orderId,
+      event,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return "not-found";
+  }
+}
+
 // --- Main notification function ---
 
 /** Send the customer (and possibly admin) email for an order lifecycle
