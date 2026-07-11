@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { and, asc, between, eq, gte, lte } from "drizzle-orm";
+import { and, asc, between, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { db, schema } from "@hmls/agent/db";
 import { type MechanicEnv, requireMechanic } from "../middleware/mechanic.ts";
 import { requireShopContext, type WithShop } from "../middleware/shop-context.ts";
@@ -195,12 +195,25 @@ mechanic.get("/orders", zValidator("query", listMyOrdersQuery), async (c) => {
   const { from, to } = c.req.valid("query");
 
   const conditions = [eq(schema.orders.providerId, providerId), eq(schema.orders.shopId, shopId)];
+  // Unscheduled-but-assigned orders (scheduledAt IS NULL) are the "Pending
+  // schedule" bucket the mechanic page renders via partitionBySchedule. A bare
+  // `scheduledAt >= from` is NULL (not TRUE) for those rows and would drop them
+  // entirely, making that bucket unreachable — so always OR-in the null case.
   if (from && to) {
-    conditions.push(between(schema.orders.scheduledAt, new Date(from), new Date(to)));
+    conditions.push(
+      or(
+        isNull(schema.orders.scheduledAt),
+        between(schema.orders.scheduledAt, new Date(from), new Date(to)),
+      )!,
+    );
   } else if (from) {
-    conditions.push(gte(schema.orders.scheduledAt, new Date(from)));
+    conditions.push(
+      or(isNull(schema.orders.scheduledAt), gte(schema.orders.scheduledAt, new Date(from)))!,
+    );
   } else if (to) {
-    conditions.push(lte(schema.orders.scheduledAt, new Date(to)));
+    conditions.push(
+      or(isNull(schema.orders.scheduledAt), lte(schema.orders.scheduledAt, new Date(to)))!,
+    );
   }
 
   const rows = await db
@@ -253,10 +266,16 @@ mechanic.post(
       return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
     }
 
-    // Persist the confirmed diagnosis before completing — the same direct
-    // column write the admin complete flow does via PATCH /orders/:id.
+    // Transition FIRST, then persist the confirmed diagnosis + close the fixo
+    // loop only on success. A rejected/duplicate Complete (stale card, order
+    // no longer in_progress, concurrent cancel) must not stamp a diagnosis
+    // onto a wrong-state order or report a calibration outcome for a
+    // completion that never happened.
+    const result = await transition(id, body.to, { kind: "mechanic", providerId });
+
     const diag = body.confirmedDiagnosis?.trim();
-    if (body.to === "completed" && diag) {
+    if (result.ok && body.to === "completed" && diag) {
+      // Same direct column write the admin complete flow does via PATCH /orders/:id.
       await db
         .update(schema.orders)
         .set({ confirmedDiagnosis: diag, updatedAt: new Date() })
@@ -282,7 +301,6 @@ mechanic.post(
       }
     }
 
-    const result = await transition(id, body.to, { kind: "mechanic", providerId });
     return sendOrderStateResult(c, result);
   },
 );

@@ -112,15 +112,21 @@ describe("ACTION_REGISTRY", () => {
     ).toBe("Reassign mechanic");
   });
 
-  test("reschedule label flips by scheduledAt", () => {
-    expect(
-      ACTION_REGISTRY.reschedule.label(makeOrder({ scheduledAt: null })),
-    ).toBe("Set appointment time");
-    expect(
-      ACTION_REGISTRY.reschedule.label(
-        makeOrder({ scheduledAt: "2026-05-25T10:00:00Z" }),
-      ),
-    ).toBe("Reschedule");
+  test("set_time and reschedule split on scheduledAt — never both, no dup label", () => {
+    const unscheduled = makeOrder({ scheduledAt: null });
+    const scheduled = makeOrder({ scheduledAt: "2026-05-25T10:00:00Z" });
+
+    // Unscheduled: only set_time shows, labelled "Set appointment time".
+    expect(ACTION_REGISTRY.set_time.visible(unscheduled)).toBe(true);
+    expect(ACTION_REGISTRY.reschedule.visible(unscheduled)).toBe(false);
+    expect(ACTION_REGISTRY.set_time.label(unscheduled)).toBe(
+      "Set appointment time",
+    );
+
+    // Scheduled: only reschedule shows, labelled "Reschedule".
+    expect(ACTION_REGISTRY.reschedule.visible(scheduled)).toBe(true);
+    expect(ACTION_REGISTRY.set_time.visible(scheduled)).toBe(false);
+    expect(ACTION_REGISTRY.reschedule.label(scheduled)).toBe("Reschedule");
   });
 });
 

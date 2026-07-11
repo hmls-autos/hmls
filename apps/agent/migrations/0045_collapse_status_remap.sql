@@ -4,11 +4,11 @@
 --   revised   → draft      (revision-in-progress = draft whose status_history
 --                           contains 'estimated'; see hasBeenSentToCustomer)
 --
--- ⚠️ ORDER OF OPERATIONS: apply 0043 first, then DEPLOY the alias-tolerant
--- code (canonicalizeStatus reads legacy labels as canonical), THEN run this
--- remap. Old code writing new 'scheduled' rows during the window is fine —
--- rerunning this file converges them (fully idempotent: a second run touches
--- 0 rows and inserts no duplicate events).
+-- ⚠️ ORDER OF OPERATIONS: apply 0043 (enum value) + 0044 (dedup index) first,
+-- then DEPLOY the alias-tolerant code (canonicalizeStatus reads legacy labels
+-- as canonical), THEN run this remap. Old code writing new 'scheduled' rows
+-- during the window is fine — rerunning this file converges them (fully
+-- idempotent: a second run touches 0 rows and inserts no duplicate events).
 --
 -- The order_status PG enum keeps the legacy labels — NO type surgery.
 -- order_events history rows referencing them are untouched.
@@ -40,15 +40,8 @@
 --   -- revised→draft rows need NO reversal: the old machine's draft is
 --   -- equally editable and sendable.
 
--- Partial UNIQUE index for schedule_ready_notified dedup (Codex C6). Lives
--- here, NOT in 0043: the enum value is added there, and a value added by
--- ALTER TYPE cannot be used in the same transaction (db-apply.sh runs each
--- file as --single-transaction); enum→text casts aren't IMMUTABLE so a
--- text-compare predicate is rejected too. Here we're one transaction later,
--- so the plain enum-literal predicate (IMMUTABLE) works.
-CREATE UNIQUE INDEX IF NOT EXISTS order_events_schedule_ready_once_idx
-  ON order_events (order_id)
-  WHERE event_type = 'schedule_ready_notified';
+-- (The schedule_ready dedup unique index is created in 0044, applied before the
+-- code deploys — see that file's header for why it can't share 0043's tx.)
 
 DO $$
 DECLARE

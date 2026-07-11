@@ -1,5 +1,10 @@
 import { assertEquals } from "@std/assert";
-import { CUSTOMER_VISIBLE_EVENT_TYPES, filterCustomerVisibleEvents } from "@hmls/shared/db/schema";
+import {
+  CUSTOMER_VISIBLE_EVENT_TYPES,
+  filterCustomerVisibleEvents,
+  INTERNAL_ORDER_FIELDS,
+  toCustomerOrder,
+} from "@hmls/shared/db/schema";
 import { portal } from "./portal.ts";
 
 // The 401 path short-circuits before any DB call runs — no env vars needed.
@@ -76,4 +81,30 @@ Deno.test("portal events: allowlist covers exactly the customer-relevant types",
       "status_change",
     ],
   );
+});
+
+// ---------------------------------------------------------------------------
+// Customer-facing order projection (used by every portal order read). The row
+// must never carry internal staff columns.
+// ---------------------------------------------------------------------------
+
+Deno.test("toCustomerOrder: strips adminNotes and fixoPredictionId", () => {
+  const raw = {
+    id: 7,
+    status: "approved",
+    subtotalCents: 12300,
+    adminNotes: "⚠ geocode failed — verify before dispatch",
+    fixoPredictionId: "pred_abc123",
+    contactName: "Jane",
+  };
+  const safe = toCustomerOrder(raw);
+  assertEquals("adminNotes" in safe, false, "internal staff notes must not leak");
+  assertEquals("fixoPredictionId" in safe, false, "internal brain id must not leak");
+  assertEquals(safe.id, 7, "customer-safe fields are preserved");
+  assertEquals(safe.subtotalCents, 12300);
+  assertEquals(safe.contactName, "Jane");
+});
+
+Deno.test("toCustomerOrder: INTERNAL_ORDER_FIELDS is the stripped set", () => {
+  assertEquals([...INTERNAL_ORDER_FIELDS].sort(), ["adminNotes", "fixoPredictionId"]);
 });

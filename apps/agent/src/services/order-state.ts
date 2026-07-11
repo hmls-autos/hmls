@@ -330,9 +330,15 @@ export async function transition(
   }
 
   if (!options.suppressNotification) {
-    fireNotification(orderId, target);
     if (updated.scheduleReadyClaimed) {
+      // Approval on an already-scheduled order: the "appointment confirmed"
+      // email fully covers it. Skip the generic "approved — we'll schedule"
+      // template, whose body promises a future confirmation email that would
+      // land in the same batch and contradict this one (walk-in shortcut +
+      // portal approval of a pre-scheduled estimate both hit this path).
       fireNotification(orderId, "schedule_ready");
+    } else {
+      fireNotification(orderId, target);
     }
   }
 

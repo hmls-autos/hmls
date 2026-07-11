@@ -330,6 +330,23 @@ export function filterCustomerVisibleEvents<
     });
 }
 
+/** Order columns that hold internal staff context and must never reach a
+ *  customer surface. adminNotes = private shop commentary (routing warnings,
+ *  geocode failures, staff reminders); fixoPredictionId = internal brain
+ *  linkage. Same private-by-default intent as CUSTOMER_VISIBLE_EVENT_TYPES,
+ *  but for the order row itself. */
+export const INTERNAL_ORDER_FIELDS = ["adminNotes", "fixoPredictionId"] as const;
+
+/** Strip internal-only columns from an order row before returning it to a
+ *  customer. Denylist (not allowlist) so portal features keep working when
+ *  new customer-safe columns are added — only known-internal fields drop. */
+export function toCustomerOrder<T extends Record<string, unknown>>(
+  order: T,
+): Omit<T, (typeof INTERNAL_ORDER_FIELDS)[number]> {
+  const { adminNotes: _adminNotes, fixoPredictionId: _fixoPredictionId, ...safe } = order;
+  return safe as Omit<T, (typeof INTERNAL_ORDER_FIELDS)[number]>;
+}
+
 export const orderEvents = pgTable("order_events", {
   id: uuid("id").primaryKey().defaultRandom(),
   orderId: integer("order_id").references(() => orders.id, { onDelete: "cascade" }).notNull(),
@@ -346,10 +363,10 @@ export const orderEvents = pgTable("order_events", {
     table.orderId,
     table.createdAt,
   ),
-  // At most one schedule_ready_notified marker per order (C6 dedup). The
-  // prod migration (0043) creates this with `event_type::text = ...` so the
-  // predicate is usable in the same transaction that adds the enum value;
-  // behavior is identical.
+  // At most one schedule_ready_notified marker per order (C6 dedup). Prod
+  // creates this in migration 0044 (a transaction after 0043 adds the enum
+  // value, so the enum-literal predicate below is usable), applied before the
+  // code that inserts these markers goes live.
   scheduleReadyOnceIdx: uniqueIndex("order_events_schedule_ready_once_idx")
     .on(table.orderId)
     .where(sql`event_type = 'schedule_ready_notified'`),

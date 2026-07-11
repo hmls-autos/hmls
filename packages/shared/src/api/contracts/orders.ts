@@ -147,7 +147,10 @@ export const recordPaymentInput = z.object({
   amountCents: z.number().int().positive(),
   method: z.enum(PAYMENT_METHODS),
   reference: z.string().optional(),
-  paidAt: z.string().optional(),
+  // Must be a real ISO 8601 timestamp — a bare z.string() lets a malformed
+  // value reach `new Date(paidAt)` as an Invalid Date, which then throws on
+  // Postgres serialization inside the money write.
+  paidAt: z.string().datetime({ offset: true }).optional(),
 });
 
 // ---------------------------------------------------------------------------

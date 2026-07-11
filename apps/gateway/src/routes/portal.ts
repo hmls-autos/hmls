@@ -4,7 +4,7 @@ import { zValidator } from "@hono/zod-validator";
 import { db, schema } from "@hmls/agent/db";
 import { desc, eq } from "drizzle-orm";
 import { Errors } from "@hmls/shared/errors";
-import { filterCustomerVisibleEvents } from "@hmls/shared/db/schema";
+import { filterCustomerVisibleEvents, toCustomerOrder } from "@hmls/shared/db/schema";
 import { type AuthEnv, requireAuth } from "../middleware/auth.ts";
 import { requireShopContext, type WithShop } from "../middleware/shop-context.ts";
 import { withTenantTx } from "../middleware/with-tenant-tx.ts";
@@ -21,6 +21,11 @@ import type {
 } from "@hmls/shared/db/types";
 
 type ApiError = { error: { code: string; message: string } };
+
+// Order shapes as the customer sees them: internal-only columns (adminNotes,
+// fixoPredictionId) stripped by toCustomerOrder before the row leaves the API.
+type CustomerOrderRow = Omit<OrderRow, "adminNotes" | "fixoPredictionId">;
+type CustomerOrderRowWithIntake = Omit<OrderRowWithIntake, "adminNotes" | "fixoPredictionId">;
 
 const ZIP_ONLY = /^\d{5}(-\d{4})?$/;
 /** An estimate whose stored location is a bare ZIP still needs a street address before approval. */
@@ -91,10 +96,10 @@ portal.get("/me/bookings", async (c) => {
     .orderBy(desc(schema.orders.scheduledAt));
 
   // Filter in JS so we still include orders without scheduled_at if none match
-  const withIntake: OrderRowWithIntake[] = rows
+  const withIntake: CustomerOrderRowWithIntake[] = rows
     .filter((r) => r.order.scheduledAt != null)
-    .map((r) => ({ ...r.order, intake: r.intake }));
-  return c.json<OrderRowWithIntake[]>(withIntake);
+    .map((r) => ({ ...toCustomerOrder(r.order), intake: r.intake }));
+  return c.json<CustomerOrderRowWithIntake[]>(withIntake);
 });
 
 // GET /me/orders — customer's orders (unified — replaces estimates + quotes)
@@ -106,7 +111,7 @@ portal.get("/me/orders", async (c) => {
     .where(eq(schema.orders.customerId, customerId)) // tenant-ok: customer-owned rows, scoped by customerId across shops; RLS app.customer_id backs it
     .orderBy(desc(schema.orders.createdAt));
 
-  return c.json<OrderRow[]>(rows);
+  return c.json<CustomerOrderRow[]>(rows.map(toCustomerOrder));
 });
 
 // GET /me/orders/:id — single order detail with events (customer-scoped)
@@ -148,13 +153,13 @@ portal.get("/me/orders/:id", async (c) => {
 
   return c.json<
     {
-      order: OrderRow;
+      order: CustomerOrderRow;
       intake: OrderIntakeRow | null;
       events: CustomerOrderEventRow[];
       needsAddress: boolean;
     }
   >({
-    order,
+    order: toCustomerOrder(order),
     intake,
     events,
     needsAddress: needsAddress(order),
@@ -170,7 +175,7 @@ portal.get("/me/estimates", async (c) => {
     .where(eq(schema.orders.customerId, customerId)) // tenant-ok: customer-owned rows, scoped by customerId across shops; RLS app.customer_id backs it
     .orderBy(desc(schema.orders.createdAt));
 
-  return c.json<OrderRow[]>(rows);
+  return c.json<CustomerOrderRow[]>(rows.map(toCustomerOrder));
 });
 
 // GET /me/quotes — backward compat redirect to orders
@@ -182,7 +187,7 @@ portal.get("/me/quotes", async (c) => {
     .where(eq(schema.orders.customerId, customerId)) // tenant-ok: customer-owned rows, scoped by customerId across shops; RLS app.customer_id backs it
     .orderBy(desc(schema.orders.createdAt));
 
-  return c.json<OrderRow[]>(rows);
+  return c.json<CustomerOrderRow[]>(rows.map(toCustomerOrder));
 });
 
 // Harness enforces role-based permission (e.g. "customer may approve

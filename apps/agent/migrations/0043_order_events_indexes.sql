@@ -1,22 +1,16 @@
--- 0043: order_events indexes + schedule_ready_notified event type
+-- 0043: order_events(order_id, created_at) index + schedule_ready enum value
 --
--- Prep for the 9→7 status collapse (0044). TWO independent pieces:
+-- Prep for the 9→7 status collapse. TWO pieces:
 --   1. order_events(order_id, created_at) index — the event feed is always
---      read as "this order's events, newest first" (TODOS.md debt; 0044
---      inserts one event per remapped row, so land the index first).
---   2. 'schedule_ready_notified' event type + a partial UNIQUE index making
---      it once-per-order. Writers insert with ON CONFLICT DO NOTHING: the
---      winner sends the customer's "appointment confirmed" email, losers
---      skip — dedups concurrent slot/mechanic pair completions (Codex C6).
+--      read as "this order's events, newest first" (TODOS.md debt; the remap
+--      in 0045 inserts one event per remapped row, so land the index first).
+--   2. 'schedule_ready_notified' event value on the order_event_type enum.
+--      The partial UNIQUE index that dedups it lives in 0044, NOT here:
+--      db-apply.sh runs each file as --single-transaction, and a value added
+--      by ALTER TYPE ... ADD VALUE cannot be USED (in an index predicate) in
+--      the same transaction — 0044 is one transaction later.
 --
--- Apply BEFORE 0044 and BEFORE deploying the PR-2 code (the code inserts
--- the new enum value). Idempotent — safe to rerun.
---
--- ⚠️ db-apply.sh runs psql --single-transaction. ALTER TYPE ... ADD VALUE is
--- allowed inside a transaction (PG 12+) but the NEW value cannot be USED in
--- the same transaction — and enum→text casts are not IMMUTABLE, so the
--- partial UNIQUE index can't live here either. It lives at the top of 0044
--- (separate transaction, so the enum literal is usable there).
+-- Apply BEFORE 0044/0045 and BEFORE deploying the PR-2 code. Idempotent.
 
 ALTER TYPE order_event_type ADD VALUE IF NOT EXISTS 'schedule_ready_notified';
 

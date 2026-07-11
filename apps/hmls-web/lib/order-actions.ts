@@ -154,11 +154,15 @@ export const ACTION_REGISTRY: Readonly<Record<ActionId, ActionDescriptor>> = {
       return Promise.resolve();
     },
   },
+  // reschedule = the order already has a time; set_time = it doesn't. Splitting
+  // on scheduledAt keeps exactly one of them visible per order — before, both
+  // rendered "Set appointment time" and opened the same dialog on an unscheduled
+  // approved order (two identical buttons).
   reschedule: {
     id: "reschedule",
-    label: (o) => (o.scheduledAt ? "Reschedule" : "Set appointment time"),
+    label: () => "Reschedule",
     variant: () => "secondary",
-    visible: () => true,
+    visible: (o) => o.scheduledAt != null,
     enabled: () => true,
     invoke: (ctx) => {
       ctx.openDialog("set_time");

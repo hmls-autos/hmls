@@ -48,6 +48,7 @@ export const STATUS_PROFILES: Readonly<Record<OrderStatus, StatusProfile>> = {
       "send_to_customer",
       "approve_walk_in",
       "reassign_mechanic",
+      "set_time",
       "reschedule",
       "cancel_order",
     ],
