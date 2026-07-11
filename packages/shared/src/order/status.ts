@@ -10,17 +10,27 @@
 // Core types
 // ---------------------------------------------------------------------------
 
-/** Nine lifecycle states. Payment is a property (paid_at), not a state. */
+/** Seven lifecycle states. Payment is a property (paid_at), not a state.
+ *  Scheduling is a property too (scheduled_at + provider_id on `approved`),
+ *  and revision-in-progress is derived (`draft` + hasBeenSentToCustomer).
+ *  The legacy `scheduled` / `revised` states were collapsed in the 9→7
+ *  migration (0044) — see LegacyOrderStatus / canonicalizeStatus. */
 export type OrderStatus =
   | "draft"
   | "estimated"
-  | "revised"
   | "approved"
   | "declined"
-  | "scheduled"
   | "in_progress"
   | "completed"
   | "cancelled";
+
+/** Retired status labels that may still exist on physical rows during the
+ *  deploy→remap window (and forever in order_events history / the PG enum,
+ *  which keeps all labels — no type surgery). */
+export type LegacyOrderStatus = "scheduled" | "revised";
+
+/** What a DB row's status column can physically hold. */
+export type PhysicalOrderStatus = OrderStatus | LegacyOrderStatus;
 
 export type TerminalStatus = Extract<OrderStatus, "completed" | "cancelled">;
 
@@ -46,21 +56,63 @@ export type Actor =
 export type ActorKind = Actor["kind"];
 
 // ---------------------------------------------------------------------------
+// Legacy-status canonicalization — the ONLY alias-tolerance point
+// ---------------------------------------------------------------------------
+
+const LEGACY_STATUS_ALIASES: Readonly<Record<LegacyOrderStatus, OrderStatus>> = {
+  // scheduled = approved with the scheduling columns filled.
+  scheduled: "approved",
+  // revised = draft whose statusHistory contains 'estimated' (pullback).
+  revised: "draft",
+};
+
+/** Map any raw status string (DB row, API input, tool input) to the
+ *  canonical 7-state machine. Legacy `scheduled`→`approved` and
+ *  `revised`→`draft`; canonical values pass through; anything else throws
+ *  (an unknown status is data corruption, not something to paper over).
+ *
+ *  This function is the ONLY place legacy labels are tolerated. Do not add
+ *  ad-hoc `=== "scheduled"` compatibility branches elsewhere. */
+export function canonicalizeStatus(raw: string): OrderStatus {
+  const alias = LEGACY_STATUS_ALIASES[raw as LegacyOrderStatus];
+  if (alias) return alias;
+  if (isOrderStatus(raw)) return raw;
+  throw new Error(`Unknown order status '${raw}'`);
+}
+
+/** Physical DB labels that canonicalize to `canonical` — the canonical label
+ *  plus any legacy aliases. Use in SQL status filters during the
+ *  deploy→remap window so pre-remap rows (still labelled `scheduled` /
+ *  `revised`) don't vanish from lists. After remap the legacy labels never
+ *  match — keeping them is harmless. */
+export function physicalStatusLabels(
+  canonical: OrderStatus,
+): readonly PhysicalOrderStatus[] {
+  const legacy = (Object.keys(LEGACY_STATUS_ALIASES) as LegacyOrderStatus[])
+    .filter((l) => LEGACY_STATUS_ALIASES[l] === canonical);
+  return [canonical, ...legacy];
+}
+
+// ---------------------------------------------------------------------------
 // State machine tables — single source of truth
 // ---------------------------------------------------------------------------
 
 export const TRANSITIONS: Readonly<Record<OrderStatus, readonly OrderStatus[]>> = {
-  // `draft → scheduled` is the chat-flow shortcut: the customer accumulates
-  // items + appointment + auto-assigned mechanic on a draft order, then
-  // admin's single "Confirm booking" click promotes the package straight to
-  // scheduled. The legacy `draft → estimated → approved → scheduled` path
-  // remains for portal/PDF approvals where the customer is not in a chat.
-  draft: ["estimated", "scheduled", "cancelled"],
-  estimated: ["approved", "declined", "cancelled"],
-  declined: ["revised"],
-  revised: ["estimated", "cancelled"],
-  approved: ["scheduled", "cancelled"],
-  scheduled: ["in_progress", "cancelled"],
+  // `draft → approved` is the walk-in shortcut: the customer authorized the
+  // work out-of-band (verbally / by text), so the shop confirms the draft
+  // straight to approved — fenced by requiresCustomerAuthorization, so the
+  // evidence (channel + note) is always recorded. `draft → estimated` is
+  // the review-and-send path for portal approvals.
+  draft: ["estimated", "approved", "cancelled"],
+  // `estimated → draft` is the pullback: the shop edits a sent estimate,
+  // which withdraws it from the customer until re-sent (driven by
+  // patchItems' auto-revert, or explicitly).
+  estimated: ["approved", "declined", "cancelled", "draft"],
+  declined: ["draft", "cancelled"],
+  // Scheduling no longer changes status — approved + scheduled_at +
+  // provider_id IS the booked state. Starting work requires an assigned
+  // provider (enforced in transition()).
+  approved: ["in_progress", "cancelled"],
   in_progress: ["completed", "cancelled"],
   completed: [],
   cancelled: [],
@@ -81,19 +133,19 @@ export const ACTOR_PERMISSIONS: Readonly<
     // the customer; they can walk away before admin confirms.
     draft: ["cancelled"],
     estimated: ["approved", "declined", "cancelled"],
-    scheduled: ["cancelled"],
+    // Customer can cancel an approved (possibly scheduled) order before
+    // work starts. In-progress cancellation goes through the shop.
+    approved: ["cancelled"],
   },
   admin: {
-    draft: ["estimated", "scheduled", "cancelled"],
-    estimated: ["approved", "declined", "cancelled"],
-    declined: ["revised"],
-    revised: ["estimated", "cancelled"],
-    approved: ["scheduled", "cancelled"],
-    scheduled: ["in_progress", "cancelled"],
+    draft: ["estimated", "approved", "cancelled"],
+    estimated: ["approved", "declined", "cancelled", "draft"],
+    declined: ["draft", "cancelled"],
+    approved: ["in_progress", "cancelled"],
     in_progress: ["completed", "cancelled"],
   },
   mechanic: {
-    scheduled: ["in_progress"],
+    approved: ["in_progress"],
     in_progress: ["completed"],
   },
   // System actors do not drive transitions today. Payment recording and
@@ -101,22 +153,22 @@ export const ACTOR_PERMISSIONS: Readonly<
   // adding a system-driven transition later is a one-line change.
   system: {},
   // Share-token holders can respond to the estimate they were sent.
-  // Narrower than customer — no scheduled-order cancel, since cancelling a
-  // scheduled appointment needs real auth.
+  // Narrower than customer — no approved-order cancel, since cancelling a
+  // booked appointment needs real auth.
   share_token: {
     estimated: ["approved", "declined"],
   },
 };
 
 export const EDITABLE_STATUSES: ReadonlySet<OrderStatus> = new Set(
-  ["draft", "revised", "estimated"],
+  ["draft", "estimated"],
 );
 
 /** Statuses on which a payment row can be stamped. Approved is included so
  *  shops that charge a deposit on approval work; draft / estimated /
- *  revised / declined / cancelled reject recordPayment. */
+ *  declined / cancelled reject recordPayment. */
 export const PAYMENT_ALLOWED_STATUSES: ReadonlySet<OrderStatus> = new Set(
-  ["approved", "scheduled", "in_progress", "completed"],
+  ["approved", "in_progress", "completed"],
 );
 
 // ---------------------------------------------------------------------------
@@ -205,12 +257,12 @@ export interface OrderAuthorization {
   note?: string;
 }
 
-/** Fenced edges: any transition into `approved`, plus the draft→scheduled
- *  walk-in shortcut that bypasses `approved` entirely. A predicate rather
- *  than an edge list so a future rewrite of the shortcut edge (e.g. to
- *  draft→approved) stays fenced without edits. */
-export function requiresCustomerAuthorization(from: OrderStatus, to: OrderStatus): boolean {
-  return to === "approved" || (from === "draft" && to === "scheduled");
+/** Fenced edges: any transition into `approved`. This now covers the walk-in
+ *  shortcut too (draft→approved replaced the legacy draft→scheduled edge in
+ *  the 9→7 collapse), so a single predicate fences every path into work
+ *  authorization. */
+export function requiresCustomerAuthorization(_from: OrderStatus, to: OrderStatus): boolean {
+  return to === "approved";
 }
 
 export type AuthorizationFenceResult =
@@ -293,17 +345,33 @@ export function completionMissingDiagnosis(
   return to === "completed" && !confirmedDiagnosis?.trim();
 }
 
+/** True iff the estimate has ever been sent to the customer — i.e. the
+ *  order's statusHistory contains an `estimated` entry. This is THE
+ *  predicate for draft dual-semantics: a draft that was sent is a
+ *  "revision in progress" (share links say so, admin badge says "rev N"),
+ *  a never-sent draft is a fresh AI draft awaiting review.
+ *
+ *  Reads ONLY the row-local statusHistory jsonb — never query order_events
+ *  for this (the admin list would turn into a per-row N+1). Do not use
+ *  revisionNumber: it defaults to 1 and increments on pure-draft edits, so
+ *  it misfires on never-sent drafts. */
+export function hasBeenSentToCustomer(order: {
+  statusHistory: readonly { status: string }[] | null | undefined;
+}): boolean {
+  return Array.isArray(order.statusHistory) &&
+    order.statusHistory.some((e) => e.status === "estimated");
+}
+
 // ---------------------------------------------------------------------------
 // Step-progress helpers (consumed by web's progress bar)
 // ---------------------------------------------------------------------------
 
-/** Linear lifecycle steps (excludes branch states declined/revised and
- *  terminal cancellation). Used to render a progress bar. */
+/** Linear lifecycle steps (excludes the declined branch and terminal
+ *  cancellation). Used to render a progress bar. */
 export const ORDER_MAIN_STEPS = [
   "draft",
   "estimated",
   "approved",
-  "scheduled",
   "in_progress",
   "completed",
 ] as const;
@@ -314,7 +382,6 @@ export const ORDER_TERMINAL_STATUSES: ReadonlySet<OrderStatus> = new Set([
 
 export const ORDER_BRANCH_STATUSES: ReadonlySet<OrderStatus> = new Set([
   "declined",
-  "revised",
 ]);
 
 export type OrderStepState = "completed" | "current" | "pending";
@@ -328,7 +395,7 @@ export function getOrderStepState(
   const stepIdx = main.indexOf(stepStatus);
 
   if (currentIdx === -1) {
-    if (currentStatus === "declined" || currentStatus === "revised") {
+    if (currentStatus === "declined") {
       const effectiveIdx = main.indexOf("estimated");
       return stepIdx <= effectiveIdx ? "completed" : "pending";
     }

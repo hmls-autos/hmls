@@ -55,20 +55,30 @@ describe("ACTION_REGISTRY", () => {
     expect(ACTION_REGISTRY.send_to_customer.visible(o)).toBe(true);
   });
 
-  test("confirm_tentative_booking requires scheduledAt + providerId", () => {
+  test("approve_walk_in requires scheduledAt + providerId", () => {
     const partial = makeOrder({
       scheduledAt: "2026-05-25T10:00:00Z",
       providerId: null,
     });
-    expect(ACTION_REGISTRY.confirm_tentative_booking.visible(partial)).toBe(
-      false,
-    );
+    expect(ACTION_REGISTRY.approve_walk_in.visible(partial)).toBe(false);
 
     const full = makeOrder({
       scheduledAt: "2026-05-25T10:00:00Z",
       providerId: 7,
     });
-    expect(ACTION_REGISTRY.confirm_tentative_booking.visible(full)).toBe(true);
+    expect(ACTION_REGISTRY.approve_walk_in.visible(full)).toBe(true);
+  });
+
+  test("start_job is disabled (with hint) until a mechanic is assigned", () => {
+    const unassigned = makeOrder({ status: "approved", providerId: null });
+    expect(ACTION_REGISTRY.start_job.enabled(unassigned)).toBe(false);
+    expect(ACTION_REGISTRY.start_job.disabledHint?.(unassigned)).toBe(
+      "Assign a mechanic before starting",
+    );
+
+    const assigned = makeOrder({ status: "approved", providerId: 7 });
+    expect(ACTION_REGISTRY.start_job.enabled(assigned)).toBe(true);
+    expect(ACTION_REGISTRY.start_job.disabledHint?.(assigned)).toBeUndefined();
   });
 
   test("mark_paid hides once paidAt is set", () => {
@@ -83,8 +93,14 @@ describe("ACTION_REGISTRY", () => {
       ACTION_REGISTRY.cancel_order.variant(makeOrder({ status: "draft" })),
     ).toBe("secondary");
     expect(
-      ACTION_REGISTRY.cancel_order.variant(makeOrder({ status: "scheduled" })),
+      ACTION_REGISTRY.cancel_order.variant(makeOrder({ status: "approved" })),
     ).toBe("danger");
+    // Window-period legacy label: physical 'revised' canonicalizes to draft.
+    expect(
+      ACTION_REGISTRY.cancel_order.variant(
+        makeOrder({ status: "revised" as OrderStatus }),
+      ),
+    ).toBe("secondary");
   });
 
   test("reassign_mechanic label flips by providerId", () => {
@@ -115,12 +131,11 @@ describe("ACTION_REGISTRY.invoke behavior", () => {
     expect(ctx.transitionStatus).toHaveBeenCalledWith("estimated");
   });
 
-  test("confirm_booking transitions to scheduled without an evidence prompt", async () => {
-    // approved→scheduled is NOT a fenced edge — no authorization dialog.
+  test("revise_estimate re-opens the declined order as a draft", async () => {
+    // `revised` no longer exists — draft is the single shop-side WIP state.
     const ctx = makeCtx();
-    await ACTION_REGISTRY.confirm_booking.invoke(ctx);
-    expect(ctx.askAuthorization).not.toHaveBeenCalled();
-    expect(ctx.transitionStatus).toHaveBeenCalledWith("scheduled");
+    await ACTION_REGISTRY.revise_estimate.invoke(ctx);
+    expect(ctx.transitionStatus).toHaveBeenCalledWith("draft");
   });
 
   test("approve_estimate collects evidence and forwards it", async () => {
@@ -141,36 +156,23 @@ describe("ACTION_REGISTRY.invoke behavior", () => {
     expect(ctx.transitionStatus).not.toHaveBeenCalled();
   });
 
-  test("confirm_tentative_booking collects evidence and forwards it", async () => {
+  test("approve_walk_in collects evidence and targets approved", async () => {
+    // The walk-in shortcut is draft→approved now (no `scheduled` state) and
+    // stays fenced: evidence is mandatory.
     const auth = { channel: "in_person" as const };
     const ctx = makeCtx({ askAuthorization: mock(async () => auth) });
-    await ACTION_REGISTRY.confirm_tentative_booking.invoke(ctx);
+    await ACTION_REGISTRY.approve_walk_in.invoke(ctx);
+    expect(ctx.askAuthorization).toHaveBeenCalled();
     expect(ctx.transitionStatus).toHaveBeenCalledWith(
-      "scheduled",
+      "approved",
       undefined,
       auth,
     );
   });
 
-  test("confirm_tentative_booking aborts when the evidence dialog is cancelled", async () => {
+  test("approve_walk_in aborts when the evidence dialog is cancelled", async () => {
     const ctx = makeCtx({ askAuthorization: mock(async () => null) });
-    await ACTION_REGISTRY.confirm_tentative_booking.invoke(ctx);
-    expect(ctx.transitionStatus).not.toHaveBeenCalled();
-  });
-
-  test("reject_booking asks for reason and cancels", async () => {
-    const ctx = makeCtx({ askReason: mock(async () => "customer no-show") });
-    await ACTION_REGISTRY.reject_booking.invoke(ctx);
-    expect(ctx.askReason).toHaveBeenCalled();
-    expect(ctx.transitionStatus).toHaveBeenCalledWith(
-      "cancelled",
-      "customer no-show",
-    );
-  });
-
-  test("reject_booking does nothing if user cancels the reason dialog", async () => {
-    const ctx = makeCtx({ askReason: mock(async () => null) });
-    await ACTION_REGISTRY.reject_booking.invoke(ctx);
+    await ACTION_REGISTRY.approve_walk_in.invoke(ctx);
     expect(ctx.transitionStatus).not.toHaveBeenCalled();
   });
 
@@ -234,23 +236,37 @@ describe("complete_job soft-nudge for confirmed diagnosis", () => {
 describe("leadAction", () => {
   test("returns profile.primary when visible", () => {
     const o = makeOrder({
-      status: "scheduled",
+      status: "approved",
       scheduledAt: "x",
       providerId: 1,
     });
     const lead = leadAction(o);
-    expect(lead?.id).toBe(STATUS_PROFILES.scheduled.primary);
+    expect(lead?.id).toBe(STATUS_PROFILES.approved.primary);
+    expect(lead?.id).toBe("start_job");
+  });
+
+  test("canonicalizes window-period legacy statuses to their profile", () => {
+    // A physical 'scheduled' row (pre-remap) is canonically approved.
+    const legacy = makeOrder({
+      status: "scheduled" as OrderStatus,
+      scheduledAt: "x",
+      providerId: 1,
+    });
+    expect(leadAction(legacy)?.id).toBe("start_job");
+    // A physical 'revised' row is canonically draft.
+    const revised = makeOrder({ status: "revised" as OrderStatus });
+    expect(leadAction(revised)?.id).toBe("send_to_customer");
   });
 
   test("falls through to next primary-variant action when profile.primary is hidden", () => {
-    // draft+tentative: profile.primary=send_to_customer hides, falls to confirm_tentative_booking
+    // draft+tentative: profile.primary=send_to_customer hides, falls to approve_walk_in
     const o = makeOrder({
       status: "draft",
       scheduledAt: "2026-05-25T10:00:00Z",
       providerId: 7,
     });
     const lead = leadAction(o);
-    expect(lead?.id).toBe("confirm_tentative_booking");
+    expect(lead?.id).toBe("approve_walk_in");
   });
 
   test("returns undefined when no primary candidate is visible", () => {

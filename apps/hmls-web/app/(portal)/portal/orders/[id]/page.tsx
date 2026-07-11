@@ -17,7 +17,13 @@ import { usePortalOrder } from "@/hooks/usePortal";
 import { ApiError } from "@/lib/api-client";
 import { portalPaths } from "@/lib/api-paths";
 import { formatCents } from "@/lib/format";
-import { isTentativeBooking, statusDisplay } from "@/lib/status-display";
+import {
+  canonicalStatus,
+  historicalStatusLabel,
+  isBookedOrder,
+  isTentativeBooking,
+  statusDisplay,
+} from "@/lib/status-display";
 
 /* ── Timeline helpers ─────────────────────────────────────────────────── */
 
@@ -25,7 +31,8 @@ function eventDescription(event: CustomerOrderEvent): string {
   switch (event.eventType) {
     case "status_change":
       if (event.toStatus) {
-        const label = statusDisplay(event.toStatus, "portal").label;
+        // History is immutable — legacy entries keep their historical label.
+        const label = historicalStatusLabel(event.toStatus, "portal");
         return `Status updated to: ${label}`;
       }
       return "Status updated";
@@ -259,14 +266,16 @@ export default function PortalOrderDetailPage() {
   const vehicleStr = vehicle
     ? [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ")
     : null;
-  const canApproveDecline = order.status === "estimated";
-  // Customer may walk away while the order is still draft (being prepared) or
-  // scheduled (before the shop starts). estimated has its own decline action;
-  // approved/in_progress require contacting the shop (work may be committed).
-  const canCancel = order.status === "draft" || order.status === "scheduled";
+  const canonical = canonicalStatus(order.status);
+  const canApproveDecline = canonical === "estimated";
+  // Customer may walk away while the order is still draft (being prepared)
+  // or approved (before the shop starts work). estimated has its own decline
+  // action; in_progress requires contacting the shop (work is committed).
+  const canCancel = canonical === "draft" || canonical === "approved";
   const tentative = isTentativeBooking(order);
   const portalStatus = statusDisplay(order.status, "portal", {
     tentativeBooking: tentative,
+    scheduledBooking: isBookedOrder(order),
   });
 
   async function handleAction(action: "approve" | "decline") {
@@ -396,8 +405,8 @@ export default function PortalOrderDetailPage() {
         {/* Fixo CTA — only shown when the order is in a terminal-decline
             state. Mirrors the email CTA so the customer journey is
             consistent whether they arrived via inbox or direct portal. */}
-        {(order.status === "declined" || order.status === "cancelled") && (
-          <FixoCtaBanner channelDetail={`portal_${order.status}`} />
+        {(canonical === "declined" || canonical === "cancelled") && (
+          <FixoCtaBanner channelDetail={`portal_${canonical}`} />
         )}
 
         {/* Content */}
@@ -611,14 +620,14 @@ export default function PortalOrderDetailPage() {
               </div>
             )}
 
-            {/* Cancel — draft (still being prepared) or scheduled (before work starts) */}
+            {/* Cancel — draft (still being prepared) or approved (before work starts) */}
             {canCancel && (
               <div className="bg-surface border border-border rounded-xl p-4 space-y-3">
                 <h2 className="text-sm font-semibold text-text">
                   Changed your mind?
                 </h2>
                 <p className="text-xs text-text-secondary">
-                  {order.status === "draft"
+                  {canonical === "draft"
                     ? "This estimate is still being prepared — cancel it now if you no longer want the work, so the shop doesn't review it."
                     : "You can cancel this order before the shop starts the work."}
                 </p>
@@ -646,6 +655,22 @@ export default function PortalOrderDetailPage() {
                   <span className="text-text-secondary">Status</span>
                   <span className="text-text">{portalStatus.label}</span>
                 </div>
+                {/* Approved + slot IS the confirmed booking (the retired
+                    `scheduled` status) — show the appointment inline. */}
+                {order.scheduledAt && (
+                  <div className="flex justify-between">
+                    <span className="text-text-secondary">Appointment</span>
+                    <span className="text-text">
+                      <DateTime value={order.scheduledAt} format="datetime" />
+                    </span>
+                  </div>
+                )}
+                {order.scheduledAt && order.location && (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-text-secondary">Location</span>
+                    <span className="text-text truncate">{order.location}</span>
+                  </div>
+                )}
                 {order.expiresAt && (
                   <div className="flex justify-between">
                     <span className="text-text-secondary">

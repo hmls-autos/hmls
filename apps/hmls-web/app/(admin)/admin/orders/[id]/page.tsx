@@ -27,7 +27,12 @@ import {
   parseAdminOrdersSearch,
 } from "@/lib/admin-order-filters";
 import { useActionInvoker } from "@/lib/order-actions";
-import { isTentativeBooking, statusDisplay } from "@/lib/status-display";
+import {
+  canonicalStatus,
+  isTentativeBooking,
+  orderSubBadge,
+  statusDisplay,
+} from "@/lib/status-display";
 import { cn } from "@/lib/utils";
 
 /* ── Status Badge (using shadcn Badge) ─────────────────────────────── */
@@ -140,6 +145,9 @@ export default function OrderDetailPage() {
   const adminStatus = statusDisplay(order.status, "admin", {
     tentativeBooking: tentative,
   });
+  // Derived dual-semantics badge: draft → Pending review / Revising · rev N,
+  // approved → Pending schedule / Scheduled.
+  const subBadge = orderSubBadge(order);
 
   const bookingProviderName =
     order.providerId != null
@@ -170,10 +178,14 @@ export default function OrderDetailPage() {
             Order #{order.id}
           </h1>
           <OrderStatusBadge entry={adminStatus} />
-          {order.revisionNumber > 1 && (
-            <Badge variant="secondary" className="text-[10px]">
-              v{order.revisionNumber}
-            </Badge>
+          {subBadge ? (
+            <OrderStatusBadge entry={subBadge} />
+          ) : (
+            order.revisionNumber > 1 && (
+              <Badge variant="secondary" className="text-[10px]">
+                v{order.revisionNumber}
+              </Badge>
+            )
           )}
         </div>
         <span className="text-xs text-muted-foreground">
@@ -181,7 +193,7 @@ export default function OrderDetailPage() {
         </span>
       </div>
 
-      {order.status === "draft" && (
+      {canonicalStatus(order.status) === "draft" && (
         <DraftBanner order={order} invoker={invoker} />
       )}
 

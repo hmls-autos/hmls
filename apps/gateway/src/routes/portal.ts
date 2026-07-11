@@ -263,8 +263,8 @@ portal.post("/me/orders/:id/decline", zValidator("json", orderReasonInput), asyn
   return sendOrderStateResult(c, result);
 });
 
-// POST /me/orders/:id/cancel-booking — customer cancels a scheduled order
-// before the shop has started work.
+// POST /me/orders/:id/cancel-booking — customer cancels a booked (approved +
+// scheduled slot) order before the shop has started work.
 portal.post(
   "/me/orders/:id/cancel-booking",
   zValidator("json", orderReasonInput),
@@ -294,8 +294,8 @@ portal.post(
 
 // POST /me/orders/:id/cancel — customer cancels an order they no longer want,
 // from the order detail page. The harness gates which states a customer may
-// cancel from (draft / estimated / scheduled — never approved/in_progress).
-// `cancel-booking` above is the Bookings-page equivalent for scheduled orders.
+// cancel from (draft / estimated / approved — never in_progress).
+// `cancel-booking` above is the Bookings-page equivalent for booked orders.
 portal.post("/me/orders/:id/cancel", zValidator("json", orderReasonInput), async (c) => {
   const customerId = c.get("customerId");
   const id = Number(c.req.param("id"));

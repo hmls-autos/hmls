@@ -42,8 +42,9 @@ const CHANNELS: ReadonlyArray<{ value: AuthorizationChannel; label: string }> =
     { value: "portal", label: "Customer portal" },
   ];
 
-/** Promise-based evidence collector for fenced transitions (→approved,
- * draft→scheduled). Returns the channel + optional note, or `null` if the
+/** Promise-based evidence collector for fenced transitions (any →approved,
+ * including the draft→approved walk-in shortcut). Returns the channel +
+ * optional note, or `null` if the
  * user cancelled. Caller must render `<AuthorizeDialog />` once (mounted in
  * root layout). Resolves `null` when the dialog isn't mounted — a fenced
  * transition without evidence would be rejected server-side anyway. */

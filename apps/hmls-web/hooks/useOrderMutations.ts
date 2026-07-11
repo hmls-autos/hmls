@@ -39,8 +39,8 @@ export function useOrderMutations(
   async function transitionStatus(
     newStatus: string,
     cancellationReason?: string,
-    /** Customer-authorization evidence — required by the API on →approved and
-     *  the draft→scheduled walk-in shortcut. */
+    /** Customer-authorization evidence — required by the API on any
+     *  →approved edge (including the draft→approved walk-in shortcut). */
     authorization?: OrderAuthorization,
   ): Promise<void> {
     setTransitioning(true);

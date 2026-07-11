@@ -7,6 +7,7 @@ import type { ToolContext } from "../../common/convert-tools.ts";
 import {
   addNote,
   allowedTransitions,
+  canonicalizeStatus,
   type OrderStatus,
   transition,
 } from "../../services/order-state.ts";
@@ -17,13 +18,14 @@ import {
   toolResultFromOrderState,
 } from "../../services/order-state-tool.ts";
 
+// Canonical 7-state machine — the LLM should never target the retired
+// 'scheduled'/'revised' labels (transition() would map them anyway, but the
+// schema shouldn't advertise them).
 const ORDER_STATUSES = [
   "draft",
   "estimated",
-  "revised",
   "approved",
   "declined",
-  "scheduled",
   "in_progress",
   "completed",
   "cancelled",
@@ -60,9 +62,10 @@ const transitionOrderStatusTool = {
       })
       .optional()
       .describe(
-        "Customer-authorization evidence. REQUIRED when transitioning to 'approved' or from " +
-          "'draft' to 'scheduled' — these edges record how the customer approved the work. If " +
-          "you do not know which channel the customer used, ASK the user first; never guess.",
+        "Customer-authorization evidence. REQUIRED when transitioning to 'approved' (including " +
+          "the draft→approved walk-in shortcut) — this edge records how the customer approved " +
+          "the work. If you do not know which channel the customer used, ASK the user first; " +
+          "never guess.",
       ),
   }),
   execute: async (
@@ -281,7 +284,10 @@ const getOrderStatusTool = {
       return toolResult({ success: false, error: "No order found" });
     }
 
-    const nextSteps = allowedTransitions(order.status as OrderStatus);
+    // Canonical status for the LLM — a window-period physical 'scheduled' /
+    // 'revised' row reads as its canonical state.
+    const status: OrderStatus = canonicalizeStatus(order.status);
+    const nextSteps = allowedTransitions(status);
     const nextStepHint = nextSteps.length > 0
       ? `Next allowed transitions: ${nextSteps.join(", ")}`
       : "Order is in a terminal state";
@@ -296,7 +302,9 @@ const getOrderStatusTool = {
     return toolResult({
       success: true,
       orderId: order.id,
-      status: order.status,
+      status,
+      scheduledAt: order.scheduledAt,
+      providerId: order.providerId,
       contactName: order.contactName,
       contactEmail: order.contactEmail,
       contactPhone: order.contactPhone,

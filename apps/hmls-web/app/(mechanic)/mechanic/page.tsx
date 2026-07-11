@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type MechanicOrder, useMechanicOrders } from "@/hooks/useMechanic";
 import { formatDate, formatTime } from "@/lib/format";
-import { statusDisplay } from "@/lib/status-display";
+import { canonicalStatus, statusDisplay } from "@/lib/status-display";
 import { cn } from "@/lib/utils";
 
 function vehicleLabel(o: MechanicOrder) {
@@ -134,12 +134,13 @@ export default function MechanicOrdersPage() {
 
   const { orders, isLoading } = useMechanicOrders(fromDate);
 
-  // Include `approved` so an order assigned-but-not-yet-confirmed by the
-  // shop still surfaces here. The mechanic needs to know it's coming even
-  // before the admin clicks "Confirm booking".
-  const upcoming = orders.filter((o) =>
-    ["approved", "scheduled", "in_progress"].includes(o.status),
-  );
+  // approved + a slot = the confirmed booking (day groups below); approved
+  // without a slot lands in "Pending schedule". canonicalStatus keeps
+  // window-period legacy 'scheduled' rows visible.
+  const upcoming = orders.filter((o) => {
+    const s = canonicalStatus(o.status);
+    return s === "approved" || s === "in_progress";
+  });
   const { pending, byDay } = partitionBySchedule(upcoming);
   const sortedDays = [...byDay.keys()].sort(
     (a, b) => new Date(a).getTime() - new Date(b).getTime(),

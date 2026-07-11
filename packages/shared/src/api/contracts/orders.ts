@@ -1,33 +1,40 @@
 import { z } from "zod";
 import {
   AUTHORIZATION_CHANNELS,
+  canonicalizeStatus,
   type OrderAuthorization,
   type OrderStatus,
 } from "@hmls/shared/order/status";
 
 // ---------------------------------------------------------------------------
-// Shared: order status enum (canonical list — single definition for this
-// module; reused wherever a status field appears)
+// Shared: order status enums. `orderStatusEnum` is the canonical 7-state
+// list (use for OUTPUT shapes). `orderStatusInput` additionally accepts the
+// legacy 'scheduled' / 'revised' labels during the 9→7 deploy→remap window
+// and maps them through canonicalizeStatus (use for INPUT filters /
+// transition targets). Once old clients are gone the legacy entries can be
+// dropped — they are harmless until then.
 // ---------------------------------------------------------------------------
 
 export const orderStatusEnum = z.enum([
   "draft",
   "estimated",
-  "revised",
   "approved",
   "declined",
-  "scheduled",
   "in_progress",
   "completed",
   "cancelled",
 ]) satisfies z.ZodType<OrderStatus>;
+
+export const orderStatusInput = z
+  .enum([...orderStatusEnum.options, "scheduled", "revised"])
+  .transform((s): OrderStatus => canonicalizeStatus(s));
 
 // ---------------------------------------------------------------------------
 // GET /orders — query string
 // ---------------------------------------------------------------------------
 
 export const listOrdersQuery = z.object({
-  status: orderStatusEnum.optional(),
+  status: orderStatusInput.optional(),
   search: z.string().optional(),
   page: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
@@ -106,16 +113,17 @@ export const scheduleOrderInput = z.object({
 // PATCH /orders/:id/status — generic status transition
 // ---------------------------------------------------------------------------
 
-/** Customer-authorization evidence for fenced transitions (→approved and the
- *  draft→scheduled walk-in shortcut). One contract shared by web, gateway,
- *  and agent tools — see requiresCustomerAuthorization in order/status. */
+/** Customer-authorization evidence for fenced transitions (any →approved,
+ *  including the draft→approved walk-in shortcut). One contract shared by
+ *  web, gateway, and agent tools — see requiresCustomerAuthorization in
+ *  order/status. */
 export const orderAuthorizationInput = z.object({
   channel: z.enum(AUTHORIZATION_CHANNELS),
   note: z.string().max(500).optional(),
 }) satisfies z.ZodType<OrderAuthorization>;
 
 export const transitionOrderInput = z.object({
-  status: orderStatusEnum,
+  status: orderStatusInput,
   notes: z.string().optional(),
   cancellationReason: z.string().optional(),
   authorization: orderAuthorizationInput.optional(),

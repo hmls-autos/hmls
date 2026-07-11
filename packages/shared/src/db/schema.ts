@@ -295,6 +295,11 @@ export const orderEventTypeEnum = pgEnum("order_event_type", [
   // Manual outreach log — admin recorded contacting the customer
   // (metadata: { method: "text"|"call"|"email", note? }).
   "customer_contacted",
+  // Once-per-order marker that the customer's "appointment confirmed" email
+  // fired when the slot+mechanic pair first became complete on an approved
+  // order. Deduped by the partial unique index (migration 0043); writers
+  // insert with ON CONFLICT DO NOTHING and skip sending when they lose.
+  "schedule_ready_notified",
 ]);
 
 export type OrderEventType = (typeof orderEventTypeEnum.enumValues)[number];
@@ -335,7 +340,20 @@ export const orderEvents = pgTable("order_events", {
   metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
     .notNull(),
-});
+}, (table) => ({
+  // Event-feed reads are always "this order's events, newest first".
+  orderCreatedIdx: index("order_events_order_id_created_at_idx").on(
+    table.orderId,
+    table.createdAt,
+  ),
+  // At most one schedule_ready_notified marker per order (C6 dedup). The
+  // prod migration (0043) creates this with `event_type::text = ...` so the
+  // predicate is usable in the same transaction that adds the enum value;
+  // behavior is identical.
+  scheduleReadyOnceIdx: uniqueIndex("order_events_schedule_ready_once_idx")
+    .on(table.orderId)
+    .where(sql`event_type = 'schedule_ready_notified'`),
+}));
 
 // --- OLP (Open Labor Project) reference data ---
 
