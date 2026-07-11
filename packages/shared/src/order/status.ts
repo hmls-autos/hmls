@@ -171,6 +171,25 @@ export const PAYMENT_ALLOWED_STATUSES: ReadonlySet<OrderStatus> = new Set(
   ["approved", "in_progress", "completed"],
 );
 
+/** Manual payment methods a human can record. Single source of truth for the
+ *  recordPayment harness, the API contract, and the web method selects. */
+export const PAYMENT_METHODS = [
+  "cash",
+  "card",
+  "check",
+  "venmo",
+  "zelle",
+  "stripe",
+  "other",
+] as const;
+export type PaymentMethod = typeof PAYMENT_METHODS[number];
+
+const PAYMENT_METHOD_SET: ReadonlySet<string> = new Set(PAYMENT_METHODS);
+
+export function isPaymentMethod(s: string): s is PaymentMethod {
+  return PAYMENT_METHOD_SET.has(s);
+}
+
 // ---------------------------------------------------------------------------
 // Drift self-check (exercised by the L1 test suite)
 // ---------------------------------------------------------------------------

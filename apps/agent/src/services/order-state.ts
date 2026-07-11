@@ -41,10 +41,13 @@ import {
   canonicalizeStatus,
   EDITABLE_STATUSES,
   evaluateAuthorizationFence,
+  isPaymentMethod,
   isTerminal,
   type OrderAuthorization,
   type OrderStatus,
   PAYMENT_ALLOWED_STATUSES,
+  PAYMENT_METHODS,
+  type PaymentMethod,
   resolveAuthority,
   type TerminalStatus,
 } from "@hmls/shared/order/status";
@@ -63,9 +66,12 @@ export {
   canActorTransition,
   canonicalizeStatus,
   hasBeenSentToCustomer,
+  isPaymentMethod,
   isTerminal,
   type OrderAuthorization,
   type OrderStatus,
+  PAYMENT_METHODS,
+  type PaymentMethod,
   physicalStatusLabels,
   requiresCustomerAuthorization,
   type TerminalStatus,
@@ -832,23 +838,6 @@ export async function assignProvider(
 // recordPayment — stamp payment fields (no status change)
 // ---------------------------------------------------------------------------
 
-export const PAYMENT_METHODS = [
-  "cash",
-  "card",
-  "check",
-  "venmo",
-  "zelle",
-  "stripe",
-  "other",
-] as const;
-export type PaymentMethod = typeof PAYMENT_METHODS[number];
-
-const PAYMENT_METHOD_SET: ReadonlySet<string> = new Set(PAYMENT_METHODS);
-
-export function isPaymentMethod(s: string): s is PaymentMethod {
-  return PAYMENT_METHOD_SET.has(s);
-}
-
 export interface PaymentRecord {
   amountCents: number;
   method: PaymentMethod;
@@ -856,7 +845,10 @@ export interface PaymentRecord {
   paidAt?: Date;
 }
 
-const PAYMENT_WRITE_ACTORS: ReadonlySet<ActorKind> = new Set(["admin", "system"]);
+// Mechanic: on-the-spot collection after completing their own job. The
+// gateway route enforces ownership + completed-only; authority kind alone is
+// checked here (same split as transition()).
+const PAYMENT_WRITE_ACTORS: ReadonlySet<ActorKind> = new Set(["admin", "system", "mechanic"]);
 
 export async function recordPayment(
   orderId: number,
@@ -934,6 +926,9 @@ export async function recordPayment(
         amountCents: payment.amountCents,
         method: payment.method,
         reference: payment.reference ?? null,
+        // Audit doesn't lie: a mechanic-collected payment names the collector
+        // instead of being proxied through a system/admin actor.
+        ...(authority.kind === "mechanic" ? { collectedBy: authority.providerId } : {}),
       },
     });
 

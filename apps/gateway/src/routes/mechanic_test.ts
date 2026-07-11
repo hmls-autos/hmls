@@ -189,3 +189,152 @@ Deno.test({
     }
   },
 });
+
+// ---------------------------------------------------------------------------
+// POST /orders/:id/payment — mechanic on-the-spot collection (PR 4)
+// ---------------------------------------------------------------------------
+
+async function paymentReq(
+  orderId: number,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  return await mechanic.request(`/orders/${orderId}/payment`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+Deno.test({
+  name: "mechanic: POST /orders/:id/payment (DB)",
+  ignore: !DATABASE_URL,
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async (t) => {
+    const shopA = await ensureShop(SLUG_A);
+    const shopB = await ensureShop(SLUG_B);
+    await sweep([shopA, shopB]);
+
+    const [me] = await db
+      .insert(schema.providers)
+      .values({ shopId: shopA, name: `${MARKER} me` })
+      .returning();
+    const [other] = await db
+      .insert(schema.providers)
+      .values({ shopId: shopA, name: `${MARKER} other` })
+      .returning();
+    const [customer] = await db
+      .insert(schema.customers)
+      .values({ shopId: shopA, name: `${MARKER} customer` })
+      .returning();
+
+    const orderIn = (
+      shopId: string,
+      providerId: number,
+      status: "completed" | "in_progress",
+    ) => ({
+      shopId,
+      customerId: customer.id,
+      providerId,
+      status,
+      statusHistory: [
+        { status, timestamp: new Date().toISOString(), actor: "test:fixture" },
+      ],
+    });
+
+    const [mine] = await db.insert(schema.orders).values(orderIn(shopA, me.id, "completed"))
+      .returning();
+    const [others] = await db.insert(schema.orders).values(orderIn(shopA, other.id, "completed"))
+      .returning();
+    const [crossShop] = await db.insert(schema.orders).values(orderIn(shopB, me.id, "completed"))
+      .returning();
+    const [notDone] = await db.insert(schema.orders).values(orderIn(shopA, me.id, "in_progress"))
+      .returning();
+
+    const prevEnv = {
+      SKIP_AUTH: Deno.env.get("SKIP_AUTH"),
+      DEV_PROVIDER_ID: Deno.env.get("DEV_PROVIDER_ID"),
+      DEV_SHOP_ID: Deno.env.get("DEV_SHOP_ID"),
+    };
+    Deno.env.set("SKIP_AUTH", "true");
+    Deno.env.set("DEV_PROVIDER_ID", String(me.id));
+    Deno.env.set("DEV_SHOP_ID", shopA);
+
+    try {
+      await t.step("own completed order: payment stamped, collectedBy in event", async () => {
+        const res = await paymentReq(mine.id, {
+          amountCents: 25000,
+          method: "cash",
+          reference: "receipt-9",
+        });
+        assertEquals(res.status, 200);
+        const body = await res.json();
+        assertEquals(body.paymentMethod, "cash");
+        assertEquals(body.paidAmountCents, 25000);
+        assertEquals(body.paymentReference, "receipt-9");
+        assertEquals(body.paidAt != null, true);
+
+        const events = await db
+          .select()
+          .from(schema.orderEvents)
+          .where(eq(schema.orderEvents.orderId, mine.id));
+        const payments = events.filter((e) => e.eventType === "payment_recorded");
+        assertEquals(payments.length, 1);
+        assertEquals(payments[0].actor, `mechanic:${me.id}`);
+        const meta = payments[0].metadata as { collectedBy?: number; amountCents?: number };
+        assertEquals(meta.collectedBy, me.id);
+        assertEquals(meta.amountCents, 25000);
+      });
+
+      await t.step("repeat submission overwrites, no stacking of columns", async () => {
+        const res = await paymentReq(mine.id, { amountCents: 26000, method: "zelle" });
+        assertEquals(res.status, 200);
+        const body = await res.json();
+        assertEquals(body.paidAmountCents, 26000);
+        assertEquals(body.paymentMethod, "zelle");
+        assertEquals(body.paymentReference, null);
+      });
+
+      await t.step("other provider's completed order -> 404, untouched", async () => {
+        const res = await paymentReq(others.id, { amountCents: 100, method: "cash" });
+        assertEquals(res.status, 404);
+        const [row] = await db
+          .select({ paidAt: schema.orders.paidAt })
+          .from(schema.orders)
+          .where(eq(schema.orders.id, others.id))
+          .limit(1);
+        assertEquals(row.paidAt, null);
+      });
+
+      await t.step("cross-shop order (assigned to me) -> 404", async () => {
+        const res = await paymentReq(crossShop.id, { amountCents: 100, method: "cash" });
+        assertEquals(res.status, 404);
+      });
+
+      await t.step("wrong status (in_progress) -> 400, untouched", async () => {
+        const res = await paymentReq(notDone.id, { amountCents: 100, method: "cash" });
+        assertEquals(res.status, 400);
+        const body = await res.json();
+        assertStringIncludes(body.error.message, "completed");
+        const [row] = await db
+          .select({ paidAt: schema.orders.paidAt })
+          .from(schema.orders)
+          .where(eq(schema.orders.id, notDone.id))
+          .limit(1);
+        assertEquals(row.paidAt, null);
+      });
+
+      await t.step("invalid method rejected by shared contract", async () => {
+        const res = await paymentReq(mine.id, { amountCents: 100, method: "transfer" });
+        assertEquals(res.status, 400);
+      });
+    } finally {
+      for (const [key, value] of Object.entries(prevEnv)) {
+        if (value === undefined) Deno.env.delete(key);
+        else Deno.env.set(key, value);
+      }
+      await sweep([shopA, shopB]);
+      await db.delete(schema.shops).where(inArray(schema.shops.id, [shopA, shopB]));
+    }
+  },
+});

@@ -93,4 +93,5 @@ export const mechanicPaths = {
   },
   orderTransition: (id: number | string) =>
     `/api/mechanic/orders/${id}/transition`,
+  orderPayment: (id: number | string) => `/api/mechanic/orders/${id}/payment`,
 };

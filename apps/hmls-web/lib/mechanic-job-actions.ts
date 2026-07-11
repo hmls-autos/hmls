@@ -25,9 +25,42 @@ export function mechanicJobAction(status: string): MechanicJobAction | null {
   }
 }
 
+export type MechanicPaymentInput = {
+  amountCents: number;
+  method: string;
+  reference?: string;
+};
+
+export type MechanicPaymentStep = {
+  /** Show the payment dialog. Resolves the fields, or null to skip. A retry
+   *  re-opens the dialog with `error` set. */
+  ask: (opts: { error?: string }) => Promise<MechanicPaymentInput | null>;
+  record: (payment: MechanicPaymentInput) => Promise<void>;
+};
+
+/** Optional on-the-spot payment capture after Complete. Complete already
+ *  succeeded and NEVER rolls back: a failed payment write re-opens the
+ *  dialog with the error (retryable) and this function never throws —
+ *  skipping is always allowed, admin mark-paid is the fallback. */
+export async function runPaymentStep(step: MechanicPaymentStep): Promise<void> {
+  let error: string | undefined;
+  while (true) {
+    const payment = await step.ask({ error });
+    if (payment === null) return; // skipped
+    try {
+      await step.record(payment);
+      return;
+    } catch (e) {
+      error = e instanceof Error ? e.message : "Failed to record payment";
+    }
+  }
+}
+
 /** Run a job action, mirroring the admin complete_job semantics: completing
  *  an order with no confirmed diagnosis soft-prompts for one (cancel backs
- *  out, blank completes without it). Start transitions immediately. */
+ *  out, blank completes without it). Start transitions immediately. After a
+ *  successful Complete, `payment` (if given) offers skippable on-the-spot
+ *  collection — see runPaymentStep for the failure semantics. */
 export async function invokeMechanicJobAction(
   action: MechanicJobAction,
   order: { confirmedDiagnosis?: string | null },
@@ -39,11 +72,14 @@ export async function invokeMechanicJobAction(
     title: string;
     description?: string;
   }) => Promise<string | null>,
+  payment?: MechanicPaymentStep,
 ): Promise<void> {
-  if (
-    action.to === "completed" &&
-    completionMissingDiagnosis("completed", order.confirmedDiagnosis)
-  ) {
+  if (action.to !== "completed") {
+    await transition(action.to);
+    return;
+  }
+
+  if (completionMissingDiagnosis("completed", order.confirmedDiagnosis)) {
     const d = await askReason({
       title: "What did it turn out to be?",
       description:
@@ -52,7 +88,9 @@ export async function invokeMechanicJobAction(
     });
     if (d === null) return; // backed out of completing
     await transition("completed", d.trim() || undefined);
-    return;
+  } else {
+    await transition("completed");
   }
-  await transition(action.to);
+
+  if (payment) await runPaymentStep(payment);
 }

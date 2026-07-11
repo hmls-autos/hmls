@@ -794,6 +794,53 @@ Deno.test({
         const events = await getEvents(order.id);
         const paymentEvents = events.filter((e) => e.eventType === "payment_recorded");
         assertEquals(paymentEvents.length, 1);
+        const meta = paymentEvents[0].metadata as { collectedBy?: number };
+        assertEquals(meta.collectedBy, undefined, "admin payments carry no collectedBy");
+      } finally {
+        await deleteOrder(order.id);
+      }
+    });
+
+    await t.step("recordPayment: mechanic actor allowed, event stamps collectedBy", async () => {
+      const mech = await insertTestMechanic(shopId, { name: "collects-payment" });
+      const order = await insertTestOrder({
+        shopId,
+        status: "completed",
+        customerId,
+        providerId: mech.id,
+      });
+      try {
+        const result = await recordPayment(order.id, {
+          amountCents: 18000,
+          method: "zelle",
+        }, { kind: "mechanic", providerId: mech.id });
+        assertEquals(result.ok, true);
+
+        const updated = await reloadOrder(order.id);
+        assertEquals(updated.paymentMethod, "zelle");
+        assertEquals(updated.paidAmountCents, 18000);
+
+        const events = await getEvents(order.id);
+        const paymentEvents = events.filter((e) => e.eventType === "payment_recorded");
+        assertEquals(paymentEvents.length, 1);
+        assertEquals(paymentEvents[0].actor, `mechanic:${mech.id}`);
+        const meta = paymentEvents[0].metadata as { collectedBy?: number };
+        assertEquals(meta.collectedBy, mech.id, "audit names the collecting mechanic");
+      } finally {
+        await deleteOrder(order.id);
+        await deleteMechanic(mech.id);
+      }
+    });
+
+    await t.step("recordPayment: customer actor forbidden", async () => {
+      const order = await insertTestOrder({ shopId, status: "completed", customerId });
+      try {
+        const result = await recordPayment(order.id, {
+          amountCents: 100,
+          method: "cash",
+        }, { kind: "customer", customerId });
+        assertStrictEquals(result.ok, false);
+        if (!result.ok) assertEquals(result.error.code, "forbidden");
       } finally {
         await deleteOrder(order.id);
       }

@@ -102,11 +102,22 @@ export function useMechanicOrders(from?: string, to?: string) {
     await mutate();
   }
 
+  /** On-the-spot payment after Complete. Repeat submission overwrites the
+   *  same payment fields (retry semantics — see recordPayment harness). */
+  async function recordPayment(
+    orderId: number,
+    payment: { amountCents: number; method: string; reference?: string },
+  ) {
+    await api.post(mechanicPaths.orderPayment(orderId), payment);
+    await mutate();
+  }
+
   return {
     orders: useStableArray(data),
     isLoading,
     isError: !!error,
     mutate,
     transitionOrder,
+    recordPayment,
   };
 }

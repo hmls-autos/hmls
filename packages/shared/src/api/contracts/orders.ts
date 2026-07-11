@@ -4,6 +4,7 @@ import {
   canonicalizeStatus,
   type OrderAuthorization,
   type OrderStatus,
+  PAYMENT_METHODS,
 } from "@hmls/shared/order/status";
 
 // ---------------------------------------------------------------------------
@@ -144,7 +145,7 @@ export const addOrderNoteInput = z.object({
 
 export const recordPaymentInput = z.object({
   amountCents: z.number().int().positive(),
-  method: z.enum(["cash", "card", "check", "venmo", "zelle", "stripe", "other"]),
+  method: z.enum(PAYMENT_METHODS),
   reference: z.string().optional(),
   paidAt: z.string().optional(),
 });

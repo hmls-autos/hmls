@@ -5,7 +5,8 @@ import { db, schema } from "@hmls/agent/db";
 import { type MechanicEnv, requireMechanic } from "../middleware/mechanic.ts";
 import { requireShopContext, type WithShop } from "../middleware/shop-context.ts";
 import { withTenantTx } from "../middleware/with-tenant-tx.ts";
-import { transition } from "@hmls/agent/order-state";
+import { recordPayment, transition } from "@hmls/agent/order-state";
+import { canonicalizeStatus } from "@hmls/shared/order/status";
 import { recordOutcome } from "@hmls/agent/fixo-brain";
 import { sendOrderStateResult } from "../lib/order-state-http.ts";
 import {
@@ -15,6 +16,7 @@ import {
   mechanicTransitionInput,
   setMechanicAvailabilityInput,
 } from "@hmls/shared/api/contracts/mechanic";
+import { recordPaymentInput } from "@hmls/shared/api/contracts/orders";
 import type {
   OrderRowWithIntake,
   ProviderAvailabilityRow,
@@ -281,6 +283,66 @@ mechanic.post(
     }
 
     const result = await transition(id, body.to, { kind: "mechanic", providerId });
+    return sendOrderStateResult(c, result);
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /orders/:id/payment — on-the-spot collection after Complete. Same body
+// as the admin route (shared recordPaymentInput contract); same ownership
+// double-scope as the transition route. Mechanics can only stamp payment on
+// their own COMPLETED job — deposits on approved orders stay admin-only.
+// recordPayment overwrites the payment fields on repeat submission (retry
+// semantics, no stacking) and writes collectedBy into the event metadata.
+// ---------------------------------------------------------------------------
+
+mechanic.post(
+  "/orders/:id/payment",
+  zValidator("json", recordPaymentInput),
+  async (c) => {
+    const providerId = c.get("providerId");
+    const shopId = c.get("shopId");
+    const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id) || id <= 0) {
+      return c.json<ApiError>({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
+    }
+    const body = c.req.valid("json");
+
+    // Ownership double-scope: mismatch is a 404, not 403 — don't leak that
+    // the order exists.
+    const [order] = await db
+      .select()
+      .from(schema.orders)
+      .where(
+        and(
+          eq(schema.orders.id, id),
+          eq(schema.orders.providerId, providerId),
+          eq(schema.orders.shopId, shopId),
+        ),
+      )
+      .limit(1);
+    if (!order) {
+      return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
+    }
+
+    if (canonicalizeStatus(order.status) !== "completed") {
+      return c.json<ApiError>(
+        {
+          error: {
+            code: "BAD_REQUEST",
+            message: "Payment can only be recorded on a completed job",
+          },
+        },
+        400,
+      );
+    }
+
+    const result = await recordPayment(id, {
+      amountCents: body.amountCents,
+      method: body.method,
+      reference: body.reference ?? null,
+      paidAt: body.paidAt ? new Date(body.paidAt) : undefined,
+    }, { kind: "mechanic", providerId });
     return sendOrderStateResult(c, result);
   },
 );

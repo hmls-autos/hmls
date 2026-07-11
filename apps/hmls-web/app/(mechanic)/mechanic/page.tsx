@@ -3,6 +3,10 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+  askPayment,
+  CollectPaymentDialog,
+} from "@/components/mechanic/CollectPaymentDialog";
+import {
   PREFERRED_ICON,
   PREFERRED_LABEL,
 } from "@/components/order/sections/CustomerSection";
@@ -170,7 +174,7 @@ export default function MechanicOrdersPage() {
     return d.toISOString();
   }, []);
 
-  const { orders, isLoading, mutate, transitionOrder } =
+  const { orders, isLoading, mutate, transitionOrder, recordPayment } =
     useMechanicOrders(fromDate);
 
   async function handleAction(order: MechanicOrder, action: MechanicJobAction) {
@@ -181,6 +185,20 @@ export default function MechanicOrdersPage() {
         (to, confirmedDiagnosis) =>
           transitionOrder(order.id, to, confirmedDiagnosis),
         askReason,
+        // Skippable on-the-spot payment after Complete. A failed payment
+        // write re-opens the dialog (retry) and never rolls back the
+        // completion — admin mark-paid is the fallback.
+        {
+          ask: ({ error }) =>
+            askPayment({
+              defaultAmountCents: order.subtotalCents ?? 0,
+              error,
+            }),
+          record: async (payment) => {
+            await recordPayment(order.id, payment);
+            toast.success("Payment recorded");
+          },
+        },
       );
     } catch (e) {
       // Conflict (double-click / concurrent admin action) or network error:
@@ -217,6 +235,7 @@ export default function MechanicOrdersPage() {
 
   return (
     <div className="space-y-10">
+      <CollectPaymentDialog />
       <h1 className="text-2xl font-display font-bold text-foreground">
         My Jobs
       </h1>

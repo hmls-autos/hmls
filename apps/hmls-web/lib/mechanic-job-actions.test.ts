@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import {
   invokeMechanicJobAction,
   type MechanicJobAction,
+  type MechanicPaymentInput,
   mechanicJobAction,
 } from "./mechanic-job-actions";
 
@@ -113,6 +114,136 @@ describe("invokeMechanicJobAction — complete soft-prompts for diagnosis", () =
       ask,
     );
     expect(ask).not.toHaveBeenCalled();
+    expect(transition).toHaveBeenCalledWith("completed");
+  });
+});
+
+describe("invokeMechanicJobAction — optional payment step after Complete", () => {
+  const complete: MechanicJobAction = {
+    label: "Complete",
+    busyLabel: "Completing…",
+    to: "completed",
+  };
+  const payment: MechanicPaymentInput = {
+    amountCents: 25000,
+    method: "cash",
+    reference: "receipt-1",
+  };
+  const noReason = mock(async () => "");
+
+  test("start never offers payment", async () => {
+    const transition = mock(async () => {});
+    const askPayment = mock(async () => payment);
+    const record = mock(async (_p: MechanicPaymentInput) => {});
+    await invokeMechanicJobAction(
+      { label: "Start", busyLabel: "Starting…", to: "in_progress" },
+      { confirmedDiagnosis: null },
+      transition,
+      noReason,
+      { ask: askPayment, record },
+    );
+    expect(askPayment).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  test("complete offers payment; entered fields are recorded", async () => {
+    const transition = mock(async () => {});
+    const askPayment = mock(async () => payment);
+    const record = mock(async (_p: MechanicPaymentInput) => {});
+    await invokeMechanicJobAction(
+      complete,
+      { confirmedDiagnosis: "done" },
+      transition,
+      noReason,
+      { ask: askPayment, record },
+    );
+    expect(transition).toHaveBeenCalledWith("completed");
+    expect(askPayment).toHaveBeenCalledTimes(1);
+    expect(record).toHaveBeenCalledWith(payment);
+  });
+
+  test("skip path: no payment call, complete stands", async () => {
+    const transition = mock(async () => {});
+    const askPayment = mock(async () => null);
+    const record = mock(async (_p: MechanicPaymentInput) => {});
+    await invokeMechanicJobAction(
+      complete,
+      { confirmedDiagnosis: "done" },
+      transition,
+      noReason,
+      { ask: askPayment, record },
+    );
+    expect(transition).toHaveBeenCalledWith("completed");
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  test("backing out of the diagnosis prompt never reaches payment", async () => {
+    const transition = mock(async () => {});
+    const askPayment = mock(async () => payment);
+    const record = mock(async (_p: MechanicPaymentInput) => {});
+    await invokeMechanicJobAction(
+      complete,
+      { confirmedDiagnosis: null },
+      transition,
+      mock(async () => null), // cancel the diagnosis prompt
+      { ask: askPayment, record },
+    );
+    expect(transition).not.toHaveBeenCalled();
+    expect(askPayment).not.toHaveBeenCalled();
+  });
+
+  test("payment failure never throws: retry affordance, complete stands", async () => {
+    const transition = mock(async () => {});
+    const record = mock(async (_p: MechanicPaymentInput) => {
+      throw new Error("network down");
+    });
+    // First ask enters a payment; the retry re-ask (with the error) skips.
+    const asks: Array<{ error?: string }> = [];
+    const askPayment = mock(async (opts: { error?: string }) => {
+      asks.push(opts);
+      return asks.length === 1 ? payment : null;
+    });
+
+    // Must resolve (not reject) — complete is the primary op.
+    await invokeMechanicJobAction(
+      complete,
+      { confirmedDiagnosis: "done" },
+      transition,
+      noReason,
+      { ask: askPayment, record },
+    );
+    expect(transition).toHaveBeenCalledTimes(1); // complete not rolled back
+    expect(asks[0].error).toBeUndefined();
+    expect(asks[1].error).toBe("network down"); // retry carries the error
+  });
+
+  test("retry after failure records on second attempt", async () => {
+    const transition = mock(async () => {});
+    let calls = 0;
+    const record = mock(async (_p: MechanicPaymentInput) => {
+      calls += 1;
+      if (calls === 1) throw new Error("flaky");
+    });
+    const askPayment = mock(async () => payment);
+    await invokeMechanicJobAction(
+      complete,
+      { confirmedDiagnosis: "done" },
+      transition,
+      noReason,
+      { ask: askPayment, record },
+    );
+    expect(record).toHaveBeenCalledTimes(2);
+    expect(askPayment).toHaveBeenCalledTimes(2);
+  });
+
+  test("no payment step provided: complete works as before", async () => {
+    const transition = mock(async () => {});
+    await invokeMechanicJobAction(
+      complete,
+      { confirmedDiagnosis: "done" },
+      transition,
+      noReason,
+    );
     expect(transition).toHaveBeenCalledWith("completed");
   });
 });
