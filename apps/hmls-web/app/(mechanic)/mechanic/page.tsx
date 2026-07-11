@@ -1,15 +1,23 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   PREFERRED_ICON,
   PREFERRED_LABEL,
 } from "@/components/order/sections/CustomerSection";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { askReason } from "@/components/ui/ReasonDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type MechanicOrder, useMechanicOrders } from "@/hooks/useMechanic";
 import { formatDate, formatTime } from "@/lib/format";
+import {
+  invokeMechanicJobAction,
+  type MechanicJobAction,
+  mechanicJobAction,
+} from "@/lib/mechanic-job-actions";
 import { canonicalStatus, statusDisplay } from "@/lib/status-display";
 import { cn } from "@/lib/utils";
 
@@ -55,13 +63,23 @@ function durationLabel(minutes: number | null): string {
   return `${m}m`;
 }
 
-function OrderCard({ order }: { order: MechanicOrder }) {
+function OrderCard({
+  order,
+  onAction,
+}: {
+  order: MechanicOrder;
+  onAction: (order: MechanicOrder, action: MechanicJobAction) => Promise<void>;
+}) {
   const vehicle = vehicleLabel(order);
   const time = order.scheduledAt
     ? formatTime(order.scheduledAt)
     : durationLabel(order.durationMinutes);
   const statusConfig = statusDisplay(order.status);
   const firstItem = order.items?.[0]?.name ?? "Service";
+  const action = mechanicJobAction(order.status);
+  // In-flight guard: double-click fires one request; the backend state guard
+  // rejects any duplicate that slips through anyway.
+  const [busy, setBusy] = useState(false);
 
   return (
     <Card className="py-0">
@@ -120,6 +138,26 @@ function OrderCard({ order }: { order: MechanicOrder }) {
             </p>
           )}
         </div>
+
+        {action && (
+          <div className="shrink-0 flex sm:self-center">
+            <Button
+              size="lg"
+              className="w-full sm:w-auto"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await onAction(order, action);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {busy ? action.busyLabel : action.label}
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -132,7 +170,25 @@ export default function MechanicOrdersPage() {
     return d.toISOString();
   }, []);
 
-  const { orders, isLoading } = useMechanicOrders(fromDate);
+  const { orders, isLoading, mutate, transitionOrder } =
+    useMechanicOrders(fromDate);
+
+  async function handleAction(order: MechanicOrder, action: MechanicJobAction) {
+    try {
+      await invokeMechanicJobAction(
+        action,
+        order,
+        (to, confirmedDiagnosis) =>
+          transitionOrder(order.id, to, confirmedDiagnosis),
+        askReason,
+      );
+    } catch (e) {
+      // Conflict (double-click / concurrent admin action) or network error:
+      // surface non-fatally and refetch so the card reflects reality.
+      toast.error(e instanceof Error ? e.message : "Failed to update job");
+      await mutate();
+    }
+  }
 
   // approved + a slot = the confirmed booking (day groups below); approved
   // without a slot lands in "Pending schedule". canonicalStatus keeps
@@ -180,7 +236,7 @@ export default function MechanicOrdersPage() {
                 </h3>
                 <div className="space-y-2">
                   {pending.map((o) => (
-                    <OrderCard key={o.id} order={o} />
+                    <OrderCard key={o.id} order={o} onAction={handleAction} />
                   ))}
                 </div>
               </div>
@@ -192,7 +248,7 @@ export default function MechanicOrdersPage() {
                 </h3>
                 <div className="space-y-2">
                   {byDay.get(day)?.map((o) => (
-                    <OrderCard key={o.id} order={o} />
+                    <OrderCard key={o.id} order={o} onAction={handleAction} />
                   ))}
                 </div>
               </div>

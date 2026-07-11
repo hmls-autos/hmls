@@ -87,10 +87,26 @@ export function useMechanicOrders(from?: string, to?: string) {
     api.get<MechanicOrder[]>(key),
   );
 
+  /** Drive own job: approved → in_progress ("Start"), in_progress →
+   *  completed ("Complete", optional confirmed diagnosis). Refetches on
+   *  success so the card's status/button flip. */
+  async function transitionOrder(
+    orderId: number,
+    to: "in_progress" | "completed",
+    confirmedDiagnosis?: string,
+  ) {
+    await api.post(mechanicPaths.orderTransition(orderId), {
+      to,
+      ...(confirmedDiagnosis ? { confirmedDiagnosis } : {}),
+    });
+    await mutate();
+  }
+
   return {
     orders: useStableArray(data),
     isLoading,
     isError: !!error,
     mutate,
+    transitionOrder,
   };
 }

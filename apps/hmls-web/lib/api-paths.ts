@@ -91,4 +91,6 @@ export const mechanicPaths = {
     const s = qs.toString();
     return `/api/mechanic/orders${s ? `?${s}` : ""}`;
   },
+  orderTransition: (id: number | string) =>
+    `/api/mechanic/orders/${id}/transition`,
 };

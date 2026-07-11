@@ -5,10 +5,14 @@ import { db, schema } from "@hmls/agent/db";
 import { type MechanicEnv, requireMechanic } from "../middleware/mechanic.ts";
 import { requireShopContext, type WithShop } from "../middleware/shop-context.ts";
 import { withTenantTx } from "../middleware/with-tenant-tx.ts";
+import { transition } from "@hmls/agent/order-state";
+import { recordOutcome } from "@hmls/agent/fixo-brain";
+import { sendOrderStateResult } from "../lib/order-state-http.ts";
 import {
   createMechanicOverrideInput,
   listMechanicOverridesQuery,
   listMyOrdersQuery,
+  mechanicTransitionInput,
   setMechanicAvailabilityInput,
 } from "@hmls/shared/api/contracts/mechanic";
 import type {
@@ -209,5 +213,76 @@ mechanic.get("/orders", zValidator("query", listMyOrdersQuery), async (c) => {
   const withIntake: OrderRowWithIntake[] = rows.map((r) => ({ ...r.order, intake: r.intake }));
   return c.json<OrderRowWithIntake[]>(withIntake);
 });
+
+// ---------------------------------------------------------------------------
+// POST /orders/:id/transition — mechanic drives their own job:
+// approved → in_progress ("Start") and in_progress → completed ("Complete").
+// ACTOR_PERMISSIONS in the harness is the rule table; this route only asserts
+// ownership and translates the result to HTTP.
+// ---------------------------------------------------------------------------
+
+mechanic.post(
+  "/orders/:id/transition",
+  zValidator("json", mechanicTransitionInput),
+  async (c) => {
+    const providerId = c.get("providerId");
+    const shopId = c.get("shopId");
+    const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id) || id <= 0) {
+      return c.json<ApiError>({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
+    }
+    const body = c.req.valid("json");
+
+    // Ownership double-scope: the order must be assigned to THIS mechanic AND
+    // belong to their shop. Any mismatch is a 404, not 403 — don't leak that
+    // the order exists.
+    const [order] = await db
+      .select()
+      .from(schema.orders)
+      .where(
+        and(
+          eq(schema.orders.id, id),
+          eq(schema.orders.providerId, providerId),
+          eq(schema.orders.shopId, shopId),
+        ),
+      )
+      .limit(1);
+    if (!order) {
+      return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
+    }
+
+    // Persist the confirmed diagnosis before completing — the same direct
+    // column write the admin complete flow does via PATCH /orders/:id.
+    const diag = body.confirmedDiagnosis?.trim();
+    if (body.to === "completed" && diag) {
+      await db
+        .update(schema.orders)
+        .set({ confirmedDiagnosis: diag, updatedAt: new Date() })
+        .where(
+          and(
+            eq(schema.orders.id, id),
+            eq(schema.orders.providerId, providerId),
+            eq(schema.orders.shopId, shopId),
+          ),
+        );
+
+      // Loop closer (mirrors admin PATCH /orders/:id): report the confirmed
+      // outcome back to the brain for fixo-linked orders. Fire-and-forget — a
+      // calibration write must never block or fail the completion.
+      if (order.fixoPredictionId) {
+        recordOutcome({
+          predictionId: order.fixoPredictionId,
+          confirmedDiagnosis: diag,
+          actualCostCents: order.paidAmountCents ?? order.subtotalCents,
+        }).catch((err) => {
+          console.error(`recordOutcome failed for order ${id}:`, String(err));
+        });
+      }
+    }
+
+    const result = await transition(id, body.to, { kind: "mechanic", providerId });
+    return sendOrderStateResult(c, result);
+  },
+);
 
 export { mechanic };
