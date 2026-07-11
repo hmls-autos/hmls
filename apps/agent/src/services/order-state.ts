@@ -124,8 +124,12 @@ function fireNotification(orderId: number, templateKey: string): void {
  *  rescheduled / cancelled). Same contract as fireNotification — errors are
  *  logged only, never roll back the committed write. notifyMechanic no-ops
  *  when the order has no assigned mechanic. */
-function fireMechanicNotification(orderId: number, event: MechanicNotifyEvent): void {
-  notifyMechanic(orderId, event).catch((err) => {
+function fireMechanicNotification(
+  orderId: number,
+  event: MechanicNotifyEvent,
+  recipientProviderId?: number,
+): void {
+  notifyMechanic(orderId, event, recipientProviderId).catch((err) => {
     logger.warn("notifyMechanic failed", { orderId, event, err: String(err) });
   });
 }
@@ -864,9 +868,15 @@ export async function assignProvider(
     fireNotification(orderId, "schedule_ready");
   }
   // The newly-assigned mechanic gets a "new job" email (the early-return guard
-  // above means providerId genuinely changed). Reassignment A→B notifies B;
-  // A (removed) is deliberately not notified — see design doc D-notify.
+  // above means providerId genuinely changed).
   fireMechanicNotification(orderId, "assigned");
+  // Reassignment A→B: also tell A they've been taken off. `order` is the
+  // pre-update row, so order.providerId is the previous mechanic; the guard
+  // above (order.providerId === providerId → early return) means when it's
+  // non-null it's genuinely a different mechanic being replaced.
+  if (order.providerId != null) {
+    fireMechanicNotification(orderId, "unassigned", order.providerId);
+  }
 
   return { ok: true, value: updated.row };
 }

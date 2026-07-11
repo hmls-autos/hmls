@@ -476,7 +476,7 @@ export async function notifyPaymentFailed(opts: {
 
 // --- Mechanic notifications ---
 
-export type MechanicNotifyEvent = "assigned" | "rescheduled" | "cancelled";
+export type MechanicNotifyEvent = "assigned" | "rescheduled" | "cancelled" | "unassigned";
 
 /** Outcome of recipient resolution — returned so callers/tests can see which
  *  path was taken without inspecting logs. "sent" = a provider email was
@@ -484,15 +484,18 @@ export type MechanicNotifyEvent = "assigned" | "rescheduled" | "cancelled";
  *  config, which is orthogonal). */
 export type MechanicNotifyResult = "sent" | "no-recipient" | "not-found";
 
-/** Email the assigned mechanic when their job is assigned, rescheduled, or
- *  cancelled. Self-contained recipient resolution like notifyOrderStatusChange:
- *  order.providerId → provider.email (via Resend). No-op (logged) when the
- *  order has no assigned mechanic or the mechanic has no email on file. Called
- *  fire-and-forget from the order-state mutation points — a send failure never
- *  affects the committed DB write. */
+/** Email a mechanic when their job is assigned, rescheduled, cancelled, or
+ *  reassigned away from them. Self-contained recipient resolution like
+ *  notifyOrderStatusChange: resolves an email via Resend. The recipient is the
+ *  order's current mechanic (order.providerId) unless `recipientProviderId` is
+ *  given — reassignment passes the PREVIOUS provider's id there to reach the
+ *  mechanic being taken off. No-op (logged) when there's no target mechanic or
+ *  they have no email on file. Called fire-and-forget from the order-state
+ *  mutation points — a send failure never affects the committed DB write. */
 export async function notifyMechanic(
   orderId: number,
   event: MechanicNotifyEvent,
+  recipientProviderId?: number,
 ): Promise<MechanicNotifyResult> {
   try {
     const [order] = await dbAdmin
@@ -505,18 +508,19 @@ export async function notifyMechanic(
       logger.warn("notifyMechanic: order {orderId} not found", { orderId });
       return "not-found";
     }
-    if (order.providerId == null) return "no-recipient"; // no mechanic assigned
+    const targetProviderId = recipientProviderId ?? order.providerId;
+    if (targetProviderId == null) return "no-recipient"; // no mechanic to notify
 
     const [provider] = await dbAdmin
       .select()
       .from(schema.providers)
-      .where(eq(schema.providers.id, order.providerId))
+      .where(eq(schema.providers.id, targetProviderId))
       .limit(1);
 
     if (!provider?.email) {
       logger.warn("notifyMechanic: no email for provider {providerId} on order {orderId}", {
         orderId,
-        providerId: order.providerId,
+        providerId: targetProviderId,
       });
       return "no-recipient";
     }
@@ -553,12 +557,19 @@ export async function notifyMechanic(
         subject = `Job cancelled — Order #${orderId}`;
         intro = "A job assigned to you was cancelled — you don't need to go.";
         break;
+      case "unassigned":
+        subject = `Removed from job — Order #${orderId}`;
+        intro = "You've been taken off this job — it's been reassigned to another mechanic.";
+        break;
     }
 
+    // "cancelled" / "unassigned" mechanics aren't going — skip the when/where/
+    // customer block that only makes sense for someone who still has the job.
+    const stillGoing = event === "assigned" || event === "rescheduled";
     lines.push(intro, "", `Order #${orderId}`);
     if (vehicle) lines.push(`Vehicle: ${vehicle}`);
     if (work) lines.push(`Work: ${work}`);
-    if (event !== "cancelled") {
+    if (stillGoing) {
       lines.push(`When: ${when}`);
       if (order.location) lines.push(`Where: ${order.location}`);
       lines.push(`Customer: ${customer}${phone ? ` (${phone})` : ""}`);

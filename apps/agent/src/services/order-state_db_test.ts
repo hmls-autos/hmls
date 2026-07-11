@@ -1235,6 +1235,12 @@ Deno.test({
         assertEquals(await notifyMechanic(noEmailOrder.id, "rescheduled"), "no-recipient");
         // Unknown order id → not-found, never throws.
         assertEquals(await notifyMechanic(2_000_000_000, "assigned"), "not-found");
+        // Reassignment: the override targets the PREVIOUS mechanic (withEmail)
+        // even though the order row now points at a different current mechanic.
+        assertEquals(
+          await notifyMechanic(noEmailOrder.id, "unassigned", withEmail.id),
+          "sent",
+        );
       } finally {
         await deleteOrder(assigned.id);
         await deleteOrder(unassigned.id);
