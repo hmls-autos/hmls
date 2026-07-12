@@ -30,7 +30,7 @@ export function MechanicCard({ mechanic: m, onToggleActive }: Props) {
   const dotClass = m.isOnJobNow
     ? "bg-amber-500"
     : m.isActive
-      ? "bg-emerald-500"
+      ? "bg-foreground"
       : "bg-neutral-400";
   const dotLabel = m.isOnJobNow
     ? "On a job now"

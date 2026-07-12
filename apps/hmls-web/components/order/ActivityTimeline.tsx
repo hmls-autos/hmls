@@ -75,13 +75,12 @@ export function eventDescription(event: OrderEvent): string {
 }
 
 function EventIcon({ eventType }: { eventType: string }) {
-  // Only the lifecycle transition carries colour; every other event uses a
-  // neutral chip so the timeline reads calm. The icon glyph — not the colour —
-  // is what tells the event types apart.
+  // Monochrome: every event uses a neutral chip. The icon glyph — not colour —
+  // tells the event types apart.
   if (eventType === "status_change") {
     return (
-      <div className="w-6 h-6 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-        <Tag className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+      <div className="w-6 h-6 rounded-full bg-muted border border-border flex items-center justify-center shrink-0">
+        <Tag className="w-3 h-3 text-muted-foreground" />
       </div>
     );
   }

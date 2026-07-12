@@ -170,8 +170,8 @@ export default function EstimateReviewPage() {
         <div className="text-center max-w-sm">
           {result === "approved" ? (
             <>
-              <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-4">
-                <Check className="w-8 h-8 text-green-600 dark:text-green-400" />
+              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+                <Check className="w-8 h-8 text-foreground" />
               </div>
               <h1 className="text-xl font-semibold text-text mb-2">
                 Estimate Approved
@@ -351,7 +351,7 @@ export default function EstimateReviewPage() {
                 handleAction("approve");
               }}
               disabled={actionLoading}
-              className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-green-600 text-white font-semibold text-sm hover:bg-green-700 transition-colors disabled:opacity-50"
+              className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
               <Check className="w-4 h-4" />
               Approve

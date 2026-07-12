@@ -284,7 +284,9 @@ export default function LoginPage() {
             <p className="text-sm text-red-primary text-center mt-4">{error}</p>
           )}
           {message && (
-            <p className="text-sm text-green-500 text-center mt-4">{message}</p>
+            <p className="text-sm text-muted-foreground text-center mt-4">
+              {message}
+            </p>
           )}
         </div>
       </div>

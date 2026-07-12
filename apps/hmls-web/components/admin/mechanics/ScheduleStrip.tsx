@@ -33,10 +33,10 @@ function bookingColor(status: string): string {
   // Only orders with a scheduledAt are plotted, so approved here means the
   // booking is locked in (the old `scheduled` state — canonicalized away).
   // Mid-tone fills (white text rides on them, so they must read in both
-  // modes). Muted + aligned to the status palette: emerald=booked, amber=active.
+  // modes). Monochrome + amber for the active job; no green.
   switch (canonicalStatus(status) ?? status) {
     case "approved":
-      return "bg-emerald-600";
+      return "bg-neutral-500";
     case "in_progress":
       return "bg-amber-600";
     case "completed":
@@ -141,7 +141,7 @@ export function ScheduleStrip({
                 return (
                   <div
                     key={`${r.startMin}-${r.endMin}`}
-                    className="absolute left-0 right-0 bg-emerald-500/10"
+                    className="absolute left-0 right-0 bg-foreground/[0.07]"
                     style={{ top: `${top}%`, height: `${height}%` }}
                   />
                 );

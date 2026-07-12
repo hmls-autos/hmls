@@ -242,7 +242,7 @@ export default function MechanicDetailPage({
           aria-label={mechanic.isActive ? "Active" : "Inactive"}
           className={cn(
             "size-2 rounded-full",
-            mechanic.isActive ? "bg-emerald-500" : "bg-neutral-400",
+            mechanic.isActive ? "bg-foreground" : "bg-neutral-400",
           )}
         />
       </div>
