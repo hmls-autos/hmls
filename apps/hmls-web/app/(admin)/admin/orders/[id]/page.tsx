@@ -8,7 +8,6 @@ import { OrderProgressBar } from "@/components/OrderProgressBar";
 import { ActivityTimeline } from "@/components/order/ActivityTimeline";
 import { DraftBanner } from "@/components/order/DraftBanner";
 import { OrderChatPanel } from "@/components/order/OrderChatPanel";
-import { OrderDetailsCard } from "@/components/order/OrderDetailsCard";
 import { OrderDocumentCard } from "@/components/order/OrderDocumentCard";
 import { OrderOpsPanel } from "@/components/order/OrderOpsPanel";
 import { OrderSectionsRegion } from "@/components/order/OrderSectionsRegion";
@@ -21,7 +20,6 @@ import { DateTime } from "@/components/ui/DateTime";
 import { askReason } from "@/components/ui/ReasonDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAdminOrder } from "@/hooks/useAdmin";
-import { useAdminMechanics } from "@/hooks/useAdminMechanics";
 import {
   getAdminOrdersListHref,
   parseAdminOrdersFilter,
@@ -71,8 +69,6 @@ export default function OrderDetailPage() {
   );
   const orderId = params.id as string;
   const { data, isLoading, isError, mutate } = useAdminOrder(orderId);
-
-  const { mechanics } = useAdminMechanics();
 
   // Hooks must run before any early return.
   const orderItems = data?.order.items ?? [];
@@ -149,11 +145,11 @@ export default function OrderDetailPage() {
   // Derived dual-semantics badge: draft → Pending review / Revising · rev N,
   // approved → Pending schedule / Scheduled.
   const subBadge = orderSubBadge(order);
-
-  const bookingProviderName =
-    order.providerId != null
-      ? (mechanics.find((m) => m.id === order.providerId)?.name ?? null)
-      : null;
+  // The progress bar already names the linear state (draft…completed), so the
+  // title only carries the main status text for the off-track states the bar
+  // can't show. The sub-badge (Scheduled / Pending review …) always shows.
+  const canonical = canonicalStatus(order.status);
+  const showMainBadge = canonical === "cancelled" || canonical === "declined";
 
   return (
     <div className="space-y-6">
@@ -178,7 +174,7 @@ export default function OrderDetailPage() {
           <h1 className="text-2xl font-display font-bold text-foreground">
             Order #{order.id}
           </h1>
-          <OrderStatusBadge entry={adminStatus} />
+          {showMainBadge && <OrderStatusBadge entry={adminStatus} />}
           {subBadge ? (
             <OrderStatusBadge entry={subBadge} />
           ) : (
@@ -191,6 +187,8 @@ export default function OrderDetailPage() {
         </div>
         <span className="text-xs text-muted-foreground">
           Created <DateTime value={order.createdAt} format="datetime" />
+          {" · Updated "}
+          <DateTime value={order.updatedAt} format="datetime" />
         </span>
       </div>
 
@@ -255,7 +253,6 @@ export default function OrderDetailPage() {
             revalidate={mutate}
             suggestedDurationMinutes={suggestedDurationMinutes}
           />
-          <OrderDetailsCard order={order} mechanicName={bookingProviderName} />
           <Card className="gap-0 py-0">
             <CardHeader className="px-4 py-4">
               <CardTitle className="text-sm">Activity</CardTitle>
