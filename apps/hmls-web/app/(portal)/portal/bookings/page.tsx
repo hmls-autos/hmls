@@ -38,7 +38,7 @@ function BookingCard({
   const firstItem = order.items?.[0]?.name ?? "Service";
 
   return (
-    <div className="bg-muted/40 rounded-xl p-5 hover:bg-muted/70 transition-colors">
+    <div className="py-5">
       <div className="flex items-start justify-between gap-4 mb-3">
         <div>
           <div className="flex items-center gap-2">
@@ -165,7 +165,7 @@ export default function PortalBookingsPage() {
           message="No bookings yet. Start a chat to schedule an appointment!"
         />
       ) : (
-        <div className="space-y-3">
+        <div className="divide-y divide-border">
           {bookings.map((order) => (
             <BookingCard
               key={order.id}

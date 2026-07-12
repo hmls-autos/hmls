@@ -2,7 +2,6 @@
 
 import { CheckCircle, ClipboardList, Loader } from "lucide-react";
 import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
 import { DateTime } from "@/components/ui/DateTime";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePortalCustomer, usePortalOrders } from "@/hooks/usePortal";
@@ -28,35 +27,30 @@ function SummaryCard({
   color: string;
 }) {
   return (
-    <Link href={href}>
-      <Card className="p-5 border-0 hover:bg-muted/50 transition-colors group">
-        <CardContent className="p-0">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm text-muted-foreground">{label}</span>
-            <div className={`p-2 rounded-lg ${color}`}>
-              <Icon className="w-4 h-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-display font-bold text-foreground">
-            {count}
-          </p>
-        </CardContent>
-      </Card>
+    <Link
+      href={href}
+      className="block rounded-xl bg-muted/40 p-5 hover:bg-muted/70 transition-colors"
+    >
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm text-muted-foreground">{label}</span>
+        <div className={`p-2 rounded-lg ${color}`}>
+          <Icon className="w-4 h-4" />
+        </div>
+      </div>
+      <p className="text-2xl font-display font-bold text-foreground">{count}</p>
     </Link>
   );
 }
 
 function SummaryCardSkeleton() {
   return (
-    <Card className="p-5 border-0">
-      <CardContent className="p-0">
-        <div className="flex items-center justify-between mb-3">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-8 w-8 rounded-lg" />
-        </div>
-        <Skeleton className="h-8 w-12" />
-      </CardContent>
-    </Card>
+    <div className="rounded-xl bg-muted/40 p-5">
+      <div className="flex items-center justify-between mb-3">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-8 w-8 rounded-lg" />
+      </div>
+      <Skeleton className="h-8 w-12" />
+    </div>
   );
 }
 
@@ -79,22 +73,20 @@ export default function PortalDashboard() {
         </div>
 
         <Skeleton className="h-6 w-32 mb-4" />
-        <Card className="border-0">
-          <CardContent className="divide-y divide-border">
-            {["skeleton-1", "skeleton-2", "skeleton-3", "skeleton-4"].map(
-              (id) => (
-                <div key={id} className="flex items-center gap-4 py-3">
-                  <Skeleton className="h-4 w-4 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <Skeleton className="h-4 w-32 mb-1" />
-                    <Skeleton className="h-3 w-24" />
-                  </div>
-                  <Skeleton className="h-3 w-20 shrink-0" />
+        <div className="divide-y divide-border">
+          {["skeleton-1", "skeleton-2", "skeleton-3", "skeleton-4"].map(
+            (id) => (
+              <div key={id} className="flex items-center gap-4 py-3">
+                <Skeleton className="h-4 w-4 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <Skeleton className="h-4 w-32 mb-1" />
+                  <Skeleton className="h-3 w-24" />
                 </div>
-              ),
-            )}
-          </CardContent>
-        </Card>
+                <Skeleton className="h-3 w-20 shrink-0" />
+              </div>
+            ),
+          )}
+        </div>
       </div>
     );
   }
@@ -151,55 +143,51 @@ export default function PortalDashboard() {
       </div>
 
       {/* Recent orders */}
-      <h2 className="text-lg font-display font-semibold text-foreground mb-4">
-        Recent Orders
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+        Recent orders
       </h2>
       {recentOrders.length === 0 ? (
-        <Card className="p-8 text-center border-0">
-          <CardContent className="p-0">
-            <p className="text-muted-foreground text-sm">No orders yet.</p>
-            <Link
-              href="/chat"
-              className="inline-block mt-3 text-sm text-primary hover:text-primary/80 font-medium"
-            >
-              Get your first estimate &rarr;
-            </Link>
-          </CardContent>
-        </Card>
+        <div className="py-8 text-center">
+          <p className="text-muted-foreground text-sm">No orders yet.</p>
+          <Link
+            href="/chat"
+            className="inline-block mt-3 text-sm text-primary hover:text-primary/80 font-medium"
+          >
+            Get your first estimate &rarr;
+          </Link>
+        </div>
       ) : (
-        <Card className="p-0 border-0">
-          <CardContent className="p-0 divide-y divide-border">
-            {recentOrders.map((order) => {
-              const statusConfig = statusDisplay(order.status, "portal", {
-                tentativeBooking: isTentativeBooking(order),
-                scheduledBooking: isBookedOrder(order),
-              });
-              return (
-                <Link
-                  key={order.id}
-                  href={`/portal/orders/${order.id}`}
-                  className="flex items-center gap-4 px-4 py-3 hover:bg-muted transition-colors first:rounded-t-xl last:rounded-b-xl"
-                >
-                  <ClipboardList className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-foreground truncate">
-                      Order #{order.id}
-                    </p>
-                    <p className="text-xs text-muted-foreground capitalize">
-                      {statusConfig.label}
-                      {order.subtotalCents > 0
-                        ? ` · ${formatCents(order.subtotalCents)}`
-                        : ""}
-                    </p>
-                  </div>
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    <DateTime value={order.updatedAt} format="datetime" />
-                  </span>
-                </Link>
-              );
-            })}
-          </CardContent>
-        </Card>
+        <div className="divide-y divide-border">
+          {recentOrders.map((order) => {
+            const statusConfig = statusDisplay(order.status, "portal", {
+              tentativeBooking: isTentativeBooking(order),
+              scheduledBooking: isBookedOrder(order),
+            });
+            return (
+              <Link
+                key={order.id}
+                href={`/portal/orders/${order.id}`}
+                className="flex items-center gap-4 py-3 -mx-2 px-2 rounded-lg hover:bg-muted/60 transition-colors"
+              >
+                <ClipboardList className="w-4 h-4 text-muted-foreground shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-foreground truncate">
+                    Order #{order.id}
+                  </p>
+                  <p className="text-xs text-muted-foreground capitalize">
+                    {statusConfig.label}
+                    {order.subtotalCents > 0
+                      ? ` · ${formatCents(order.subtotalCents)}`
+                      : ""}
+                  </p>
+                </div>
+                <span className="text-xs text-muted-foreground shrink-0">
+                  <DateTime value={order.updatedAt} format="datetime" />
+                </span>
+              </Link>
+            );
+          })}
+        </div>
       )}
     </div>
   );
