@@ -317,7 +317,15 @@ export default function OrderDetailPage() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="chat">
+            {/* forceMount keeps the chat — and any in-flight agent turn (assign
+                mechanic / send estimate) plus its onFinish revalidate — alive
+                when the operator switches tabs mid-stream. Radix unmounts an
+                inactive TabsContent by default, which would abort the turn. */}
+            <TabsContent
+              value="chat"
+              forceMount
+              className="data-[state=inactive]:hidden"
+            >
               {/* Agent tool mutations revalidate the page via SWR mutate. */}
               <OrderChatPanel
                 orderId={order.id}
