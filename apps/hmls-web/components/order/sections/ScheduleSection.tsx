@@ -42,9 +42,16 @@ export function ScheduleSection({
         </div>
         <div className="flex items-center gap-2">
           <User className="w-3.5 h-3.5 text-muted-foreground" />
-          {mechanic?.name ?? (
-            <span className="text-muted-foreground">Unassigned</span>
-          )}
+          {mechanic?.name ??
+            (order.providerId != null ? (
+              // Assigned, but the name isn't resolved yet (mechanics list
+              // still loading, or the provider is inactive/cross-shop and
+              // filtered out). Show the id so an assigned order never reads
+              // as "Unassigned".
+              <span className="text-foreground">#{order.providerId}</span>
+            ) : (
+              <span className="text-muted-foreground">Unassigned</span>
+            ))}
         </div>
         {order.location && (
           <div className="flex items-center gap-2">

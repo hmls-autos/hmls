@@ -34,6 +34,16 @@ import {
 } from "@/lib/status-display";
 import { cn } from "@/lib/utils";
 
+/** Linear lifecycle states the admin progress bar renders as steps. Off-track
+ *  states (cancelled/declined) and unknown values need their own title badge. */
+const LINEAR_STATUSES = new Set([
+  "draft",
+  "estimated",
+  "approved",
+  "in_progress",
+  "completed",
+]);
+
 /* ── Status Badge (using shadcn Badge) ─────────────────────────────── */
 
 function OrderStatusBadge({
@@ -146,10 +156,12 @@ export default function OrderDetailPage() {
   // approved → Pending schedule / Scheduled.
   const subBadge = orderSubBadge(order);
   // The progress bar already names the linear state (draft…completed), so the
-  // title only carries the main status text for the off-track states the bar
-  // can't show. The sub-badge (Scheduled / Pending review …) always shows.
+  // title only carries the main status text for states the bar can't show: the
+  // branches (cancelled / declined) AND any unknown/corrupt value (canonical
+  // === null), which the bar would otherwise render as a false "Draft". The
+  // sub-badge (Scheduled / Pending review …) always shows.
   const canonical = canonicalStatus(order.status);
-  const showMainBadge = canonical === "cancelled" || canonical === "declined";
+  const showMainBadge = !canonical || !LINEAR_STATUSES.has(canonical);
 
   return (
     <div className="space-y-6">
