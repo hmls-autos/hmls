@@ -38,7 +38,7 @@ function OrderCard({
   });
 
   return (
-    <div className="py-5">
+    <div className="bg-muted/40 rounded-lg p-5">
       <div className="flex items-start justify-between gap-4 mb-3">
         <div>
           <div className="flex items-center gap-2">
@@ -184,7 +184,7 @@ export default function PortalOrdersPage() {
           message="No orders yet. Start a chat to get an estimate!"
         />
       ) : (
-        <div className="divide-y divide-border">
+        <div className="space-y-3">
           {orders.map((order) => (
             <OrderCard
               key={order.id}
