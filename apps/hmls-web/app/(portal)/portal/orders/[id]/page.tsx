@@ -4,7 +4,7 @@ import type { CustomerOrderEvent, OrderItem } from "@hmls/shared/db/types";
 import { ArrowLeft, Check, Printer, X as XIcon } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { FixoCtaBanner } from "@/components/FixoCtaBanner";
 import { OrderProgressBar } from "@/components/OrderProgressBar";
@@ -227,6 +227,27 @@ function PrintReceipt({
   );
 }
 
+/* ── Flat layout helpers ──────────────────────────────────────────────────
+ * No cards. A section is a small uppercase label + its content; hairline
+ * dividers and whitespace carry the structure. */
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <h2 className="text-xs font-semibold uppercase tracking-wider text-text-secondary mb-3">
+      {children}
+    </h2>
+  );
+}
+
+function Field({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div>
+      <span className="text-xs text-text-secondary">{label}</span>
+      <p className="text-sm text-text font-medium">{value}</p>
+    </div>
+  );
+}
+
 /* ── Page ──────────────────────────────────────────────────────────────── */
 
 export default function PortalOrderDetailPage() {
@@ -345,7 +366,7 @@ export default function PortalOrderDetailPage() {
       <PrintReceipt order={{ ...order, items }} />
 
       {/* Screen content — hidden when printing */}
-      <div className="space-y-6 print:hidden">
+      <div className="space-y-8 print:hidden">
         {/* Breadcrumb */}
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -362,7 +383,7 @@ export default function PortalOrderDetailPage() {
           <button
             type="button"
             onClick={() => window.print()}
-            className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-text transition-colors border border-border rounded-lg px-3 py-1.5"
+            className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-text transition-colors"
           >
             <Printer className="w-3.5 h-3.5" />
             Print
@@ -394,13 +415,11 @@ export default function PortalOrderDetailPage() {
         )}
 
         {/* Progress bar */}
-        <div className="bg-muted/30 rounded-xl p-4">
-          <OrderProgressBar
-            status={order.status}
-            variant="portal"
-            tentativeBooking={tentative}
-          />
-        </div>
+        <OrderProgressBar
+          status={order.status}
+          variant="portal"
+          tentativeBooking={tentative}
+        />
 
         {/* Fixo CTA — only shown when the order is in a terminal-decline
             state. Mirrors the email CTA so the customer journey is
@@ -410,53 +429,31 @@ export default function PortalOrderDetailPage() {
         )}
 
         {/* Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 border-t border-border pt-8">
           {/* Left column */}
-          <div className="lg:col-span-2 space-y-4">
+          <div className="lg:col-span-2 space-y-8">
             {/* Contact info */}
-            <div className="bg-muted/30 rounded-xl p-4">
-              <h2 className="text-sm font-semibold text-text mb-3">Contact</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                <div>
-                  <span className="text-text-secondary">Name</span>
-                  <p className="text-text font-medium">
-                    {order.contactName ?? "—"}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-text-secondary">Email</span>
-                  <p className="text-text font-medium">
-                    {order.contactEmail ?? "—"}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-text-secondary">Phone</span>
-                  <p className="text-text font-medium">
-                    {order.contactPhone ?? "—"}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-text-secondary">Address</span>
-                  <p className="text-text font-medium">
-                    {order.contactAddress ?? "—"}
-                  </p>
-                </div>
+            <section>
+              <SectionLabel>Contact</SectionLabel>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                <Field label="Name" value={order.contactName ?? "—"} />
+                <Field label="Email" value={order.contactEmail ?? "—"} />
+                <Field label="Phone" value={order.contactPhone ?? "—"} />
+                <Field label="Address" value={order.contactAddress ?? "—"} />
               </div>
-            </div>
+            </section>
 
             {/* Vehicle */}
             {vehicleStr && (
-              <div className="bg-muted/30 rounded-xl p-4">
-                <h2 className="text-sm font-semibold text-text mb-2">
-                  Vehicle
-                </h2>
+              <section>
+                <SectionLabel>Vehicle</SectionLabel>
                 <p className="text-sm text-text">{vehicleStr}</p>
-              </div>
+              </section>
             )}
 
             {/* Line items */}
-            <div className="bg-muted/30 rounded-xl p-4 space-y-3">
-              <h2 className="text-sm font-semibold text-text">Services</h2>
+            <div className="space-y-3">
+              <SectionLabel>Services</SectionLabel>
               {items.length > 0 ? (
                 <>
                   <div className="rounded-lg overflow-x-auto">
@@ -563,13 +560,11 @@ export default function PortalOrderDetailPage() {
           </div>
 
           {/* Right sidebar */}
-          <div className="space-y-4">
+          <div className="space-y-8 lg:border-l lg:border-border lg:pl-8">
             {/* Action buttons */}
             {canApproveDecline && (
-              <div className="bg-muted/30 rounded-xl p-4 space-y-3">
-                <h2 className="text-sm font-semibold text-text">
-                  Your Action Required
-                </h2>
+              <section className="space-y-3">
+                <SectionLabel>Your action required</SectionLabel>
                 <p className="text-xs text-text-secondary">
                   Please review the services above and approve or decline this
                   estimate.
@@ -617,15 +612,13 @@ export default function PortalOrderDetailPage() {
                     Decline
                   </button>
                 </div>
-              </div>
+              </section>
             )}
 
             {/* Cancel — draft (still being prepared) or approved (before work starts) */}
             {canCancel && (
-              <div className="bg-muted/30 rounded-xl p-4 space-y-3">
-                <h2 className="text-sm font-semibold text-text">
-                  Changed your mind?
-                </h2>
+              <section className="space-y-3">
+                <SectionLabel>Changed your mind?</SectionLabel>
                 <p className="text-xs text-text-secondary">
                   {canonical === "draft"
                     ? "This estimate is still being prepared — cancel it now if you no longer want the work, so the shop doesn't review it."
@@ -640,12 +633,12 @@ export default function PortalOrderDetailPage() {
                   <XIcon className="w-3.5 h-3.5" />
                   Cancel order
                 </button>
-              </div>
+              </section>
             )}
 
             {/* Order details */}
-            <div className="bg-muted/30 rounded-xl p-4 space-y-2">
-              <h2 className="text-sm font-semibold text-text">Details</h2>
+            <section className="space-y-2">
+              <SectionLabel>Details</SectionLabel>
               <div className="text-xs space-y-1.5">
                 <div className="flex justify-between">
                   <span className="text-text-secondary">Order ID</span>
@@ -688,17 +681,15 @@ export default function PortalOrderDetailPage() {
                   </span>
                 </div>
               </div>
-            </div>
+            </section>
           </div>
         </div>
 
         {/* Activity timeline */}
-        <div className="bg-muted/30 rounded-xl p-4">
-          <h2 className="text-sm font-semibold text-text mb-3">
-            Order History
-          </h2>
+        <section className="border-t border-border pt-8">
+          <SectionLabel>Order history</SectionLabel>
           <StatusTimeline events={events ?? []} />
-        </div>
+        </section>
       </div>
     </>
   );
