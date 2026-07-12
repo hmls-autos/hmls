@@ -198,7 +198,7 @@ export default function LoginPage() {
                 />
                 <button
                   type="submit"
-                  className="w-full bg-red-primary text-white font-medium py-3 rounded-xl hover:bg-red-dark transition-colors"
+                  className="w-full bg-foreground text-background font-medium py-3 rounded-xl hover:bg-foreground/90 transition-colors"
                 >
                   Continue
                 </button>
@@ -261,7 +261,7 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full bg-red-primary text-white font-medium py-3 rounded-xl hover:bg-red-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full bg-foreground text-background font-medium py-3 rounded-xl hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {isLoading && (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />

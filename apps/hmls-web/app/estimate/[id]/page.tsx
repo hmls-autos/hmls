@@ -351,7 +351,7 @@ export default function EstimateReviewPage() {
                 handleAction("approve");
               }}
               disabled={actionLoading}
-              className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
+              className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-foreground text-background font-semibold text-sm hover:bg-foreground/90 transition-colors disabled:opacity-50"
             >
               <Check className="w-4 h-4" />
               Approve

@@ -105,7 +105,7 @@ function OrderCard({
             type="button"
             onClick={() => onAction(order.id, "approve")}
             disabled={loading === order.id}
-            className="flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-lg bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-50"
           >
             <Check className="w-3.5 h-3.5" />
             Approve Estimate
