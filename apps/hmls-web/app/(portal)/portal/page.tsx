@@ -3,6 +3,7 @@
 import { CheckCircle, ClipboardList, Loader } from "lucide-react";
 import Link from "next/link";
 import { DateTime } from "@/components/ui/DateTime";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePortalCustomer, usePortalOrders } from "@/hooks/usePortal";
 import { formatCents } from "@/lib/format";
@@ -159,7 +160,7 @@ export default function PortalDashboard() {
           </Link>
         </div>
       ) : (
-        <div className="divide-y divide-border">
+        <div className="space-y-2">
           {recentOrders.map((order) => {
             const statusConfig = statusDisplay(order.status, "portal", {
               tentativeBooking: isTentativeBooking(order),
@@ -169,23 +170,22 @@ export default function PortalDashboard() {
               <Link
                 key={order.id}
                 href={`/portal/orders/${order.id}`}
-                className="flex items-center gap-4 py-3 -mx-2 px-2 rounded-lg hover:bg-muted/60 transition-colors"
+                className="flex items-center justify-between gap-4 bg-muted/40 rounded-lg p-4 hover:bg-muted/60 transition-colors"
               >
-                <ClipboardList className="w-4 h-4 text-muted-foreground shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-foreground truncate">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="text-sm font-semibold text-foreground shrink-0">
                     Order #{order.id}
-                  </p>
-                  <p className="text-xs text-muted-foreground capitalize">
-                    {statusConfig.label}
-                    {order.subtotalCents > 0
-                      ? ` · ${formatCents(order.subtotalCents)}`
-                      : ""}
-                  </p>
+                  </span>
+                  <StatusBadge entry={statusConfig} />
                 </div>
-                <span className="text-xs text-muted-foreground shrink-0">
+                <div className="flex items-center gap-3 shrink-0 text-xs text-muted-foreground">
+                  {order.subtotalCents > 0 && (
+                    <span className="tabular-nums">
+                      {formatCents(order.subtotalCents)}
+                    </span>
+                  )}
                   <DateTime value={order.updatedAt} format="datetime" />
-                </span>
+                </div>
               </Link>
             );
           })}
