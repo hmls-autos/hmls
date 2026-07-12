@@ -35,9 +35,10 @@ export function canonicalStatus(raw: string): OrderStatus | null {
 //   DARK_PILL  → committed / in motion (approved, in progress, scheduled) — a
 //                solid inverted pill that pops out of the neutral ones
 //   NEUTRAL    → passive: waiting on the customer, or already settled
-const NEUTRAL_PILL =
-  "bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-100";
-const DARK_PILL = "bg-foreground text-background";
+// Active = a solid mid-grey chip with WHITE text (readable + prominent in both
+// modes — no glary inverted white pill). Passive = a quiet muted chip.
+const NEUTRAL_PILL = "bg-muted text-muted-foreground";
+const DARK_PILL = "bg-neutral-600 text-white dark:bg-neutral-500";
 const RED_PILL = "bg-red-100 text-red-700 dark:bg-red-500/25 dark:text-red-200";
 
 export const ORDER_STATUS: Record<OrderStatus, StatusConfig> = {
