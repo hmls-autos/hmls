@@ -28,30 +28,31 @@ export function canonicalStatus(raw: string): OrderStatus | null {
   }
 }
 
-// Black / white / red only — a hue would clash with the red brand accent (esp.
-// green). States are grouped by "what does this order need from me", encoded by
-// treatment, not colour:
-//   RED_PILL   → needs the shop to act (declined; "pending" sub-badges below)
-//   DARK_PILL  → committed / in motion (approved, in progress, scheduled) — a
-//                solid inverted pill that pops out of the neutral ones
-//   NEUTRAL    → passive: waiting on the customer, or already settled
-// Active = a solid mid-grey chip with WHITE text (readable + prominent in both
-// modes — no glary inverted white pill). Passive = a quiet muted chip.
-const NEUTRAL_PILL = "bg-muted text-muted-foreground";
-const DARK_PILL = "bg-neutral-600 text-white dark:bg-neutral-500";
-const RED_PILL = "bg-red-100 text-red-700 dark:bg-red-500/25 dark:text-red-200";
+// Vercel's palette has NO green (success is blue), so colour-coding the
+// lifecycle avoids the red/green clash by construction: blue = sent, violet =
+// authorized/booked, amber = active work, red = needs attention, neutral = the
+// quiet ends. Each pill: soft tint + readable text in both modes.
+const NEUTRAL_PILL =
+  "bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-200";
+const BLUE_PILL =
+  "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-200";
+const VIOLET_PILL =
+  "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-200";
+const AMBER_PILL =
+  "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-200";
+const RED_PILL = "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-200";
 
 export const ORDER_STATUS: Record<OrderStatus, StatusConfig> = {
   draft: { label: "Draft", color: NEUTRAL_PILL },
-  estimated: { label: "Estimated", color: NEUTRAL_PILL },
-  approved: { label: "Approved", color: DARK_PILL },
+  estimated: { label: "Estimated", color: BLUE_PILL },
+  approved: { label: "Approved", color: VIOLET_PILL },
   declined: { label: "Declined", color: RED_PILL },
-  in_progress: { label: "In Progress", color: DARK_PILL },
+  in_progress: { label: "In Progress", color: AMBER_PILL },
   completed: { label: "Completed", color: NEUTRAL_PILL },
   cancelled: {
     label: "Cancelled",
     color:
-      "bg-neutral-200 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-300",
+      "bg-neutral-200 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-400",
   },
 };
 
@@ -124,7 +125,7 @@ const PENDING_CONFIRMATION_CONFIG: StatusConfig = {
  *  "Scheduled" because that's what they care about. */
 const SCHEDULED_BOOKING_CONFIG: StatusConfig = {
   label: "Scheduled",
-  color: DARK_PILL,
+  color: VIOLET_PILL,
 };
 
 /** True when a draft has accumulated chat-flow scheduling — it is
