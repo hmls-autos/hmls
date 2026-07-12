@@ -12,7 +12,9 @@ interface DashboardStats {
   pendingReview: number;
   pendingApprovals: number;
   activeJobs: number;
+  todayJobs: number;
   revenue30d: number;
+  revenuePrev30d: number;
 }
 
 interface UpcomingOrderRow {
@@ -24,8 +26,20 @@ interface UpcomingOrderRow {
   status: string;
 }
 
+/** Canonical pipeline counts, keyed by the 5 linear lifecycle states. */
+export interface DashboardFunnel {
+  draft: number;
+  estimated: number;
+  approved: number;
+  in_progress: number;
+  completed: number;
+}
+
 interface DashboardData {
   stats: DashboardStats;
+  funnel: DashboardFunnel;
+  /** Weekly completed-order revenue (cents), oldest → newest, fixed length. */
+  revenueTrend: number[];
   upcomingOrders: UpcomingOrderRow[];
   recentCustomers: Customer[];
 }
