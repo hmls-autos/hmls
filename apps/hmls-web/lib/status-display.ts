@@ -28,16 +28,18 @@ export function canonicalStatus(raw: string): OrderStatus | null {
   }
 }
 
-// Vercel's palette has NO green (success is blue), so colour-coding the
-// lifecycle avoids the red/green clash by construction: blue = sent, violet =
-// authorized/booked, amber = active work, red = needs attention, neutral = the
-// quiet ends. Each pill: soft tint + readable text in both modes.
+// Cool-leaning colour code: blue = sent, emerald (cool blue-green) =
+// approved/booked, amber = active work, red = needs attention, neutral = the
+// quiet ends. Emerald is cool enough not to clash with the red brand accent.
+// Each pill: soft tint + readable text in both modes.
 const NEUTRAL_PILL =
   "bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-200";
 const BLUE_PILL =
   "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-200";
-const VIOLET_PILL =
-  "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-200";
+// Cool emerald (blue-green), not a warm/lime green — reads as "go/approved"
+// without clashing against the red brand accent.
+const EMERALD_PILL =
+  "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200";
 const AMBER_PILL =
   "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-200";
 const RED_PILL = "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-200";
@@ -45,7 +47,7 @@ const RED_PILL = "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-200";
 export const ORDER_STATUS: Record<OrderStatus, StatusConfig> = {
   draft: { label: "Draft", color: NEUTRAL_PILL },
   estimated: { label: "Estimated", color: BLUE_PILL },
-  approved: { label: "Approved", color: VIOLET_PILL },
+  approved: { label: "Approved", color: EMERALD_PILL },
   declined: { label: "Declined", color: RED_PILL },
   in_progress: { label: "In Progress", color: AMBER_PILL },
   completed: { label: "Completed", color: NEUTRAL_PILL },
@@ -125,7 +127,7 @@ const PENDING_CONFIRMATION_CONFIG: StatusConfig = {
  *  "Scheduled" because that's what they care about. */
 const SCHEDULED_BOOKING_CONFIG: StatusConfig = {
   label: "Scheduled",
-  color: VIOLET_PILL,
+  color: EMERALD_PILL,
 };
 
 /** True when a draft has accumulated chat-flow scheduling — it is
