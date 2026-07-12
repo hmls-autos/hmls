@@ -63,7 +63,7 @@ export default function TimeOffPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-display font-bold text-foreground">
+        <h1 className="text-2xl font-display font-semibold tracking-tight text-foreground">
           Time Off
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -72,7 +72,7 @@ export default function TimeOffPage() {
         </p>
       </div>
 
-      <Card>
+      <Card className="border-0">
         <CardContent className="p-4 space-y-3">
           <h2 className="text-sm font-semibold text-foreground">
             Add a day off
@@ -109,7 +109,7 @@ export default function TimeOffPage() {
         ) : (
           <div className="space-y-2">
             {dayOffs.map((o) => (
-              <Card key={o.id} className="py-0">
+              <Card key={o.id} className="border-0 py-0">
                 <CardContent className="p-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-foreground">

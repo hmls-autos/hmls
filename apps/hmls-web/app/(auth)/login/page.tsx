@@ -127,13 +127,13 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <Link
           href="/"
-          className="block text-center text-xl font-display font-bold tracking-tight text-text mb-10"
+          className="block text-center text-xl font-display font-semibold tracking-tight text-text mb-10"
         >
           HMLS<span className="text-red-primary">.</span>
         </Link>
         <div key={`${step}-${mode}`} className="page-enter">
           <div className="text-center mb-8">
-            <h1 className="text-2xl font-display font-bold mb-2">
+            <h1 className="text-2xl font-display font-semibold tracking-tight mb-2">
               {step === "password"
                 ? "Enter your password"
                 : mode === "login"
@@ -198,7 +198,7 @@ export default function LoginPage() {
                 />
                 <button
                   type="submit"
-                  className="w-full bg-red-primary text-white font-medium py-3 rounded-xl hover:bg-red-dark transition-colors"
+                  className="w-full bg-foreground text-background font-medium py-3 rounded-xl hover:bg-foreground/90 transition-colors"
                 >
                   Continue
                 </button>
@@ -261,7 +261,7 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full bg-red-primary text-white font-medium py-3 rounded-xl hover:bg-red-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full bg-foreground text-background font-medium py-3 rounded-xl hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {isLoading && (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -284,7 +284,9 @@ export default function LoginPage() {
             <p className="text-sm text-red-primary text-center mt-4">{error}</p>
           )}
           {message && (
-            <p className="text-sm text-green-500 text-center mt-4">{message}</p>
+            <p className="text-sm text-muted-foreground text-center mt-4">
+              {message}
+            </p>
           )}
         </div>
       </div>

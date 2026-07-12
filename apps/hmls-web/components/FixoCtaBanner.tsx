@@ -22,7 +22,7 @@ export function FixoCtaBanner({ channelDetail }: FixoCtaBannerProps) {
   return (
     <aside
       aria-label="Free second opinion"
-      className="mt-6 rounded-lg border border-border bg-surface-alt px-4 py-3"
+      className="mt-6 rounded-lg bg-muted/40 px-4 py-3"
     >
       <p className="m-0 text-sm leading-relaxed text-text-secondary">
         Want a quick second opinion before you call another shop? We built a

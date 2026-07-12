@@ -20,6 +20,12 @@ type Props = {
   suggestedDurationMinutes: number;
 };
 
+// Schedule / mechanic edits have a contextual home in the Appointment section
+// (ScheduleSection), shown whenever schedule is editable. Keep the Actions
+// panel to lifecycle transitions only so the two don't render the same
+// "Reschedule" / "Reassign" buttons side by side.
+const INLINE_ACTIONS = new Set(["set_time", "reschedule", "reassign_mechanic"]);
+
 export function OrderOpsPanel({
   order,
   invoker,
@@ -34,6 +40,7 @@ export function OrderOpsPanel({
   const profile = STATUS_PROFILES[status];
 
   const visible = profile.actions
+    .filter((id) => !INLINE_ACTIONS.has(id))
     .map((id) => ACTION_REGISTRY[id])
     .filter((a) => a.visible(order));
 
@@ -50,7 +57,7 @@ export function OrderOpsPanel({
 
   return (
     <>
-      <Card className="gap-0 py-0">
+      <Card className="gap-0 py-0 border-0">
         <CardHeader className="px-4 py-4">
           <CardTitle className="text-sm">Actions</CardTitle>
         </CardHeader>

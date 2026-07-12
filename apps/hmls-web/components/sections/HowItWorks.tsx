@@ -42,12 +42,12 @@ export default function HowItWorks() {
                 <div className="relative group text-center">
                   <div className="relative mx-auto w-20 h-20 rounded-full bg-surface border border-border flex items-center justify-center mb-8 group-hover:border-red-500/50 group-hover:shadow-lg group-hover:shadow-red-500/10 transition-all duration-300">
                     <Icon className="w-8 h-8 text-red-400" strokeWidth={1.5} />
-                    <div className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-red-600 flex items-center justify-center text-xs font-display font-bold text-white shadow-lg shadow-red-600/30">
+                    <div className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-red-600 flex items-center justify-center text-xs font-display font-semibold text-white shadow-lg shadow-red-600/30">
                       {step.number}
                     </div>
                   </div>
 
-                  <h3 className="text-xl md:text-2xl font-display font-bold text-text mb-3">
+                  <h3 className="text-xl md:text-2xl font-display font-semibold tracking-tight text-text mb-3">
                     {step.title}
                   </h3>
                   <p className="text-text-secondary leading-relaxed max-w-xs mx-auto">

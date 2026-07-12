@@ -16,15 +16,19 @@
   --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.96 0.003 264.542);
   --secondary-foreground: oklch(0.205 0.015 264.542);
-  --muted: oklch(0.96 0.003 264.542);
-  --muted-foreground: oklch(0.556 0.015 264.542);
+  --muted: oklch(0.97 0 0);
+  /* Vercel body text (#4d4d4d) — darker + neutral than the old #737373 for
+     legibility. */
+  --muted-foreground: oklch(0.45 0 0);
   --accent: oklch(0.96 0.003 264.542);
   --accent-foreground: oklch(0.205 0.015 264.542);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0.004 264.542);
-  --input: oklch(0.922 0.004 264.542);
+  /* Vercel hairline (#ebebeb) — pure gray, no blue tint. */
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
   --ring: oklch(0.577 0.245 27.325);
-  --radius: 0.625rem;
+  /* Vercel in-app radius: 6px controls / 8px cards / 12px large. */
+  --radius: 0.5rem;
   --sidebar-background: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.577 0.245 27.325);
@@ -40,7 +44,7 @@
   --surface-hover: #fef2f2;
   --border-hover: #dc2626;
   --text: #171717;
-  --text-secondary: #737373;
+  --text-secondary: #4d4d4d;
   --red-primary: #dc2626;
   --red-dark: #991b1b;
   --red-light: #fef2f2;
@@ -112,7 +116,9 @@
   /* Fonts */
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
-  --font-display: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
+  /* DESIGN.md: one geometric sans (Geist) carries display + body; the display
+     voice is size + weight (≤600) + negative tracking, not a separate family. */
+  --font-display: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 
   /* shadcn color system */
   --color-background: var(--background);

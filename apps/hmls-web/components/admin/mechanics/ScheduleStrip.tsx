@@ -32,18 +32,20 @@ function minutesToHM(total: number) {
 function bookingColor(status: string): string {
   // Only orders with a scheduledAt are plotted, so approved here means the
   // booking is locked in (the old `scheduled` state — canonicalized away).
+  // Mid-tone fills (white text rides on them, so they must read in both
+  // modes). Monochrome + amber for the active job; no green.
   switch (canonicalStatus(status) ?? status) {
     case "approved":
-      return "bg-blue-500";
+      return "bg-neutral-500";
     case "in_progress":
-      return "bg-orange-500";
+      return "bg-amber-600";
     case "completed":
-      return "bg-green-500";
+      return "bg-neutral-500";
     case "cancelled":
     case "declined":
       return "bg-neutral-400";
     default:
-      return "bg-purple-500";
+      return "bg-neutral-500";
   }
 }
 
@@ -124,7 +126,7 @@ export function ScheduleStrip({
                 day: "numeric",
               })}
             </div>
-            <div className="relative h-56 rounded-md bg-muted overflow-hidden border border-border">
+            <div className="relative h-56 rounded-md bg-muted overflow-hidden">
               {availableRanges.map((r) => {
                 const top =
                   ((Math.max(r.startMin, dayStart) - dayStart) /
@@ -139,7 +141,7 @@ export function ScheduleStrip({
                 return (
                   <div
                     key={`${r.startMin}-${r.endMin}`}
-                    className="absolute left-0 right-0 bg-green-100 dark:bg-green-900/20"
+                    className="absolute left-0 right-0 bg-foreground/[0.07]"
                     style={{ top: `${top}%`, height: `${height}%` }}
                   />
                 );

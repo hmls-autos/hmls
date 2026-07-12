@@ -107,7 +107,7 @@ export function LookupStatusCard({
       {showRunning ? (
         <Loader2 className="w-3.5 h-3.5 animate-spin text-red-primary" />
       ) : (
-        <Check className="w-3.5 h-3.5 text-emerald-500" />
+        <Check className="w-3.5 h-3.5 text-muted-foreground" />
       )}
       {showRunning ? (
         <Shimmer as="span">{`${labels.running}…`}</Shimmer>

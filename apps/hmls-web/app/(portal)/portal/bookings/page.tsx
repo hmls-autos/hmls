@@ -1,6 +1,12 @@
 "use client";
 
-import { Calendar, Clock, MapPin, X as XIcon } from "lucide-react";
+import {
+  Calendar,
+  ChevronRight,
+  Clock,
+  MapPin,
+  X as XIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -38,7 +44,14 @@ function BookingCard({
   const firstItem = order.items?.[0]?.name ?? "Service";
 
   return (
-    <div className="bg-surface border border-border rounded-xl p-5 hover:border-border-hover transition-colors">
+    <div className="relative bg-muted/40 rounded-lg p-5 hover:bg-muted/60 transition-colors">
+      {/* Stretched link — whole card is the tap target; the Cancel button sits
+          above it via z-10. */}
+      <Link
+        href={`/portal/orders/${order.id}`}
+        aria-label={`Open order #${order.id}`}
+        className="absolute inset-0 rounded-lg"
+      />
       <div className="flex items-start justify-between gap-4 mb-3">
         <div>
           <div className="flex items-center gap-2">
@@ -54,12 +67,10 @@ function BookingCard({
             <p className="text-xs text-text-secondary mt-0.5">{vehicleStr}</p>
           )}
         </div>
-        <Link
-          href={`/portal/orders/${order.id}`}
-          className="text-xs text-text-secondary hover:text-text shrink-0"
-        >
-          Order #{order.id} →
-        </Link>
+        <span className="flex items-center gap-1 text-xs text-text-secondary shrink-0">
+          #{order.id}
+          <ChevronRight className="w-4 h-4" />
+        </span>
       </div>
 
       {/* Date/Time + Location */}
@@ -100,7 +111,7 @@ function BookingCard({
       )}
 
       {canCancel && (
-        <div className="flex gap-2 pt-3 border-t border-border">
+        <div className="relative z-10 flex gap-2 pt-3 border-t border-border">
           <button
             type="button"
             onClick={() => onCancel(order.id)}

@@ -52,7 +52,7 @@ function WelcomeScreen({ onPick }: { onPick: (text: string) => void }) {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
-        className="text-xl font-display font-bold text-foreground mb-2"
+        className="text-xl font-display font-semibold text-foreground mb-2"
       >
         What do you need?
       </motion.h2>
@@ -180,7 +180,7 @@ export default function AdminChatPage() {
               <Wrench className="w-6 h-6 text-primary" />
             </motion.div>
             <div>
-              <h1 className="text-xl font-display font-bold text-foreground">
+              <h1 className="text-xl font-display font-semibold text-foreground">
                 Shop Assistant
               </h1>
               <p className="text-sm text-muted-foreground">

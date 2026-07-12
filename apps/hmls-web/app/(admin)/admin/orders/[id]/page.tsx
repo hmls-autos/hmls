@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  type EditableSection,
+  STATUS_PROFILES,
+} from "@hmls/shared/order/profiles";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -8,10 +12,12 @@ import { OrderProgressBar } from "@/components/OrderProgressBar";
 import { ActivityTimeline } from "@/components/order/ActivityTimeline";
 import { DraftBanner } from "@/components/order/DraftBanner";
 import { OrderChatPanel } from "@/components/order/OrderChatPanel";
-import { OrderDetailsCard } from "@/components/order/OrderDetailsCard";
-import { OrderDocumentCard } from "@/components/order/OrderDocumentCard";
 import { OrderOpsPanel } from "@/components/order/OrderOpsPanel";
-import { OrderSectionsRegion } from "@/components/order/OrderSectionsRegion";
+import { CustomerSection } from "@/components/order/sections/CustomerSection";
+import { DiagnosisSection } from "@/components/order/sections/DiagnosisSection";
+import { ItemsSection } from "@/components/order/sections/ItemsSection";
+import { NotesSection } from "@/components/order/sections/NotesSection";
+import { ScheduleSection } from "@/components/order/sections/ScheduleSection";
 import { TechPrepCard } from "@/components/order/TechPrepCard";
 import { askAuthorization } from "@/components/ui/AuthorizeDialog";
 import { Badge } from "@/components/ui/badge";
@@ -20,8 +26,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DateTime } from "@/components/ui/DateTime";
 import { askReason } from "@/components/ui/ReasonDialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAdminOrder } from "@/hooks/useAdmin";
-import { useAdminMechanics } from "@/hooks/useAdminMechanics";
 import {
   getAdminOrdersListHref,
   parseAdminOrdersFilter,
@@ -35,6 +41,16 @@ import {
   statusDisplay,
 } from "@/lib/status-display";
 import { cn } from "@/lib/utils";
+
+/** Linear lifecycle states the admin progress bar renders as steps. Off-track
+ *  states (cancelled/declined) and unknown values need their own title badge. */
+const LINEAR_STATUSES = new Set([
+  "draft",
+  "estimated",
+  "approved",
+  "in_progress",
+  "completed",
+]);
 
 /* ── Status Badge (using shadcn Badge) ─────────────────────────────── */
 
@@ -71,8 +87,6 @@ export default function OrderDetailPage() {
   );
   const orderId = params.id as string;
   const { data, isLoading, isError, mutate } = useAdminOrder(orderId);
-
-  const { mechanics } = useAdminMechanics();
 
   // Hooks must run before any early return.
   const orderItems = data?.order.items ?? [];
@@ -149,11 +163,24 @@ export default function OrderDetailPage() {
   // Derived dual-semantics badge: draft → Pending review / Revising · rev N,
   // approved → Pending schedule / Scheduled.
   const subBadge = orderSubBadge(order);
+  // The progress bar already names the linear state (draft…completed), so the
+  // title only carries the main status text for states the bar can't show: the
+  // branches (cancelled / declined) AND any unknown/corrupt value (canonical
+  // === null), which the bar would otherwise render as a false "Draft". The
+  // sub-badge (Scheduled / Pending review …) always shows.
+  const canonical = canonicalStatus(order.status);
+  const showMainBadge = !canonical || !LINEAR_STATUSES.has(canonical);
 
-  const bookingProviderName =
-    order.providerId != null
-      ? (mechanics.find((m) => m.id === order.providerId)?.name ?? null)
-      : null;
+  const v = order.vehicleInfo;
+  const vehicleLabel = v
+    ? [v.year, v.make, v.model].filter(Boolean).join(" ")
+    : "";
+  const eventCount = data.events?.length ?? 0;
+
+  // Per-status edit affordances (which sections are editable in this state).
+  const profile = canonical ? STATUS_PROFILES[canonical] : null;
+  const canEdit = (s: EditableSection) =>
+    profile?.editableSections.includes(s) ?? false;
 
   return (
     <div className="space-y-6">
@@ -174,11 +201,16 @@ export default function OrderDetailPage() {
 
       {/* Title row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-display font-bold text-foreground">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-2xl font-display font-semibold tracking-tight text-foreground">
             Order #{order.id}
           </h1>
-          <OrderStatusBadge entry={adminStatus} />
+          {vehicleLabel && (
+            <span className="text-lg text-muted-foreground font-medium">
+              · {vehicleLabel}
+            </span>
+          )}
+          {showMainBadge && <OrderStatusBadge entry={adminStatus} />}
           {subBadge ? (
             <OrderStatusBadge entry={subBadge} />
           ) : (
@@ -191,6 +223,8 @@ export default function OrderDetailPage() {
         </div>
         <span className="text-xs text-muted-foreground">
           Created <DateTime value={order.createdAt} format="datetime" />
+          {" · Updated "}
+          <DateTime value={order.updatedAt} format="datetime" />
         </span>
       </div>
 
@@ -199,7 +233,7 @@ export default function OrderDetailPage() {
       )}
 
       {/* Progress bar */}
-      <Card className="py-4 gap-0">
+      <Card className="py-4 gap-0 border-0">
         <CardContent>
           <OrderProgressBar
             status={order.status}
@@ -209,61 +243,107 @@ export default function OrderDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Content grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Left: main details — sections region renders Items, Customer,
-            Schedule, Notes with status-aware edit affordances. */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* Status-contextual estimate/quote PDF panels (moved from aside in
-              Phase 4 — they live with the editable content they describe). */}
-          <OrderDocumentCard order={order} />
+      {/* Content grid — tabbed main area + a persistent Actions sidebar so the
+          operator can act from any tab without losing the working view. The
+          two tall, lower-frequency panels (Activity, Chat) live behind tabs so
+          the Overview tab stays a single scannable screen. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+        <div className="lg:col-span-2">
+          <Tabs defaultValue="overview">
+            <TabsList>
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="activity">
+                Activity{eventCount > 0 ? ` (${eventCount})` : ""}
+              </TabsTrigger>
+              <TabsTrigger value="chat">Assistant</TabsTrigger>
+            </TabsList>
 
-          <OrderSectionsRegion
-            order={order}
-            revalidate={mutate}
-            onSetTime={() => invoker.openDialog("set_time")}
-            onReassign={() => invoker.openDialog("reassign")}
-            profilePreferred={data.customer?.preferredContact ?? null}
-          />
+            {/* Overview — the working view. Line items carries the total +
+                PDF (the old standalone Estimate card folded in); the booking
+                logistics (Appointment + Customer) sit side by side so the page
+                reads as a few dense blocks, not a tall stack of one-fact cards. */}
+            <TabsContent value="overview" className="space-y-4">
+              <ItemsSection
+                order={order}
+                readOnly={!canEdit("items")}
+                revalidate={mutate}
+              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                <ScheduleSection
+                  order={order}
+                  readOnly={!canEdit("schedule")}
+                  revalidate={mutate}
+                  onSetTime={() => invoker.openDialog("set_time")}
+                  onReassign={() => invoker.openDialog("reassign")}
+                />
+                <CustomerSection
+                  order={order}
+                  readOnly={!canEdit("customer")}
+                  revalidate={mutate}
+                  profilePreferred={data.customer?.preferredContact ?? null}
+                />
+              </div>
+              <DiagnosisSection
+                order={order}
+                readOnly={!canEdit("diagnosis")}
+                revalidate={mutate}
+              />
+              <TechPrepCard order={order} />
+              <NotesSection order={order} />
+              {order.cancellationReason && (
+                <Card className="gap-0 py-0 border-0">
+                  <CardHeader className="px-4 py-4">
+                    <CardTitle className="text-sm text-destructive">
+                      Cancellation Reason
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-4">
+                    <p className="text-xs text-foreground">
+                      {order.cancellationReason}
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
 
-          <TechPrepCard order={order} />
+            <TabsContent value="activity">
+              <Card className="gap-0 py-0 border-0">
+                <CardHeader className="px-4 py-4">
+                  <CardTitle className="text-sm">Activity</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-4">
+                  <ActivityTimeline events={data.events ?? []} />
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-          {/* Embedded staff chat scoped to this order (PR 6). Agent tool
-              mutations revalidate the page via SWR mutate. */}
-          <OrderChatPanel orderId={order.id} revalidate={mutate} />
-
-          {order.cancellationReason && (
-            <Card className="gap-0 py-0 border-destructive/50">
-              <CardHeader className="px-4 py-4">
-                <CardTitle className="text-sm text-destructive">
-                  Cancellation Reason
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 pb-4">
-                <p className="text-xs text-foreground">
-                  {order.cancellationReason}
-                </p>
-              </CardContent>
-            </Card>
-          )}
+            {/* forceMount keeps the chat — and any in-flight agent turn (assign
+                mechanic / send estimate) plus its onFinish revalidate — alive
+                when the operator switches tabs mid-stream. Radix unmounts an
+                inactive TabsContent by default, which would abort the turn. */}
+            <TabsContent
+              value="chat"
+              forceMount
+              className="data-[state=inactive]:hidden"
+            >
+              {/* Agent tool mutations revalidate the page via SWR mutate. */}
+              <OrderChatPanel
+                orderId={order.id}
+                revalidate={mutate}
+                defaultOpen
+              />
+            </TabsContent>
+          </Tabs>
         </div>
 
-        <aside className="space-y-4">
+        {/* Persistent action rail — visible on every tab. */}
+        <aside className="space-y-4 lg:sticky lg:top-4">
           <OrderOpsPanel
             order={order}
             invoker={invoker}
             revalidate={mutate}
             suggestedDurationMinutes={suggestedDurationMinutes}
           />
-          <OrderDetailsCard order={order} mechanicName={bookingProviderName} />
-          <Card className="gap-0 py-0">
-            <CardHeader className="px-4 py-4">
-              <CardTitle className="text-sm">Activity</CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4">
-              <ActivityTimeline events={data.events ?? []} />
-            </CardContent>
-          </Card>
         </aside>
       </div>
     </div>

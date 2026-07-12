@@ -37,7 +37,7 @@ function ProfileCard({ id }: { id: number }) {
   if (!mechanic) return <Skeleton className="h-40 w-full" />;
 
   return (
-    <Card className="p-4 gap-0">
+    <Card className="p-4 gap-0 border-0">
       <CardContent className="p-0 space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">Profile</h2>
@@ -145,10 +145,10 @@ function BookingRow({
 
 function KpiTile({ label, value }: { label: string; value: string }) {
   return (
-    <Card className="p-4 gap-0">
+    <Card className="p-4 gap-0 border-0">
       <CardContent className="p-0">
         <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="text-lg font-display font-bold text-foreground tabular-nums">
+        <p className="text-lg font-display font-semibold text-foreground tabular-nums">
           {value}
         </p>
       </CardContent>
@@ -234,7 +234,7 @@ export default function MechanicDetailPage({
         >
           <ArrowLeft className="size-4" />
         </Link>
-        <h1 className="text-2xl font-display font-bold text-foreground">
+        <h1 className="text-2xl font-display font-semibold tracking-tight text-foreground">
           {mechanic.name}
         </h1>
         <span
@@ -242,7 +242,7 @@ export default function MechanicDetailPage({
           aria-label={mechanic.isActive ? "Active" : "Inactive"}
           className={cn(
             "size-2 rounded-full",
-            mechanic.isActive ? "bg-green-500" : "bg-neutral-400",
+            mechanic.isActive ? "bg-foreground" : "bg-neutral-400",
           )}
         />
       </div>
@@ -289,7 +289,7 @@ export default function MechanicDetailPage({
             </Button>
           </div>
         </div>
-        <Card className="p-3">
+        <Card className="p-3 border-0">
           <CardContent className="p-0">
             <ScheduleStrip
               weekly={availability}
@@ -304,7 +304,7 @@ export default function MechanicDetailPage({
         <h2 className="text-sm font-semibold text-foreground mb-2">
           Upcoming bookings
         </h2>
-        <Card className="p-0">
+        <Card className="p-0 border-0">
           <CardContent className="p-0">
             {upcoming.length === 0 ? (
               <p className="text-sm text-muted-foreground p-4">
@@ -325,7 +325,7 @@ export default function MechanicDetailPage({
         <h2 className="text-sm font-semibold text-foreground mb-2">
           Recent completed
         </h2>
-        <Card className="p-0">
+        <Card className="p-0 border-0">
           <CardContent className="p-0">
             {recentCompleted.length === 0 ? (
               <p className="text-sm text-muted-foreground p-4">

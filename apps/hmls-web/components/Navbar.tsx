@@ -48,7 +48,7 @@ export default function Navbar() {
       <nav className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         <Link
           href="/"
-          className={`text-xl font-display font-bold tracking-tight transition-colors ${
+          className={`text-xl font-display font-semibold tracking-tight transition-colors ${
             isTransparent ? "text-white" : "text-text"
           }`}
         >

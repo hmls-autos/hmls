@@ -11,7 +11,7 @@ export function EmptyState({
   action?: { label: string; href: string };
 }) {
   return (
-    <div className="bg-surface border border-border rounded-xl p-8 text-center">
+    <div className="bg-muted/30 rounded-xl p-8 text-center">
       <Icon className="w-8 h-8 text-text-secondary mx-auto mb-3" />
       <p className="text-text-secondary text-sm">{message}</p>
       {action && (

@@ -2,105 +2,322 @@
 
 import {
   AlertTriangle,
-  ArrowRight,
+  CalendarClock,
   Clock,
-  DollarSign,
   PlayCircle,
-  Users,
+  TrendingDown,
+  TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
 import { DateTime } from "@/components/ui/DateTime";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAdminDashboard } from "@/hooks/useAdmin";
+import { type DashboardFunnel, useAdminDashboard } from "@/hooks/useAdmin";
 import { formatCents } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
-function StatCard({
+/* No cards, no borders. Structure comes from section labels, whitespace, and
+ * the marks themselves. The only filled surfaces are the action tiles (they're
+ * clickable CTAs); a single red accent carries urgency. */
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="text-xs font-semibold uppercase tracking-wider font-mono text-muted-foreground">
+      {children}
+    </h2>
+  );
+}
+
+/* ── Action queue ─────────────────────────────────────────────────────────── */
+
+function ActionTile({
   label,
   value,
+  sub,
   icon: Icon,
-  color,
   href,
+  urgent,
 }: {
   label: string;
-  value: string | number;
+  value: number;
+  sub: string;
   icon: React.ComponentType<{ className?: string }>;
-  color: string;
-  href?: string;
+  href: string;
+  urgent?: boolean;
 }) {
-  const card = (
-    <Card className="gap-0 p-5 h-full">
-      <CardContent className="p-0">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-sm text-muted-foreground">{label}</span>
-          <div className={`p-2 rounded-lg ${color}`}>
-            <Icon className="w-4 h-4" />
-          </div>
-        </div>
-        <p className="text-2xl font-display font-bold text-foreground">
-          {value}
-        </p>
-      </CardContent>
-    </Card>
-  );
-  return href ? (
-    <Link href={href} className="block hover:opacity-90 transition-opacity">
-      {card}
-    </Link>
-  ) : (
-    card
-  );
-}
-
-function StatCardSkeleton() {
+  const on = urgent && value > 0;
   return (
-    <Card className="gap-0 p-5">
-      <CardContent className="p-0">
-        <div className="flex items-center justify-between mb-3">
-          <Skeleton className="h-4 w-20" />
-          <Skeleton className="h-8 w-8 rounded-lg" />
-        </div>
-        <Skeleton className="h-8 w-24" />
-      </CardContent>
-    </Card>
+    <Link
+      href={href}
+      className={cn(
+        "block rounded-xl p-4 transition-colors",
+        on
+          ? "bg-red-500/10 hover:bg-red-500/15"
+          : "bg-muted/40 hover:bg-muted/70",
+      )}
+    >
+      <div className="flex items-center justify-between">
+        <span
+          className={cn(
+            "text-sm",
+            on ? "text-red-600 dark:text-red-400" : "text-muted-foreground",
+          )}
+        >
+          {label}
+        </span>
+        <Icon
+          className={cn(
+            "w-4 h-4 shrink-0",
+            on ? "text-red-500 dark:text-red-400" : "text-muted-foreground",
+          )}
+        />
+      </div>
+      <p
+        className={cn(
+          "text-3xl font-display font-semibold mt-2 tabular-nums",
+          on ? "text-red-600 dark:text-red-400" : "text-foreground",
+        )}
+      >
+        {value}
+      </p>
+      <p
+        className={cn(
+          "text-xs mt-0.5",
+          on ? "text-red-600/80 dark:text-red-400/80" : "text-muted-foreground",
+        )}
+      >
+        {sub}
+      </p>
+    </Link>
   );
 }
 
-function DashboardSkeleton() {
+/* ── Order pipeline funnel ─────────────────────────────────────────────────
+ * Bars for the four in-flight states (completed dwarfs them, so it's a footer
+ * stat instead of a bar). Draft is red — it's the state stuck on the shop. */
+
+const FUNNEL_ROWS: {
+  key: keyof Pick<
+    DashboardFunnel,
+    "draft" | "estimated" | "approved" | "in_progress"
+  >;
+  label: string;
+  href: string;
+}[] = [
+  { key: "draft", label: "Draft", href: "/admin/orders?status=draft" },
+  {
+    key: "estimated",
+    label: "Estimated",
+    href: "/admin/orders?status=estimated",
+  },
+  { key: "approved", label: "Approved", href: "/admin/orders?status=approved" },
+  {
+    key: "in_progress",
+    label: "In progress",
+    href: "/admin/orders?status=in_progress",
+  },
+];
+
+function FunnelChart({ funnel }: { funnel: DashboardFunnel }) {
+  const active = FUNNEL_ROWS.map((r) => funnel[r.key]);
+  const max = Math.max(...active, 1);
+  const total =
+    funnel.draft +
+    funnel.estimated +
+    funnel.approved +
+    funnel.in_progress +
+    funnel.completed;
+
   return (
     <div>
-      <Skeleton className="h-8 w-40 mb-1" />
-      <Skeleton className="h-4 w-56 mb-8" />
-
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-10">
-        {["stat-1", "stat-2", "stat-3", "stat-4", "stat-5"].map((id) => (
-          <StatCardSkeleton key={id} />
-        ))}
+      <div className="flex items-baseline justify-between mb-4">
+        <SectionLabel>Order pipeline</SectionLabel>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {total} total
+        </span>
       </div>
+      <div className="flex flex-col gap-3.5">
+        {FUNNEL_ROWS.map((r) => {
+          const value = funnel[r.key];
+          const pct = Math.round((value / max) * 100);
+          return (
+            <Link key={r.key} href={r.href} className="block group">
+              <div className="flex justify-between text-xs mb-1.5">
+                <span className="text-muted-foreground group-hover:text-foreground transition-colors">
+                  {r.label}
+                </span>
+                <span className="text-foreground tabular-nums">{value}</span>
+              </div>
+              <div className="h-2 rounded-full bg-muted overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full rounded-full",
+                    r.key === "draft" ? "bg-red-500" : "bg-foreground/40",
+                  )}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+      <p className="mt-4 text-xs text-muted-foreground tabular-nums">
+        {funnel.completed} completed
+      </p>
+    </div>
+  );
+}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {["col-1", "col-2"].map((colId) => (
-          <div key={colId}>
-            <div className="flex items-center justify-between mb-3">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-3 w-14" />
-            </div>
-            <Card className="gap-0 p-0">
-              <CardContent className="p-0 divide-y divide-border">
-                {["row-1", "row-2", "row-3"].map((rowId) => (
-                  <div key={rowId} className="px-4 py-3">
-                    <Skeleton className="h-4 w-3/4 mb-1.5" />
-                    <Skeleton className="h-3 w-1/2" />
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-        ))}
+/* ── Revenue trend ─────────────────────────────────────────────────────────
+ * Hand-rolled SVG area line (8 weekly points). One accent stroke, non-scaling
+ * so it stays crisp when the viewBox stretches to fill width. */
+
+function RevenueSparkline({ data }: { data: number[] }) {
+  const w = 300;
+  const h = 72;
+  const pad = 6;
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data, 0);
+  const range = max - min || 1;
+  const stepX = data.length > 1 ? w / (data.length - 1) : w;
+  const pts = data.map((v, i) => {
+    const x = i * stepX;
+    const y = h - pad - ((v - min) / range) * (h - pad * 2);
+    return [x, y] as const;
+  });
+  const line = pts
+    .map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`)
+    .join(" ");
+  const area = `${line} L${w},${h} L0,${h} Z`;
+
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      className="w-full h-20"
+      preserveAspectRatio="none"
+      role="img"
+      aria-label="Weekly revenue trend over the last 8 weeks"
+    >
+      <defs>
+        <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="var(--red-primary)" stopOpacity="0.18" />
+          <stop offset="1" stopColor="var(--red-primary)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill="url(#revenueGradient)" />
+      <path
+        d={line}
+        fill="none"
+        stroke="var(--red-primary)"
+        strokeWidth="2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
+
+function RevenueCard({
+  revenue30d,
+  revenuePrev30d,
+  trend,
+}: {
+  revenue30d: number;
+  revenuePrev30d: number;
+  trend: number[];
+}) {
+  const deltaPct =
+    revenuePrev30d > 0
+      ? Math.round(((revenue30d - revenuePrev30d) / revenuePrev30d) * 100)
+      : null;
+  const DeltaIcon =
+    deltaPct != null && deltaPct < 0 ? TrendingDown : TrendingUp;
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-2">
+        <SectionLabel>Revenue</SectionLabel>
+        <span className="text-xs text-muted-foreground">last 30 days</span>
+      </div>
+      <div className="flex items-baseline gap-2">
+        <p className="text-3xl font-display font-semibold text-foreground tabular-nums">
+          {formatCents(revenue30d)}
+        </p>
+        {deltaPct != null && (
+          <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+            <DeltaIcon className="w-3 h-3" />
+            {Math.abs(deltaPct)}%
+          </span>
+        )}
+      </div>
+      <div className="mt-4">
+        <RevenueSparkline data={trend} />
+        <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+          <span>8 weeks ago</span>
+          <span>this week</span>
+        </div>
       </div>
     </div>
   );
 }
+
+/* ── List sections ─────────────────────────────────────────────────────────
+ * Flat rows separated by hairlines — no outer box. */
+
+function ListSection({
+  title,
+  href,
+  empty,
+  children,
+}: {
+  title: string;
+  href: string;
+  empty: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <SectionLabel>{title}</SectionLabel>
+        <Link
+          href={href}
+          className="text-xs text-primary hover:text-primary/80 font-medium"
+        >
+          View all
+        </Link>
+      </div>
+      {empty ? (
+        <p className="text-xs text-muted-foreground py-4">Nothing here yet.</p>
+      ) : (
+        <div className="divide-y divide-border">{children}</div>
+      )}
+    </div>
+  );
+}
+
+/* ── Skeleton ─────────────────────────────────────────────────────────────── */
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-10">
+      <div>
+        <Skeleton className="h-8 w-40 mb-1" />
+        <Skeleton className="h-4 w-56" />
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {["t1", "t2", "t3", "t4"].map((id) => (
+          <Skeleton key={id} className="h-28 w-full rounded-xl" />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+        <Skeleton className="h-44 w-full" />
+        <Skeleton className="h-44 w-full" />
+      </div>
+    </div>
+  );
+}
+
+/* ── Page ─────────────────────────────────────────────────────────────────── */
 
 export default function AdminDashboard() {
   const { data, isLoading } = useAdminDashboard();
@@ -109,172 +326,116 @@ export default function AdminDashboard() {
     return <DashboardSkeleton />;
   }
 
-  const { stats, upcomingOrders, recentCustomers } = data;
+  const { stats, funnel, revenueTrend, upcomingOrders, recentCustomers } = data;
 
   return (
-    <div>
-      <h1 className="text-2xl font-display font-bold text-foreground mb-1">
-        Dashboard
-      </h1>
-      <p className="text-sm text-muted-foreground mb-8">
-        Business overview at a glance.
-      </p>
+    <div className="space-y-10">
+      <div>
+        <h1 className="text-2xl font-display font-semibold tracking-tight text-foreground mb-1">
+          Dashboard
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Business overview at a glance.
+        </p>
+      </div>
 
-      {/* Pending Review banner */}
-      {stats.pendingReview > 0 && (
-        <Link href="/admin/orders?status=draft" className="block mb-6 group">
-          <Card className="border-amber-500/40 bg-amber-50 dark:bg-amber-950/20 gap-0 py-0 transition-colors hover:bg-amber-100 dark:hover:bg-amber-950/30">
-            <CardContent className="px-4 py-3 flex items-center gap-3">
-              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-                  {stats.pendingReview} AI-drafted estimate
-                  {stats.pendingReview === 1 ? "" : "s"} pending review
-                </p>
-                <p className="text-xs text-amber-800 dark:text-amber-300/90">
-                  Review and send to customers
-                </p>
-              </div>
-              <ArrowRight className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
-            </CardContent>
-          </Card>
-        </Link>
-      )}
+      {/* Needs your attention — operational triage */}
+      <section className="space-y-3">
+        <SectionLabel>Needs your attention</SectionLabel>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <ActionTile
+            label="Pending review"
+            value={stats.pendingReview}
+            sub="AI drafts to send"
+            icon={AlertTriangle}
+            href="/admin/orders?status=draft"
+            urgent
+          />
+          <ActionTile
+            label="Awaiting approval"
+            value={stats.pendingApprovals}
+            sub="Sent, waiting on customer"
+            icon={Clock}
+            href="/admin/orders?status=estimated"
+          />
+          <ActionTile
+            label="Today's jobs"
+            value={stats.todayJobs}
+            sub="Scheduled for today"
+            icon={CalendarClock}
+            href="/admin/orders?status=approved"
+          />
+          <ActionTile
+            label="Active jobs"
+            value={stats.activeJobs}
+            sub="Booked or in progress"
+            icon={PlayCircle}
+            href="/admin/orders?status=in_progress"
+          />
+        </div>
+      </section>
 
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-10">
-        <StatCard
-          label="Customers"
-          value={stats.customers}
-          icon={Users}
-          href="/admin/customers"
-          color="bg-red-500/10 text-red-500 dark:bg-red-900/30 dark:text-red-400"
-        />
-        <StatCard
-          label="Pending Review"
-          value={stats.pendingReview}
-          icon={AlertTriangle}
-          href="/admin/orders?status=draft"
-          color="bg-amber-500/10 text-amber-500 dark:bg-amber-900/30 dark:text-amber-400"
-        />
-        <StatCard
-          label="Awaiting Approval"
-          value={stats.pendingApprovals}
-          icon={Clock}
-          href="/admin/orders?status=estimated"
-          color="bg-indigo-500/10 text-indigo-500 dark:bg-indigo-900/30 dark:text-indigo-400"
-        />
-        <StatCard
-          label="Active Jobs"
-          value={stats.activeJobs}
-          icon={PlayCircle}
-          href="/admin/orders?status=in_progress"
-          color="bg-emerald-500/10 text-emerald-500 dark:bg-emerald-900/30 dark:text-emerald-400"
-        />
-        <StatCard
-          label="Revenue (30d)"
-          value={formatCents(stats.revenue30d)}
-          icon={DollarSign}
-          color="bg-green-500/10 text-green-500 dark:bg-green-900/30 dark:text-green-400"
+      {/* Pipeline + revenue */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+        <FunnelChart funnel={funnel} />
+        <RevenueCard
+          revenue30d={stats.revenue30d}
+          revenuePrev30d={stats.revenuePrev30d}
+          trend={revenueTrend}
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Upcoming bookings */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-foreground">
-              Upcoming Bookings
-            </h2>
-            <Link
-              href="/admin/orders?status=approved"
-              className="text-xs text-primary hover:text-primary/80 font-medium"
-            >
-              View all
-            </Link>
-          </div>
-          {upcomingOrders.length === 0 ? (
-            <Card className="gap-0 p-6 text-center">
-              <CardContent className="p-0">
-                <p className="text-xs text-muted-foreground">
-                  No upcoming bookings.
+      {/* Upcoming bookings + recent customers */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+        <ListSection
+          title="Upcoming bookings"
+          href="/admin/orders?status=approved"
+          empty={upcomingOrders.length === 0}
+        >
+          {upcomingOrders.map((o) => {
+            const v = o.vehicleInfo;
+            const vehicleStr = v
+              ? [v.year, v.make, v.model].filter(Boolean).join(" ")
+              : null;
+            return (
+              <Link
+                key={o.id}
+                href={`/admin/orders/${o.id}`}
+                className="block py-3 -mx-2 px-2 rounded-lg hover:bg-muted/60 transition-colors"
+              >
+                <p className="text-sm text-foreground font-medium truncate">
+                  #{o.id}
+                  {vehicleStr ? ` · ${vehicleStr}` : ""}
                 </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="gap-0 p-0">
-              <CardContent className="p-0 divide-y divide-border">
-                {upcomingOrders.map((o) => {
-                  const vehicle = o.vehicleInfo;
-                  const vehicleStr = vehicle
-                    ? [vehicle.year, vehicle.make, vehicle.model]
-                        .filter(Boolean)
-                        .join(" ")
-                    : null;
-                  return (
-                    <Link
-                      key={o.id}
-                      href={`/admin/orders/${o.id}`}
-                      className="block px-4 py-3 hover:bg-muted transition-colors"
-                    >
-                      <p className="text-sm text-foreground font-medium truncate">
-                        #{o.id}
-                        {vehicleStr ? ` · ${vehicleStr}` : ""}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        <DateTime value={o.scheduledAt} format="date" />{" "}
-                        &middot; {o.contactName ?? "Unknown"}
-                      </p>
-                    </Link>
-                  );
-                })}
-              </CardContent>
-            </Card>
-          )}
-        </div>
+                <p className="text-xs text-muted-foreground">
+                  <DateTime value={o.scheduledAt} format="date" /> &middot;{" "}
+                  {o.contactName ?? "Unknown"}
+                </p>
+              </Link>
+            );
+          })}
+        </ListSection>
 
-        {/* Recent customers */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-foreground">
-              Recent Customers
-            </h2>
+        <ListSection
+          title="Recent customers"
+          href="/admin/customers"
+          empty={recentCustomers.length === 0}
+        >
+          {recentCustomers.map((cust) => (
             <Link
-              href="/admin/customers"
-              className="text-xs text-primary hover:text-primary/80 font-medium"
+              key={cust.id}
+              href={`/admin/customers?id=${cust.id}`}
+              className="block py-3 -mx-2 px-2 rounded-lg hover:bg-muted/60 transition-colors"
             >
-              View all
+              <p className="text-sm text-foreground font-medium truncate">
+                {cust.name ?? "Unnamed"}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {cust.email ?? cust.phone ?? "No contact info"}
+              </p>
             </Link>
-          </div>
-          {recentCustomers.length === 0 ? (
-            <Card className="gap-0 p-6 text-center">
-              <CardContent className="p-0">
-                <p className="text-xs text-muted-foreground">
-                  No customers yet.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="gap-0 p-0 overflow-hidden">
-              <CardContent className="p-0 divide-y divide-border">
-                {recentCustomers.map((c) => (
-                  <Link
-                    key={c.id}
-                    href={`/admin/customers?id=${c.id}`}
-                    className="block px-4 py-3 hover:bg-muted transition-colors"
-                  >
-                    <p className="text-sm text-foreground font-medium truncate">
-                      {c.name ?? "Unnamed"}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {c.email ?? c.phone ?? "No contact info"}
-                    </p>
-                  </Link>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-        </div>
+          ))}
+        </ListSection>
       </div>
     </div>
   );

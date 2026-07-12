@@ -30,7 +30,7 @@ export default function AreasIndex() {
           <div className="inline-block mb-4 px-4 py-1.5 rounded-full border border-red-primary/30 bg-red-light text-red-primary text-xs tracking-widest uppercase font-display font-semibold">
             Service Areas
           </div>
-          <h1 className="text-5xl md:text-6xl font-display font-bold mb-4 leading-tight">
+          <h1 className="text-5xl md:text-6xl font-display font-semibold mb-4 leading-tight">
             Where we <span className="text-red-primary">come to you</span>
           </h1>
           <p className="text-xl text-text-secondary font-light mb-12 max-w-2xl leading-relaxed">
@@ -48,7 +48,7 @@ export default function AreasIndex() {
           if (cities.length === 0) return null;
           return (
             <FadeIn key={rid} direction="up" delay={0.1}>
-              <h2 className="text-2xl font-display font-bold mb-4 mt-4">
+              <h2 className="text-2xl font-display font-semibold tracking-tight mb-4 mt-4">
                 {region.label}
               </h2>
               <div className="grid sm:grid-cols-2 gap-3 mb-12">

@@ -619,7 +619,7 @@ export default function OrdersPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-display font-bold text-foreground">
+        <h1 className="text-2xl font-display font-semibold tracking-tight text-foreground">
           Orders
         </h1>
         <Button onClick={() => setShowCreate(true)}>
@@ -657,7 +657,7 @@ export default function OrdersPage() {
                 "text-xs font-medium px-3 py-1.5 rounded-full transition-colors inline-flex items-center gap-1.5",
                 filter === opt.value
                   ? "bg-primary text-white"
-                  : "bg-card border border-border text-muted-foreground hover:text-foreground hover:border-primary",
+                  : "bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted",
               )}
             >
               {opt.label}
@@ -667,7 +667,7 @@ export default function OrdersPage() {
                     "rounded-full text-[10px] leading-none px-1.5 py-0.5 font-semibold",
                     filter === opt.value
                       ? "bg-white text-primary"
-                      : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+                      : "bg-red-500/10 text-red-600 dark:bg-red-900/30 dark:text-red-400",
                   )}
                 >
                   {pendingReviewCount}
@@ -684,7 +684,7 @@ export default function OrdersPage() {
               "text-xs font-medium px-3 py-1.5 rounded-full transition-colors",
               isMoreActive
                 ? "bg-primary text-white"
-                : "bg-card border border-border text-muted-foreground hover:text-foreground hover:border-primary",
+                : "bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted",
             )}
           >
             More {showMore ? "\u25B2" : "\u25BC"}
@@ -717,7 +717,7 @@ export default function OrdersPage() {
       {isLoading ? (
         <OrdersSkeleton />
       ) : orders.length === 0 ? (
-        <Card>
+        <Card className="border-0">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <ClipboardList className="w-10 h-10 text-muted-foreground mb-3" />
             <p className="text-sm text-muted-foreground">
@@ -750,7 +750,7 @@ export default function OrdersPage() {
                   debouncedSearch,
                 )}
                 prefetch={false}
-                className="flex items-center justify-between gap-3 bg-card border border-border rounded-xl p-4 hover:border-primary transition-colors group"
+                className="flex items-center justify-between gap-3 bg-muted/40 rounded-lg p-4 hover:bg-muted/70 transition-colors group"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="flex items-center gap-2">
@@ -769,7 +769,7 @@ export default function OrdersPage() {
                       </span>
                     ) : (
                       order.revisionNumber > 1 && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
                           v{order.revisionNumber}
                         </span>
                       )

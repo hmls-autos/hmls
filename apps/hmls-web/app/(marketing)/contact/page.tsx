@@ -18,7 +18,7 @@ export default function Contact() {
             <div className="inline-block mb-4 px-4 py-1.5 rounded-full border border-red-primary/30 bg-red-light text-red-primary text-xs tracking-widest uppercase font-display font-semibold">
               Contact Us
             </div>
-            <h1 className="text-5xl md:text-6xl font-display font-bold mb-8 leading-tight">
+            <h1 className="text-5xl md:text-6xl font-display font-semibold mb-8 leading-tight">
               Get in Touch for{" "}
               <span className="text-red-primary">Reliable Auto Care.</span>
             </h1>

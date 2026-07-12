@@ -38,7 +38,7 @@ export function CustomerSection({
 
   if (editing && !readOnly) {
     return (
-      <Card className="gap-0 py-0">
+      <Card className="gap-0 py-0 border-0">
         <CardHeader className="px-4 py-4 flex flex-row items-center justify-between">
           <CardTitle className="text-sm">Customer</CardTitle>
         </CardHeader>
@@ -64,7 +64,7 @@ export function CustomerSection({
   }
 
   return (
-    <Card className="gap-0 py-0">
+    <Card className="gap-0 py-0 border-0">
       <CardHeader className="px-4 py-4 flex flex-row items-center justify-between">
         <CardTitle className="text-sm">Customer</CardTitle>
         {!readOnly && (

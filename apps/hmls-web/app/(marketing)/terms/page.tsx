@@ -14,7 +14,7 @@ export default function Terms() {
           <div className="inline-block mb-4 px-4 py-1.5 rounded-full border border-red-primary/30 bg-red-light text-red-primary text-xs tracking-widest uppercase font-display font-semibold">
             Legal
           </div>
-          <h1 className="text-4xl md:text-5xl font-display font-bold mb-4">
+          <h1 className="text-4xl md:text-5xl font-display font-semibold mb-4">
             Terms of Service
           </h1>
           <p className="text-text-secondary text-sm">

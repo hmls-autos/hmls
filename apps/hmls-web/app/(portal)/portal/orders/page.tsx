@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ClipboardList, X as XIcon } from "lucide-react";
+import { Check, ChevronRight, ClipboardList, X as XIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -38,28 +38,27 @@ function OrderCard({
   });
 
   return (
-    <div className="bg-surface border border-border rounded-xl p-5 hover:border-border-hover transition-colors">
+    <div className="relative bg-muted/40 rounded-lg p-5 hover:bg-muted/60 transition-colors">
+      {/* Stretched link — whole card is the tap target; interactive children
+          (Approve/Decline) sit above it via z-10. */}
+      <Link
+        href={`/portal/orders/${order.id}`}
+        aria-label={`Open order #${order.id}`}
+        className="absolute inset-0 rounded-lg"
+      />
       <div className="flex items-start justify-between gap-4 mb-3">
         <div>
           <div className="flex items-center gap-2">
-            <Link
-              href={`/portal/orders/${order.id}`}
-              className="text-sm font-semibold text-text hover:text-red-primary transition-colors"
-            >
+            <span className="text-sm font-semibold text-text">
               Order #{order.id}
-            </Link>
+            </span>
             <StatusBadge entry={badgeEntry} />
           </div>
           <p className="text-xs text-text-secondary mt-0.5">
             <DateTime value={order.createdAt} format="datetime" />
           </p>
         </div>
-        <Link
-          href={`/portal/orders/${order.id}`}
-          className="text-xs text-text-secondary hover:text-text transition-colors shrink-0"
-        >
-          View →
-        </Link>
+        <ChevronRight className="w-4 h-4 text-text-secondary shrink-0" />
       </div>
 
       {order.cancellationReason && (
@@ -100,12 +99,12 @@ function OrderCard({
 
       {/* Approve / Decline buttons */}
       {canApproveDecline && (
-        <div className="flex gap-2 pt-3 border-t border-border">
+        <div className="relative z-10 flex gap-2 pt-3 border-t border-border">
           <button
             type="button"
             onClick={() => onAction(order.id, "approve")}
             disabled={loading === order.id}
-            className="flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-lg bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-50"
           >
             <Check className="w-3.5 h-3.5" />
             Approve Estimate

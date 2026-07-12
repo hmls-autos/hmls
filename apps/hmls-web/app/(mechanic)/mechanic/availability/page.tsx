@@ -109,7 +109,7 @@ export default function AvailabilityPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-display font-bold text-foreground">
+        <h1 className="text-2xl font-display font-semibold tracking-tight text-foreground">
           Weekly Hours
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -118,7 +118,7 @@ export default function AvailabilityPage() {
         </p>
       </div>
 
-      <Card>
+      <Card className="border-0">
         <CardContent className="p-4 space-y-3">
           {sorted.length === 0 && (
             <p className="text-sm text-muted-foreground">
