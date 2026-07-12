@@ -619,7 +619,7 @@ export default function OrdersPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-display font-bold text-foreground">
+        <h1 className="text-2xl font-display font-semibold tracking-tight text-foreground">
           Orders
         </h1>
         <Button onClick={() => setShowCreate(true)}>

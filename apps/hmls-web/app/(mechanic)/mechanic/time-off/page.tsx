@@ -63,7 +63,7 @@ export default function TimeOffPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-display font-bold text-foreground">
+        <h1 className="text-2xl font-display font-semibold tracking-tight text-foreground">
           Time Off
         </h1>
         <p className="text-sm text-muted-foreground mt-1">

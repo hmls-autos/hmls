@@ -94,7 +94,7 @@ export function DashboardLayout({
       <main className="flex flex-1 items-center justify-center">
         <div className="text-center">
           <BarChart3 className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-          <h1 className="text-lg font-display font-bold text-foreground mb-1">
+          <h1 className="text-lg font-display font-semibold text-foreground mb-1">
             Access Denied
           </h1>
           <p className="text-sm text-muted-foreground">
@@ -111,7 +111,7 @@ export function DashboardLayout({
     <>
       {adminPanelLabel && (
         <div className="px-4 mb-4 hidden md:block">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <span className="text-xs font-semibold uppercase tracking-wider font-mono text-muted-foreground">
             {adminPanelLabel}
           </span>
         </div>

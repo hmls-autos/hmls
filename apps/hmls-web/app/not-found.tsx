@@ -12,7 +12,7 @@ export default function NotFound() {
             </span>
           </div>
 
-          <h1 className="text-2xl md:text-3xl font-display font-bold text-text mb-4 boundary-fade-up boundary-fade-up-1">
+          <h1 className="text-2xl md:text-3xl font-display font-semibold text-text mb-4 boundary-fade-up boundary-fade-up-1">
             Page Not Found
           </h1>
 

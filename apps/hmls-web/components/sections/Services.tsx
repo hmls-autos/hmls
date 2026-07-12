@@ -77,7 +77,7 @@ export default function Services() {
                       />
                     </div>
 
-                    <h3 className="text-lg font-display font-bold text-text mb-2">
+                    <h3 className="text-lg font-display font-semibold text-text mb-2">
                       {service.title}
                     </h3>
                     <p className="text-text-secondary text-sm leading-relaxed mb-4">

@@ -37,7 +37,9 @@ function SummaryCard({
           <Icon className="w-4 h-4" />
         </div>
       </div>
-      <p className="text-2xl font-display font-bold text-foreground">{count}</p>
+      <p className="text-2xl font-display font-semibold tracking-tight text-foreground">
+        {count}
+      </p>
     </Link>
   );
 }
@@ -110,7 +112,7 @@ export default function PortalDashboard() {
 
   return (
     <div>
-      <h1 className="text-2xl font-display font-bold text-foreground mb-1">
+      <h1 className="text-2xl font-display font-semibold tracking-tight text-foreground mb-1">
         {customer?.name ? `Welcome back, ${customer.name}` : "Welcome back"}
       </h1>
       <p className="text-sm text-muted-foreground mb-8">
@@ -143,7 +145,7 @@ export default function PortalDashboard() {
       </div>
 
       {/* Recent orders */}
-      <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+      <h2 className="text-xs font-semibold uppercase tracking-wider font-mono text-muted-foreground mb-3">
         Recent orders
       </h2>
       {recentOrders.length === 0 ? (

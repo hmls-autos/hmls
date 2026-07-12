@@ -63,7 +63,7 @@ export default async function CityPage({ params }: Props) {
           <div className="inline-block mb-4 px-4 py-1.5 rounded-full border border-red-primary/30 bg-red-light text-red-primary text-xs tracking-widest uppercase font-display font-semibold">
             Service Area
           </div>
-          <h1 className="text-5xl md:text-6xl font-display font-bold mb-4 leading-tight">
+          <h1 className="text-5xl md:text-6xl font-display font-semibold mb-4 leading-tight">
             Mobile Mechanic in{" "}
             <span className="text-red-primary">{city.name}</span>, CA
           </h1>
@@ -121,7 +121,7 @@ export default async function CityPage({ params }: Props) {
         </FadeIn>
 
         <FadeIn direction="up" delay={0.15}>
-          <h2 className="text-2xl font-display font-bold mb-4">
+          <h2 className="text-2xl font-display font-semibold tracking-tight mb-4">
             Neighborhoods we cover
           </h2>
           <div className="flex flex-wrap gap-2 mb-12">
@@ -138,7 +138,7 @@ export default async function CityPage({ params }: Props) {
         </FadeIn>
 
         <FadeIn direction="up" delay={0.2}>
-          <h2 className="text-2xl font-display font-bold mb-4">
+          <h2 className="text-2xl font-display font-semibold tracking-tight mb-4">
             Services available in {city.name}
           </h2>
           <div className="grid sm:grid-cols-2 gap-3 mb-12">
@@ -157,7 +157,7 @@ export default async function CityPage({ params }: Props) {
         </FadeIn>
 
         <FadeIn direction="up" delay={0.25}>
-          <h2 className="text-2xl font-display font-bold mb-4">
+          <h2 className="text-2xl font-display font-semibold tracking-tight mb-4">
             Nearby service areas
           </h2>
           <div className="grid sm:grid-cols-2 gap-3 mb-12">

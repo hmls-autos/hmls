@@ -56,7 +56,7 @@ export default async function ServicePage({ params }: Props) {
           <div className="inline-block mb-4 px-4 py-1.5 rounded-full border border-red-primary/30 bg-red-light text-red-primary text-xs tracking-widest uppercase font-display font-semibold">
             Mobile Service
           </div>
-          <h1 className="text-5xl md:text-6xl font-display font-bold mb-4 leading-tight">
+          <h1 className="text-5xl md:text-6xl font-display font-semibold mb-4 leading-tight">
             {service.name}
           </h1>
           <p className="text-xl text-text-secondary font-light mb-8 max-w-2xl leading-relaxed">
@@ -98,7 +98,7 @@ export default async function ServicePage({ params }: Props) {
         </FadeIn>
 
         <FadeIn direction="up" delay={0.1}>
-          <h2 className="text-2xl font-display font-bold mb-4">
+          <h2 className="text-2xl font-display font-semibold tracking-tight mb-4">
             What we do on a {service.shortName.toLowerCase()}
           </h2>
           <ul className="space-y-3 mb-12">
@@ -112,7 +112,7 @@ export default async function ServicePage({ params }: Props) {
         </FadeIn>
 
         <FadeIn direction="up" delay={0.15}>
-          <h2 className="text-2xl font-display font-bold mb-4">
+          <h2 className="text-2xl font-display font-semibold tracking-tight mb-4">
             Signs you need this service
           </h2>
           <ul className="space-y-3 mb-12">
@@ -126,7 +126,7 @@ export default async function ServicePage({ params }: Props) {
         </FadeIn>
 
         <FadeIn direction="up" delay={0.2}>
-          <h2 className="text-2xl font-display font-bold mb-4">
+          <h2 className="text-2xl font-display font-semibold tracking-tight mb-4">
             Where we offer {service.shortName.toLowerCase()}
           </h2>
           <p className="text-text-secondary mb-4">
@@ -147,7 +147,7 @@ export default async function ServicePage({ params }: Props) {
         </FadeIn>
 
         <FadeIn direction="up" delay={0.25}>
-          <h2 className="text-2xl font-display font-bold mb-4">
+          <h2 className="text-2xl font-display font-semibold tracking-tight mb-4">
             Other mobile services
           </h2>
           <div className="grid sm:grid-cols-2 gap-3">

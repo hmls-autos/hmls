@@ -42,7 +42,7 @@ export default function Hero() {
         <div className="hero-animate hero-animate-4 flex flex-col items-center gap-4">
           <Link
             href="/chat"
-            className="group relative inline-flex items-center gap-3 px-10 py-5 bg-red-600 text-white text-lg font-display font-bold rounded-2xl hover:bg-red-700 transition-all duration-300 shadow-2xl shadow-red-600/30 hover:shadow-red-600/50 hover:scale-[1.02]"
+            className="group relative inline-flex items-center gap-3 px-10 py-5 bg-red-600 text-white text-lg font-display font-semibold rounded-2xl hover:bg-red-700 transition-all duration-300 shadow-2xl shadow-red-600/30 hover:shadow-red-600/50 hover:scale-[1.02]"
           >
             <span className="absolute inset-0 rounded-2xl ring-1 ring-red-400/0 group-hover:ring-red-400/40 transition-all duration-300" />
             <MessageSquare className="w-5 h-5" />

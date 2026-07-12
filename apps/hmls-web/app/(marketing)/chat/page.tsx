@@ -57,7 +57,7 @@ function WelcomeScreen({ onPick }: { onPick: (text: string) => void }) {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
-        className="text-xl font-display font-bold text-text mb-2"
+        className="text-xl font-display font-semibold text-text mb-2"
       >
         Welcome to HMLS Assistant
       </motion.h2>
@@ -322,7 +322,7 @@ function ChatPageInner() {
               <Wrench className="w-6 h-6 text-red-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-display font-bold text-text">
+              <h1 className="text-xl font-display font-semibold text-text">
                 HMLS Assistant
               </h1>
               <p className="text-sm text-text-secondary">

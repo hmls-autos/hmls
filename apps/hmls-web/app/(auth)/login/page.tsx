@@ -127,13 +127,13 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <Link
           href="/"
-          className="block text-center text-xl font-display font-bold tracking-tight text-text mb-10"
+          className="block text-center text-xl font-display font-semibold tracking-tight text-text mb-10"
         >
           HMLS<span className="text-red-primary">.</span>
         </Link>
         <div key={`${step}-${mode}`} className="page-enter">
           <div className="text-center mb-8">
-            <h1 className="text-2xl font-display font-bold mb-2">
+            <h1 className="text-2xl font-display font-semibold tracking-tight mb-2">
               {step === "password"
                 ? "Enter your password"
                 : mode === "login"

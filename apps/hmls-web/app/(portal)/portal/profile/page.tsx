@@ -85,7 +85,7 @@ export default function ProfilePage() {
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-display font-bold text-text mb-1">
+          <h1 className="text-2xl font-display font-semibold tracking-tight text-text mb-1">
             Profile
           </h1>
           <p className="text-sm text-text-secondary">

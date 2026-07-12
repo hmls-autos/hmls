@@ -202,7 +202,7 @@ export default function OrderDetailPage() {
       {/* Title row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-2xl font-display font-bold text-foreground">
+          <h1 className="text-2xl font-display font-semibold tracking-tight text-foreground">
             Order #{order.id}
           </h1>
           {vehicleLabel && (

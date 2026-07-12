@@ -103,7 +103,7 @@ function PrintReceipt({
       {/* Header */}
       <div className="flex justify-between items-start mb-6 border-b border-gray-200 pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">HMLS</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">HMLS</h1>
           <p className="text-sm text-gray-500">Mobile Mechanic Service</p>
         </div>
         <div className="text-right text-sm">
@@ -188,7 +188,7 @@ function PrintReceipt({
               <td colSpan={3} className="py-2 text-right font-semibold">
                 Subtotal
               </td>
-              <td className="py-2 text-right font-bold text-lg">
+              <td className="py-2 text-right font-semibold text-lg">
                 {formatCents(order.subtotalCents)}
               </td>
             </tr>
@@ -233,7 +233,7 @@ function PrintReceipt({
 
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <h2 className="text-xs font-semibold uppercase tracking-wider text-text-secondary mb-3">
+    <h2 className="text-xs font-semibold uppercase tracking-wider font-mono text-text-secondary mb-3">
       {children}
     </h2>
   );
@@ -393,7 +393,7 @@ export default function PortalOrderDetailPage() {
         {/* Title row */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-display font-bold text-text">
+            <h1 className="text-2xl font-display font-semibold tracking-tight text-text">
               Order #{order.id}
             </h1>
             <StatusBadge entry={portalStatus} />

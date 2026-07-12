@@ -116,7 +116,9 @@
   /* Fonts */
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
-  --font-display: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
+  /* DESIGN.md: one geometric sans (Geist) carries display + body; the display
+     voice is size + weight (≤600) + negative tracking, not a separate family. */
+  --font-display: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 
   /* shadcn color system */
   --color-background: var(--background);

@@ -327,7 +327,7 @@ function CustomerDetail({
     return (
       <Card className="border-0">
         <CardHeader className="flex-row items-center justify-between">
-          <CardTitle className="text-lg font-display font-bold">
+          <CardTitle className="text-lg font-display font-semibold">
             Edit Customer
           </CardTitle>
           <Button variant="ghost" size="icon-sm" onClick={cancelEdit}>
@@ -361,7 +361,7 @@ function CustomerDetail({
     <Card className="border-0">
       <CardHeader className="flex-row items-start justify-between">
         <div>
-          <CardTitle className="text-lg font-display font-bold">
+          <CardTitle className="text-lg font-display font-semibold">
             {customer.name ?? "Unnamed"}
           </CardTitle>
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground">
@@ -443,7 +443,7 @@ function CustomerDetail({
         )}
 
         <div className="text-center border-t border-border pt-4 mt-4">
-          <p className="text-xl font-display font-bold text-foreground">
+          <p className="text-xl font-display font-semibold text-foreground">
             {orders.length}
           </p>
           <p className="text-xs text-muted-foreground">Orders</p>
@@ -583,7 +583,7 @@ function CustomersPageInner() {
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <h1 className="text-2xl font-display font-bold text-foreground">
+        <h1 className="text-2xl font-display font-semibold tracking-tight text-foreground">
           Customers
         </h1>
         <Button onClick={() => setShowCreate(true)}>

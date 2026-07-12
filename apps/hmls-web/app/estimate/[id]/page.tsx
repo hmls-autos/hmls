@@ -204,7 +204,7 @@ export default function EstimateReviewPage() {
     <main className="max-w-lg mx-auto px-4 py-8 sm:py-12">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-text">Your Estimate</h1>
+        <h1 className="text-2xl font-semibold text-text">Your Estimate</h1>
         {customerName && (
           <p className="text-text-secondary text-sm mt-1">
             Hi {customerName}, here&apos;s your service estimate.

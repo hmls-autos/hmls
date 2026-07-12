@@ -8,7 +8,7 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto px-6 py-16">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
           <div className="col-span-2 md:col-span-1">
-            <div className="text-xl font-display font-bold text-white">
+            <div className="text-xl font-display font-semibold text-white">
               HMLS<span className="text-red-500">.</span>
             </div>
             <div className="text-sm text-white/40 mt-1">

@@ -23,7 +23,7 @@ function KpiTile({ label, value }: { label: string; value: string }) {
     <Card className="p-4 gap-0 border-0">
       <CardContent className="p-0">
         <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="text-lg font-display font-bold text-foreground tabular-nums">
+        <p className="text-lg font-display font-semibold text-foreground tabular-nums">
           {value}
         </p>
       </CardContent>
@@ -123,7 +123,7 @@ export default function MechanicsPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-display font-bold text-foreground">
+        <h1 className="text-2xl font-display font-semibold tracking-tight text-foreground">
           Mechanics
         </h1>
         <Button onClick={() => setDialogOpen(true)}>

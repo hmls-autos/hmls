@@ -236,7 +236,7 @@ export default function MechanicOrdersPage() {
   return (
     <div className="space-y-10">
       <CollectPaymentDialog />
-      <h1 className="text-2xl font-display font-bold text-foreground">
+      <h1 className="text-2xl font-display font-semibold tracking-tight text-foreground">
         My Jobs
       </h1>
 
@@ -262,7 +262,7 @@ export default function MechanicOrdersPage() {
             )}
             {sortedDays.map((day) => (
               <div key={day}>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider font-mono text-muted-foreground mb-2">
                   {formatDate(new Date(day).toISOString())}
                 </h3>
                 <div className="space-y-2">

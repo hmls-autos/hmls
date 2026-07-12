@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+    <h2 className="text-xs font-semibold uppercase tracking-wider font-mono text-muted-foreground">
       {children}
     </h2>
   );
@@ -73,7 +73,7 @@ function ActionTile({
       </div>
       <p
         className={cn(
-          "text-3xl font-display font-bold mt-2 tabular-nums",
+          "text-3xl font-display font-semibold mt-2 tabular-nums",
           on ? "text-red-600 dark:text-red-400" : "text-foreground",
         )}
       >
@@ -240,7 +240,7 @@ function RevenueCard({
         <span className="text-xs text-muted-foreground">last 30 days</span>
       </div>
       <div className="flex items-baseline gap-2">
-        <p className="text-3xl font-display font-bold text-foreground tabular-nums">
+        <p className="text-3xl font-display font-semibold text-foreground tabular-nums">
           {formatCents(revenue30d)}
         </p>
         {deltaPct != null && (
@@ -331,7 +331,7 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-10">
       <div>
-        <h1 className="text-2xl font-display font-bold text-foreground mb-1">
+        <h1 className="text-2xl font-display font-semibold tracking-tight text-foreground mb-1">
           Dashboard
         </h1>
         <p className="text-sm text-muted-foreground">
