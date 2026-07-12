@@ -36,9 +36,9 @@ export function canonicalStatus(raw: string): OrderStatus | null {
 //                solid inverted pill that pops out of the neutral ones
 //   NEUTRAL    → passive: waiting on the customer, or already settled
 const NEUTRAL_PILL =
-  "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300";
+  "bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-100";
 const DARK_PILL = "bg-foreground text-background";
-const RED_PILL = "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300";
+const RED_PILL = "bg-red-100 text-red-700 dark:bg-red-500/25 dark:text-red-200";
 
 export const ORDER_STATUS: Record<OrderStatus, StatusConfig> = {
   draft: { label: "Draft", color: NEUTRAL_PILL },
@@ -50,7 +50,7 @@ export const ORDER_STATUS: Record<OrderStatus, StatusConfig> = {
   cancelled: {
     label: "Cancelled",
     color:
-      "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400",
+      "bg-neutral-200 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-300",
   },
 };
 
