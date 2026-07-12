@@ -118,7 +118,7 @@ export default function AvailabilityPage() {
         </p>
       </div>
 
-      <Card>
+      <Card className="border-0">
         <CardContent className="p-4 space-y-3">
           {sorted.length === 0 && (
             <p className="text-sm text-muted-foreground">

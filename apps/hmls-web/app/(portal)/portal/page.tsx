@@ -29,7 +29,7 @@ function SummaryCard({
 }) {
   return (
     <Link href={href}>
-      <Card className="p-5 hover:border-primary transition-colors group">
+      <Card className="p-5 border-0 hover:bg-muted/50 transition-colors group">
         <CardContent className="p-0">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm text-muted-foreground">{label}</span>
@@ -48,7 +48,7 @@ function SummaryCard({
 
 function SummaryCardSkeleton() {
   return (
-    <Card className="p-5">
+    <Card className="p-5 border-0">
       <CardContent className="p-0">
         <div className="flex items-center justify-between mb-3">
           <Skeleton className="h-4 w-24" />
@@ -79,7 +79,7 @@ export default function PortalDashboard() {
         </div>
 
         <Skeleton className="h-6 w-32 mb-4" />
-        <Card>
+        <Card className="border-0">
           <CardContent className="divide-y divide-border">
             {["skeleton-1", "skeleton-2", "skeleton-3", "skeleton-4"].map(
               (id) => (
@@ -155,7 +155,7 @@ export default function PortalDashboard() {
         Recent Orders
       </h2>
       {recentOrders.length === 0 ? (
-        <Card className="p-8 text-center">
+        <Card className="p-8 text-center border-0">
           <CardContent className="p-0">
             <p className="text-muted-foreground text-sm">No orders yet.</p>
             <Link
@@ -167,7 +167,7 @@ export default function PortalDashboard() {
           </CardContent>
         </Card>
       ) : (
-        <Card className="p-0">
+        <Card className="p-0 border-0">
           <CardContent className="p-0 divide-y divide-border">
             {recentOrders.map((order) => {
               const statusConfig = statusDisplay(order.status, "portal", {

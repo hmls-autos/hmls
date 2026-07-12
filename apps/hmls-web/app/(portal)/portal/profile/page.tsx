@@ -105,7 +105,7 @@ export default function ProfilePage() {
       </div>
 
       {editing ? (
-        <div className="bg-surface border border-border rounded-xl p-5 space-y-4">
+        <div className="bg-muted/30 rounded-xl p-5 space-y-4">
           <Field label="Name" value={name} onChange={setName} />
           <Field label="Email" value={customer.email ?? ""} disabled />
           <Field label="Phone" value={phone} onChange={setPhone} />
@@ -156,7 +156,7 @@ export default function ProfilePage() {
           </div>
         </div>
       ) : (
-        <div className="bg-surface border border-border rounded-xl divide-y divide-border">
+        <div className="bg-muted/30 rounded-xl divide-y divide-border">
           <div className="flex items-center gap-4 p-5">
             <div className="w-12 h-12 rounded-full bg-red-light flex items-center justify-center">
               <User className="w-5 h-5 text-red-primary" />

@@ -126,7 +126,7 @@ export function OrderProgressBar({
                   className={cn(
                     "h-0.5 shrink-0",
                     styles.connectorWidth,
-                    isDone ? "bg-emerald-500" : "bg-border",
+                    isDone ? "bg-foreground" : "bg-border",
                   )}
                 />
               )}
@@ -135,7 +135,7 @@ export function OrderProgressBar({
                   className={cn(
                     "w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-colors",
                     state === "completed"
-                      ? "bg-emerald-500 text-white"
+                      ? "bg-foreground text-background"
                       : state === "current"
                         ? styles.currentCircle
                         : styles.pendingCircle,
@@ -153,7 +153,7 @@ export function OrderProgressBar({
                     state === "current"
                       ? styles.currentLabel
                       : state === "completed"
-                        ? "text-emerald-600 dark:text-emerald-400"
+                        ? "text-foreground"
                         : styles.pendingLabel,
                   )}
                 >

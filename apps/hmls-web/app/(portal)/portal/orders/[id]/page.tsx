@@ -383,9 +383,9 @@ export default function PortalOrderDetailPage() {
         </div>
 
         {tentative && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-200">
+          <div className="rounded-xl bg-red-500/10 px-4 py-3 text-xs text-red-700 dark:text-red-300">
             <p className="font-semibold">Pending shop confirmation</p>
-            <p className="mt-0.5 text-amber-800 dark:text-amber-200/90">
+            <p className="mt-0.5 text-red-600/90 dark:text-red-300/80">
               Our team is reviewing the AI-drafted estimate. Once they confirm
               the line items and pricing, your appointment will be locked in and
               you'll get a notification.
@@ -394,7 +394,7 @@ export default function PortalOrderDetailPage() {
         )}
 
         {/* Progress bar */}
-        <div className="bg-surface border border-border rounded-xl p-4">
+        <div className="bg-muted/30 rounded-xl p-4">
           <OrderProgressBar
             status={order.status}
             variant="portal"
@@ -414,7 +414,7 @@ export default function PortalOrderDetailPage() {
           {/* Left column */}
           <div className="lg:col-span-2 space-y-4">
             {/* Contact info */}
-            <div className="bg-surface border border-border rounded-xl p-4">
+            <div className="bg-muted/30 rounded-xl p-4">
               <h2 className="text-sm font-semibold text-text mb-3">Contact</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                 <div>
@@ -446,7 +446,7 @@ export default function PortalOrderDetailPage() {
 
             {/* Vehicle */}
             {vehicleStr && (
-              <div className="bg-surface border border-border rounded-xl p-4">
+              <div className="bg-muted/30 rounded-xl p-4">
                 <h2 className="text-sm font-semibold text-text mb-2">
                   Vehicle
                 </h2>
@@ -455,14 +455,14 @@ export default function PortalOrderDetailPage() {
             )}
 
             {/* Line items */}
-            <div className="bg-surface border border-border rounded-xl p-4 space-y-3">
+            <div className="bg-muted/30 rounded-xl p-4 space-y-3">
               <h2 className="text-sm font-semibold text-text">Services</h2>
               {items.length > 0 ? (
                 <>
-                  <div className="border border-border rounded-lg overflow-x-auto">
+                  <div className="rounded-lg overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
-                        <tr className="bg-surface-alt text-text-secondary">
+                        <tr className="bg-muted/50 text-text-secondary">
                           <th className="text-left px-3 py-1.5 font-medium">
                             Item
                           </th>
@@ -504,7 +504,7 @@ export default function PortalOrderDetailPage() {
                         ))}
                       </tbody>
                       <tfoot>
-                        <tr className="border-t border-border bg-surface-alt">
+                        <tr className="border-t border-border bg-muted/50">
                           <td
                             colSpan={3}
                             className="px-3 py-1.5 text-right font-medium text-text"
@@ -553,7 +553,7 @@ export default function PortalOrderDetailPage() {
 
             {/* Cancellation reason */}
             {order.cancellationReason && (
-              <div className="bg-surface border border-red-200 dark:border-red-900/50 rounded-xl p-4">
+              <div className="bg-red-500/5 rounded-xl p-4">
                 <h2 className="text-sm font-semibold text-red-600 dark:text-red-400 mb-1">
                   Cancellation Reason
                 </h2>
@@ -566,7 +566,7 @@ export default function PortalOrderDetailPage() {
           <div className="space-y-4">
             {/* Action buttons */}
             {canApproveDecline && (
-              <div className="bg-surface border border-border rounded-xl p-4 space-y-3">
+              <div className="bg-muted/30 rounded-xl p-4 space-y-3">
                 <h2 className="text-sm font-semibold text-text">
                   Your Action Required
                 </h2>
@@ -602,7 +602,7 @@ export default function PortalOrderDetailPage() {
                       handleAction("approve");
                     }}
                     disabled={actionLoading}
-                    className="flex items-center justify-center gap-1.5 text-xs font-medium px-4 py-2.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50"
+                    className="flex items-center justify-center gap-1.5 text-xs font-medium px-4 py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
                   >
                     <Check className="w-3.5 h-3.5" />
                     Approve Estimate
@@ -622,7 +622,7 @@ export default function PortalOrderDetailPage() {
 
             {/* Cancel — draft (still being prepared) or approved (before work starts) */}
             {canCancel && (
-              <div className="bg-surface border border-border rounded-xl p-4 space-y-3">
+              <div className="bg-muted/30 rounded-xl p-4 space-y-3">
                 <h2 className="text-sm font-semibold text-text">
                   Changed your mind?
                 </h2>
@@ -644,7 +644,7 @@ export default function PortalOrderDetailPage() {
             )}
 
             {/* Order details */}
-            <div className="bg-surface border border-border rounded-xl p-4 space-y-2">
+            <div className="bg-muted/30 rounded-xl p-4 space-y-2">
               <h2 className="text-sm font-semibold text-text">Details</h2>
               <div className="text-xs space-y-1.5">
                 <div className="flex justify-between">
@@ -693,7 +693,7 @@ export default function PortalOrderDetailPage() {
         </div>
 
         {/* Activity timeline */}
-        <div className="bg-surface border border-border rounded-xl p-4">
+        <div className="bg-muted/30 rounded-xl p-4">
           <h2 className="text-sm font-semibold text-text mb-3">
             Order History
           </h2>

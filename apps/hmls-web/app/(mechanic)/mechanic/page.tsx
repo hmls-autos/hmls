@@ -86,7 +86,7 @@ function OrderCard({
   const [busy, setBusy] = useState(false);
 
   return (
-    <Card className="py-0">
+    <Card className="py-0 border-0">
       <CardContent className="p-4 flex flex-col sm:flex-row sm:items-start gap-3">
         <div className="shrink-0 text-center sm:w-16">
           <span className="text-xs font-semibold text-muted-foreground bg-muted border border-border rounded-lg px-2 py-1 inline-block">
@@ -250,7 +250,7 @@ export default function MechanicOrdersPage() {
           <div className="space-y-6">
             {pending.length > 0 && (
               <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400 mb-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-red-600 dark:text-red-400 mb-2">
                   Pending schedule
                 </h3>
                 <div className="space-y-2">

@@ -38,7 +38,7 @@ function OrderCard({
   });
 
   return (
-    <div className="bg-surface border border-border rounded-xl p-5 hover:border-border-hover transition-colors">
+    <div className="bg-muted/40 rounded-xl p-5 hover:bg-muted/70 transition-colors">
       <div className="flex items-start justify-between gap-4 mb-3">
         <div>
           <div className="flex items-center gap-2">
@@ -105,7 +105,7 @@ function OrderCard({
             type="button"
             onClick={() => onAction(order.id, "approve")}
             disabled={loading === order.id}
-            className="flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             <Check className="w-3.5 h-3.5" />
             Approve Estimate
