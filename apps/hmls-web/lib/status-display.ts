@@ -28,20 +28,24 @@ export function canonicalStatus(raw: string): OrderStatus | null {
   }
 }
 
-// Monochrome + red. Red clashes with green (and every other hue) once it's the
-// brand accent, so lifecycle states are all neutral pills; red is reserved for
-// the states that actually need attention (declined here; the "pending"
-// sub-badges below). The label text — not colour — tells them apart.
+// Black / white / red only — a hue would clash with the red brand accent (esp.
+// green). States are grouped by "what does this order need from me", encoded by
+// treatment, not colour:
+//   RED_PILL   → needs the shop to act (declined; "pending" sub-badges below)
+//   DARK_PILL  → committed / in motion (approved, in progress, scheduled) — a
+//                solid inverted pill that pops out of the neutral ones
+//   NEUTRAL    → passive: waiting on the customer, or already settled
 const NEUTRAL_PILL =
   "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300";
+const DARK_PILL = "bg-foreground text-background";
 const RED_PILL = "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300";
 
 export const ORDER_STATUS: Record<OrderStatus, StatusConfig> = {
   draft: { label: "Draft", color: NEUTRAL_PILL },
   estimated: { label: "Estimated", color: NEUTRAL_PILL },
-  approved: { label: "Approved", color: NEUTRAL_PILL },
+  approved: { label: "Approved", color: DARK_PILL },
   declined: { label: "Declined", color: RED_PILL },
-  in_progress: { label: "In Progress", color: NEUTRAL_PILL },
+  in_progress: { label: "In Progress", color: DARK_PILL },
   completed: { label: "Completed", color: NEUTRAL_PILL },
   cancelled: {
     label: "Cancelled",
@@ -119,7 +123,7 @@ const PENDING_CONFIRMATION_CONFIG: StatusConfig = {
  *  "Scheduled" because that's what they care about. */
 const SCHEDULED_BOOKING_CONFIG: StatusConfig = {
   label: "Scheduled",
-  color: NEUTRAL_PILL,
+  color: DARK_PILL,
 };
 
 /** True when a draft has accumulated chat-flow scheduling — it is
