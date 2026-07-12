@@ -7,7 +7,7 @@ interface Props {
 
 function colorClasses(percent: number): string {
   if (percent < 40) return "bg-muted-foreground/40";
-  if (percent < 80) return "bg-green-500";
+  if (percent < 80) return "bg-emerald-500";
   if (percent < 95) return "bg-amber-500";
   return "bg-red-500";
 }

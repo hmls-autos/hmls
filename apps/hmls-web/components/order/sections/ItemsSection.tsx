@@ -20,7 +20,7 @@ export function ItemsSection({ order, readOnly, revalidate }: SectionProps) {
 
   if (editing && !readOnly) {
     return (
-      <Card className="gap-0 py-0">
+      <Card className="gap-0 py-0 border-0">
         <CardHeader className="px-4 py-4 flex flex-row items-center justify-between">
           <CardTitle className="text-sm">Line items</CardTitle>
         </CardHeader>
@@ -55,7 +55,7 @@ export function ItemsSection({ order, readOnly, revalidate }: SectionProps) {
 
   return (
     <>
-      <Card className="gap-0 py-0">
+      <Card className="gap-0 py-0 border-0">
         <CardHeader className="px-4 py-4 flex flex-row items-center justify-between">
           <CardTitle className="text-sm">Line items</CardTitle>
           <div className="flex items-center gap-1">

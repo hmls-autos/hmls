@@ -20,7 +20,7 @@ type Filter = "all" | "active" | "inactive" | "available-today";
 
 function KpiTile({ label, value }: { label: string; value: string }) {
   return (
-    <Card className="p-4 gap-0">
+    <Card className="p-4 gap-0 border-0">
       <CardContent className="p-0">
         <p className="text-xs text-muted-foreground">{label}</p>
         <p className="text-lg font-display font-bold text-foreground tabular-nums">
@@ -169,7 +169,7 @@ export default function MechanicsPage() {
       </div>
 
       {filtered.length === 0 ? (
-        <Card className="p-6 text-center">
+        <Card className="p-6 text-center border-0">
           <CardContent className="p-0">
             <p className="text-sm text-muted-foreground">
               {mechanics.length === 0

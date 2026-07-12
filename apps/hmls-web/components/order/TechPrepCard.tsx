@@ -48,7 +48,7 @@ export function TechPrepCard({ order }: { order: Order }) {
   );
 
   return (
-    <Card className="gap-0 py-0">
+    <Card className="gap-0 py-0 border-0">
       <CardHeader className="px-4 py-4 flex flex-row items-center justify-between gap-2">
         <CardTitle className="text-sm flex items-center gap-1.5">
           <Wrench className="w-3.5 h-3.5" /> Tech prep

@@ -75,44 +75,33 @@ export function eventDescription(event: OrderEvent): string {
 }
 
 function EventIcon({ eventType }: { eventType: string }) {
+  // Only the lifecycle transition carries colour; every other event uses a
+  // neutral chip so the timeline reads calm. The icon glyph — not the colour —
+  // is what tells the event types apart.
   if (eventType === "status_change") {
     return (
-      <div className="w-6 h-6 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0">
-        <Tag className="w-3 h-3 text-emerald-500" />
+      <div className="w-6 h-6 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+        <Tag className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
       </div>
     );
   }
-  if (eventType === "items_edited") {
-    return (
-      <div className="w-6 h-6 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shrink-0">
-        <ClipboardEdit className="w-3 h-3 text-blue-400" />
-      </div>
-    );
-  }
-  if (eventType === "contact_edited") {
-    return (
-      <div className="w-6 h-6 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0">
-        <User className="w-3 h-3 text-purple-400" />
-      </div>
-    );
-  }
-  if (eventType === "note_added") {
-    return (
-      <div className="w-6 h-6 rounded-full bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center shrink-0">
-        <MessageSquare className="w-3 h-3 text-yellow-400" />
-      </div>
-    );
-  }
-  if (eventType === "customer_contacted") {
-    return (
-      <div className="w-6 h-6 rounded-full bg-sky-500/10 border border-sky-500/30 flex items-center justify-center shrink-0">
-        <PhoneCall className="w-3 h-3 text-sky-400" />
-      </div>
-    );
-  }
+  const Glyph =
+    eventType === "items_edited"
+      ? ClipboardEdit
+      : eventType === "contact_edited"
+        ? User
+        : eventType === "note_added"
+          ? MessageSquare
+          : eventType === "customer_contacted"
+            ? PhoneCall
+            : null;
   return (
     <div className="w-6 h-6 rounded-full bg-muted border border-border flex items-center justify-center shrink-0">
-      <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+      {Glyph ? (
+        <Glyph className="w-3 h-3 text-muted-foreground" />
+      ) : (
+        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+      )}
     </div>
   );
 }

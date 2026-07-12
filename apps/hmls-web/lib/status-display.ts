@@ -28,35 +28,39 @@ export function canonicalStatus(raw: string): OrderStatus | null {
   }
 }
 
+// Restrained semantic palette: muted -50/-700 fills (not the old neon -100
+// tones), a distinct hue per lifecycle state so the list still scans by
+// colour, and red reserved for attention (declined here; "pending" sub-badges
+// below). draft/completed/cancelled stay neutral — their weight is carried by
+// the sub-badge, not the pill.
 export const ORDER_STATUS: Record<OrderStatus, StatusConfig> = {
   draft: {
     label: "Draft",
     color:
-      "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400",
+      "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300",
   },
   estimated: {
     label: "Estimated",
-    color:
-      "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
+    color: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
   },
   approved: {
     label: "Approved",
     color:
-      "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+      "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
   },
   declined: {
     label: "Declined",
-    color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+    color: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300",
   },
   in_progress: {
     label: "In Progress",
     color:
-      "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+      "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
   },
   completed: {
     label: "Completed",
     color:
-      "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+      "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300",
   },
   cancelled: {
     label: "Cancelled",
@@ -124,7 +128,8 @@ export function historicalStatusLabel(
  *  treatment so the review queue is visually distinct from plain drafts. */
 const PENDING_CONFIRMATION_CONFIG: StatusConfig = {
   label: "Pending Confirmation",
-  color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  // Attention state → red (matches the dashboard's "pending review" accent).
+  color: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300",
 };
 
 /** Booked display for approved orders whose slot + mechanic pair is complete.
@@ -133,7 +138,9 @@ const PENDING_CONFIRMATION_CONFIG: StatusConfig = {
  *  "Scheduled" because that's what they care about. */
 const SCHEDULED_BOOKING_CONFIG: StatusConfig = {
   label: "Scheduled",
-  color: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
+  // Booking locked in — same muted green as approved (it IS an approved order).
+  color:
+    "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
 };
 
 /** True when a draft has accumulated chat-flow scheduling — it is
@@ -174,27 +181,23 @@ export function orderSubBadge(order: {
   statusHistory?: readonly { status: string }[] | null;
 }): StatusConfig | null {
   const status = canonicalStatus(order.status);
+  const pendingColor =
+    "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300";
   if (status === "draft") {
     return hasBeenSentToCustomer({ statusHistory: order.statusHistory ?? null })
       ? {
           label: `Revising · rev ${order.revisionNumber ?? 1}`,
+          // In-progress revision — neutral; the red accent is reserved for
+          // things actually waiting on the shop (pending review/schedule).
           color:
-            "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+            "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300",
         }
-      : {
-          label: "Pending review",
-          color:
-            "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-        };
+      : { label: "Pending review", color: pendingColor };
   }
   if (status === "approved") {
     return order.scheduledAt != null && order.providerId != null
       ? SCHEDULED_BOOKING_CONFIG
-      : {
-          label: "Pending schedule",
-          color:
-            "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-        };
+      : { label: "Pending schedule", color: pendingColor };
   }
   return null;
 }

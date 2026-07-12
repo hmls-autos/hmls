@@ -30,7 +30,7 @@ export function DiagnosisSection({
 
   if (editing && !readOnly) {
     return (
-      <Card className="gap-0 py-0">
+      <Card className="gap-0 py-0 border-0">
         <CardHeader className="px-4 py-4">
           <CardTitle className="text-sm">Confirmed diagnosis</CardTitle>
         </CardHeader>
@@ -71,7 +71,7 @@ export function DiagnosisSection({
   }
 
   return (
-    <Card className="gap-0 py-0">
+    <Card className="gap-0 py-0 border-0">
       <CardHeader className="px-4 py-4 flex flex-row items-center justify-between">
         <CardTitle className="text-sm">Confirmed diagnosis</CardTitle>
         {!readOnly && (

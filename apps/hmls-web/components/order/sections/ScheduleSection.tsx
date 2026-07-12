@@ -27,7 +27,7 @@ export function ScheduleSection({
       : null;
 
   return (
-    <Card className="gap-0 py-0">
+    <Card className="gap-0 py-0 border-0">
       <CardHeader className="px-4 py-4">
         <CardTitle className="text-sm">Appointment</CardTitle>
       </CardHeader>

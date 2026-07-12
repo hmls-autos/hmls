@@ -233,7 +233,7 @@ export default function OrderDetailPage() {
       )}
 
       {/* Progress bar */}
-      <Card className="py-4 gap-0">
+      <Card className="py-4 gap-0 border-0">
         <CardContent>
           <OrderProgressBar
             status={order.status}
@@ -291,7 +291,7 @@ export default function OrderDetailPage() {
               <TechPrepCard order={order} />
               <NotesSection order={order} />
               {order.cancellationReason && (
-                <Card className="gap-0 py-0 border-destructive/50">
+                <Card className="gap-0 py-0 border-0">
                   <CardHeader className="px-4 py-4">
                     <CardTitle className="text-sm text-destructive">
                       Cancellation Reason
@@ -307,7 +307,7 @@ export default function OrderDetailPage() {
             </TabsContent>
 
             <TabsContent value="activity">
-              <Card className="gap-0 py-0">
+              <Card className="gap-0 py-0 border-0">
                 <CardHeader className="px-4 py-4">
                   <CardTitle className="text-sm">Activity</CardTitle>
                 </CardHeader>

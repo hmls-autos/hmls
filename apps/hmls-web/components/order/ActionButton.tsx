@@ -11,7 +11,7 @@ type Props = {
   onClick(action: ActionDescriptor): void;
   /** Render large/featured (banner button or panel primary slot). */
   prominent?: boolean;
-  /** Banner styling — amber background for the draft-review banner. */
+  /** Banner styling — red background for the draft-review banner. */
   banner?: boolean;
   disabled?: boolean;
 };
@@ -44,7 +44,7 @@ export function ActionButton({
           "w-full justify-center",
           variant === "danger" &&
             "text-destructive border-destructive/30 hover:bg-destructive/10",
-          banner && "bg-amber-600 hover:bg-amber-700 text-white",
+          banner && "bg-red-600 hover:bg-red-700 text-white",
         )}
       >
         {label}

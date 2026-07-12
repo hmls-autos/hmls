@@ -28,9 +28,9 @@ export function MechanicCard({ mechanic: m, onToggleActive }: Props) {
   const [isToggling, setIsToggling] = useState(false);
 
   const dotClass = m.isOnJobNow
-    ? "bg-purple-500"
+    ? "bg-amber-500"
     : m.isActive
-      ? "bg-green-500"
+      ? "bg-emerald-500"
       : "bg-neutral-400";
   const dotLabel = m.isOnJobNow
     ? "On a job now"
@@ -48,10 +48,10 @@ export function MechanicCard({ mechanic: m, onToggleActive }: Props) {
   }
 
   return (
-    <Card className="p-0">
+    <Card className="p-0 border-0">
       <CardContent className="p-4 space-y-3">
         <div className="flex items-start gap-3">
-          <div className="size-10 shrink-0 rounded-full bg-red-500/10 text-red-600 dark:bg-red-900/30 dark:text-red-400 flex items-center justify-center text-sm font-semibold">
+          <div className="size-10 shrink-0 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-sm font-semibold">
             {initials(m.name)}
           </div>
           <div className="min-w-0 flex-1">
