@@ -47,14 +47,20 @@ type Props = {
   /** SWR mutate for the order detail — called after each agent turn so
    * tool mutations (assign/transition/payment/items) show up on the page. */
   revalidate(): void;
+  /** Start expanded (e.g. when the panel is the whole content of a Chat tab). */
+  defaultOpen?: boolean;
 };
 
 /** Embedded staff chat scoped to one order (PR 6). Collapsible card; the
  * chat body mounts on first expand and stays mounted afterwards (hidden via
  * CSS) so collapsing never aborts an in-flight tool call. */
-export function OrderChatPanel({ orderId, revalidate }: Props) {
-  const [open, setOpen] = useState(false);
-  const [everOpened, setEverOpened] = useState(false);
+export function OrderChatPanel({
+  orderId,
+  revalidate,
+  defaultOpen = false,
+}: Props) {
+  const [open, setOpen] = useState(defaultOpen);
+  const [everOpened, setEverOpened] = useState(defaultOpen);
 
   return (
     <Card className="gap-0 py-0">

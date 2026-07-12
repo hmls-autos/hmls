@@ -21,9 +21,9 @@ type Props = {
 };
 
 // Schedule / mechanic edits have a contextual home in the Appointment section
-// (OrderSectionsRegion → ScheduleSection), shown whenever schedule is editable.
-// Keep the Actions panel to lifecycle transitions only so the two don't render
-// the same "Reschedule" / "Reassign" buttons side by side.
+// (ScheduleSection), shown whenever schedule is editable. Keep the Actions
+// panel to lifecycle transitions only so the two don't render the same
+// "Reschedule" / "Reassign" buttons side by side.
 const INLINE_ACTIONS = new Set(["set_time", "reschedule", "reassign_mechanic"]);
 
 export function OrderOpsPanel({
