@@ -730,7 +730,7 @@ export default function OrdersPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-2">
+        <div className="divide-y divide-border">
           {orders.map((order) => {
             const vehicle = order.vehicleInfo;
             const vehicleStr = vehicle
@@ -750,7 +750,7 @@ export default function OrdersPage() {
                   debouncedSearch,
                 )}
                 prefetch={false}
-                className="flex items-center justify-between gap-3 bg-muted/40 rounded-xl p-4 hover:bg-muted/70 transition-colors group"
+                className="flex items-center justify-between gap-3 py-4 -mx-2 px-2 rounded-lg hover:bg-muted/40 transition-colors group"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="flex items-center gap-2">
