@@ -66,11 +66,8 @@ export const portalPaths = {
   updateMe: () => "/api/portal/me",
   orders: () => "/api/portal/me/orders",
   order: (id: number | string) => `/api/portal/me/orders/${id}`,
-  bookings: () => "/api/portal/me/bookings",
   approve: (id: number | string) => `/api/portal/me/orders/${id}/approve`,
   decline: (id: number | string) => `/api/portal/me/orders/${id}/decline`,
-  cancelBooking: (id: number | string) =>
-    `/api/portal/me/orders/${id}/cancel-booking`,
   cancel: (id: number | string) => `/api/portal/me/orders/${id}/cancel`,
 };
 
