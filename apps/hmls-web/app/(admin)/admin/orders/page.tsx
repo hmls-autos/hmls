@@ -3,7 +3,7 @@
 import { ChevronRight, ClipboardList, Plus, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,10 +40,12 @@ import {
 } from "@/lib/admin-create-order";
 import {
   type AdminOrdersFilter,
+  applyVirtualOrderFilters,
   getAdminOrderDetailHref,
   getAdminOrdersListHref,
   parseAdminOrdersFilter,
   parseAdminOrdersSearch,
+  parseAdminOrdersToday,
 } from "@/lib/admin-order-filters";
 import { adminPaths } from "@/lib/api-paths";
 import { formatCents } from "@/lib/format";
@@ -69,6 +71,7 @@ function OrderStatusBadge({ entry }: { entry: StatusConfig }) {
 
 const FILTER_GROUPS = [
   { value: "", label: "All" },
+  { value: "active", label: "Active" },
   { value: "draft", label: "Pending Review" },
   { value: "estimated", label: "Sent" },
   { value: "approved", label: "Approved" },
@@ -580,35 +583,43 @@ export default function OrdersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const filter = parseAdminOrdersFilter(searchParams.get("status"));
+  const today = parseAdminOrdersToday(searchParams.get("today"));
   const urlSearch = parseAdminOrdersSearch(searchParams.get("search"));
   const [searchInput, setSearchInput] = useState(urlSearch);
   // 300ms debounce so fetch + URL sync only fire after the user pauses typing.
   const debouncedSearch = useDebouncedValue(searchInput, 300);
   const [showMore, setShowMore] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  // 'active' is client-side: fetch unfiltered, narrow below.
+  const gatewayStatus = filter === "active" ? undefined : filter || undefined;
   const {
-    orders,
+    orders: fetchedOrders,
     isLoading,
     mutate: mutateOrders,
-  } = useAdminOrders(filter || undefined, debouncedSearch || undefined);
+  } = useAdminOrders(gatewayStatus, debouncedSearch || undefined);
+  const orders = useMemo(
+    () => applyVirtualOrderFilters(fetchedOrders, filter, today),
+    [fetchedOrders, filter, today],
+  );
   const { data: dashboard } = useAdminDashboard();
   const pendingReviewCount = dashboard?.stats.pendingReview ?? 0;
 
   // Sync deferred search into the URL so refresh, back/forward, and shared
   // links keep the active query.
   useEffect(() => {
-    const desired = getAdminOrdersListHref(filter, debouncedSearch);
-    const current = getAdminOrdersListHref(filter, urlSearch);
+    const desired = getAdminOrdersListHref(filter, debouncedSearch, { today });
+    const current = getAdminOrdersListHref(filter, urlSearch, { today });
     if (desired !== current) {
       router.replace(desired, { scroll: false });
     }
-  }, [debouncedSearch, filter, urlSearch, router]);
+  }, [debouncedSearch, filter, urlSearch, today, router]);
 
   const isMoreActive = MORE_FILTERS.some((f) => f.value === filter);
   const setFilter = (nextFilter: typeof filter) => {
-    router.replace(getAdminOrdersListHref(nextFilter, debouncedSearch), {
-      scroll: false,
-    });
+    router.replace(
+      getAdminOrdersListHref(nextFilter, debouncedSearch, { today }),
+      { scroll: false },
+    );
   };
   const handleOrderCreated = async (id: number) => {
     setShowCreate(false);
@@ -712,6 +723,19 @@ export default function OrdersPage() {
             </div>
           )}
         </div>
+        {today && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() =>
+              router.replace(getAdminOrdersListHref(filter, debouncedSearch), {
+                scroll: false,
+              })
+            }
+          >
+            Scheduled today ×
+          </Button>
+        )}
       </div>
 
       {isLoading ? (
