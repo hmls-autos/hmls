@@ -65,7 +65,7 @@ export function runFixoAgent(options: RunFixoAgentOptions) {
 
   return streamText({
     model: google(modelId),
-    system: options.systemPrompt ?? SYSTEM_PROMPT,
+    instructions: options.systemPrompt ?? SYSTEM_PROMPT,
     messages: options.messages,
     tools,
     // emit_diagnosis is the terminal capture tool for the one-shot structured
@@ -76,7 +76,7 @@ export function runFixoAgent(options: RunFixoAgentOptions) {
       hasToolCall("ask_user_question"),
       hasToolCall("emit_diagnosis"),
     ],
-    onStepFinish: (step) => {
+    onStepEnd: (step) => {
       const toolCalls = step.toolCalls ?? [];
       if (toolCalls.length > 0) {
         logger.debug("Step tool calls", {

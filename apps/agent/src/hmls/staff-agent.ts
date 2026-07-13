@@ -67,11 +67,11 @@ export function runStaffAgent(options: RunStaffAgentOptions) {
 
   return streamText({
     model: deepseek(modelId),
-    system: systemPrompt,
+    instructions: systemPrompt,
     messages,
     tools,
     stopWhen: [stepCountIs(25), hasToolCall("ask_user_question")],
-    onStepFinish: (step) => {
+    onStepEnd: (step) => {
       const toolCalls = step.toolCalls ?? [];
       if (toolCalls.length > 0) {
         logger.debug("Step tool calls", {

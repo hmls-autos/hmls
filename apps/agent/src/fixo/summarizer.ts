@@ -50,7 +50,7 @@ export async function runSummarizer(
   const start = Date.now();
   const { text } = await generateText({
     model: google(SUMMARIZER_MODEL),
-    system: SUMMARIZER_SYSTEM,
+    instructions: SUMMARIZER_SYSTEM,
     prompt,
   });
   logger.info("Summarizer complete", {

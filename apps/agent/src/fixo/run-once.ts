@@ -24,7 +24,7 @@ export async function runFixoOnce(input: DiagnoseOnceInput): Promise<DiagnoseOnc
   const result = runFixoAgent({ messages });
 
   let estimate: unknown | null = null;
-  for await (const part of result.fullStream) {
+  for await (const part of result.stream) {
     // deno-lint-ignore no-explicit-any
     const p = part as any;
     if (p.type === "tool-result" && p.toolName === "create_estimate") {

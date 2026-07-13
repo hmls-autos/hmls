@@ -88,7 +88,7 @@ export async function summarizeFixoSession(
   const { object } = await generateObject({
     model: google(modelId),
     schema: fixoResultSchema,
-    system: SUMMARIZE_SYSTEM_PROMPT,
+    instructions: SUMMARIZE_SYSTEM_PROMPT,
     messages: options.messages,
   });
 

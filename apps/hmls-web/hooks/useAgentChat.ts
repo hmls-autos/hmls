@@ -4,7 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
   getToolOrDynamicToolName,
-  isToolOrDynamicToolUIPart,
+  isToolUIPart,
   lastAssistantMessageIsCompleteWithToolCalls,
   type UIMessage,
 } from "ai";
@@ -56,7 +56,7 @@ function sendAutomaticallyWhenNotAskUser({
   const last = messages[messages.length - 1];
   if (!last || last.role !== "assistant") return false;
   const hasAskUserQuestion = last.parts
-    .filter(isToolOrDynamicToolUIPart)
+    .filter(isToolUIPart)
     .some(
       (p) =>
         p.state === "output-available" &&

@@ -131,7 +131,7 @@ async function runScenario(s: Scenario): Promise<RunResult> {
   let text = "";
 
   // Iterate the full stream so we capture every tool call/result and any error.
-  for await (const part of result.fullStream) {
+  for await (const part of result.stream) {
     // deno-lint-ignore no-explicit-any
     const p = part as any;
     switch (p.type) {
@@ -153,7 +153,7 @@ async function runScenario(s: Scenario): Promise<RunResult> {
 
   const out: RunResult = { text, toolCalls, toolResults, errors };
   try {
-    out.usage = await result.totalUsage;
+    out.usage = await result.usage;
   } catch {
     try {
       out.usage = await result.usage;
