@@ -1,6 +1,6 @@
 "use client";
 
-import { isToolOrDynamicToolUIPart } from "ai";
+import { isToolUIPart } from "ai";
 import { Wrench } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -127,7 +127,7 @@ export default function AdminChatPage() {
           (p) =>
             (p.type === "text" && p.text.trim().length > 0) ||
             p.type === "reasoning" ||
-            isToolOrDynamicToolUIPart(p),
+            isToolUIPart(p),
         );
       }),
     [uiMessages],

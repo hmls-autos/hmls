@@ -1,4 +1,4 @@
-import { hasToolCall, type ModelMessage, stepCountIs, streamText } from "ai";
+import { hasToolCall, isStepCount, type ModelMessage, streamText } from "ai";
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import { getLogger } from "@logtape/logtape";
 import { buildStaffSystemPrompt } from "./staff-system-prompt.ts";
@@ -67,11 +67,11 @@ export function runStaffAgent(options: RunStaffAgentOptions) {
 
   return streamText({
     model: deepseek(modelId),
-    system: systemPrompt,
+    instructions: systemPrompt,
     messages,
     tools,
-    stopWhen: [stepCountIs(25), hasToolCall("ask_user_question")],
-    onStepFinish: (step) => {
+    stopWhen: [isStepCount(25), hasToolCall("ask_user_question")],
+    onStepEnd: (step) => {
       const toolCalls = step.toolCalls ?? [];
       if (toolCalls.length > 0) {
         logger.debug("Step tool calls", {

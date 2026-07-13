@@ -37,7 +37,7 @@ async function runTurn(prompt: string): Promise<Trace> {
   });
   const toolOrder: string[] = [];
   let text = "";
-  for await (const part of result.fullStream) {
+  for await (const part of result.stream) {
     // deno-lint-ignore no-explicit-any
     const p = part as any;
     if (p.type === "tool-call" && p.toolName) toolOrder.push(p.toolName as string);

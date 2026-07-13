@@ -1,6 +1,6 @@
 "use client";
 
-import { isToolOrDynamicToolUIPart } from "ai";
+import { isToolUIPart } from "ai";
 import { Wrench } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -197,8 +197,7 @@ function ChatPageInner() {
         if (msg.role !== "user" && msg.role !== "assistant") return false;
         return msg.parts.some(
           (p) =>
-            (p.type === "text" && p.text.trim().length > 0) ||
-            isToolOrDynamicToolUIPart(p),
+            (p.type === "text" && p.text.trim().length > 0) || isToolUIPart(p),
         );
       }),
     [uiMessages],

@@ -1,4 +1,4 @@
-import { hasToolCall, type ModelMessage, stepCountIs, streamText } from "ai";
+import { hasToolCall, isStepCount, type ModelMessage, streamText } from "ai";
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import { getLogger } from "@logtape/logtape";
 import { SYSTEM_PROMPT } from "./system-prompt.ts";
@@ -73,11 +73,11 @@ export function runHmlsAgent(options: RunAgentOptions) {
 
   return streamText({
     model: deepseek(modelId),
-    system: systemPrompt,
+    instructions: systemPrompt,
     messages,
     tools,
-    stopWhen: [stepCountIs(25), hasToolCall("ask_user_question"), hasToolCall("collect_contact")],
-    onStepFinish: (step) => {
+    stopWhen: [isStepCount(25), hasToolCall("ask_user_question"), hasToolCall("collect_contact")],
+    onStepEnd: (step) => {
       const toolCalls = step.toolCalls ?? [];
       if (toolCalls.length > 0) {
         logger.debug("Step tool calls", {

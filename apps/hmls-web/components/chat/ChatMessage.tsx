@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  getToolOrDynamicToolName,
-  isToolOrDynamicToolUIPart,
-  type UIMessage,
-} from "ai";
+import { getToolOrDynamicToolName, isToolUIPart, type UIMessage } from "ai";
 import { Wrench } from "lucide-react";
 import { memo } from "react";
 import {
@@ -36,7 +32,7 @@ export function renderableMessages(msgs: UIMessage[]): UIMessage[] {
       (p) =>
         (p.type === "text" && p.text.trim().length > 0) ||
         p.type === "reasoning" ||
-        isToolOrDynamicToolUIPart(p),
+        isToolUIPart(p),
     );
   });
 }
@@ -130,7 +126,7 @@ export const ChatMessage = memo(function ChatMessage({
               </Reasoning>
             );
           }
-          if (isToolOrDynamicToolUIPart(part)) {
+          if (isToolUIPart(part)) {
             const card = renderToolCard(part, {
               isAnswered: !!nextUserAnswer,
               answer: nextUserAnswer,

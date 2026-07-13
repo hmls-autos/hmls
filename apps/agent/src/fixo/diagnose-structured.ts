@@ -32,7 +32,7 @@ export async function diagnoseStructured(input: DiagnoseOnceInput): Promise<Stru
   });
 
   const parts: { type: string; toolName?: string; output?: unknown }[] = [];
-  for await (const part of result.fullStream) {
+  for await (const part of result.stream) {
     // deno-lint-ignore no-explicit-any
     const p = part as any;
     if (p.type === "tool-result") {

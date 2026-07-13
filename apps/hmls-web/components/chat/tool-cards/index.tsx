@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  getToolOrDynamicToolName,
-  isToolOrDynamicToolUIPart,
-  type UIMessage,
-} from "ai";
+import { getToolOrDynamicToolName, isToolUIPart, type UIMessage } from "ai";
 import { AskUserQuestionCard } from "./AskUserQuestionCard";
 import { ContactIntakeCard } from "./ContactIntakeCard";
 import {
@@ -39,7 +35,7 @@ export function renderToolCard(
     mode?: "customer" | "staff";
   } = {},
 ): React.ReactNode {
-  if (!isToolOrDynamicToolUIPart(part)) return null;
+  if (!isToolUIPart(part)) return null;
   const toolPart = part as ToolPart;
   const toolName = getToolOrDynamicToolName(toolPart);
   const state = toolPart.state;

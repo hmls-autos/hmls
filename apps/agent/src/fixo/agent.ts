@@ -1,4 +1,4 @@
-import { hasToolCall, type ModelMessage, stepCountIs, streamText } from "ai";
+import { hasToolCall, isStepCount, type ModelMessage, streamText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { getLogger } from "@logtape/logtape";
 import { SYSTEM_PROMPT } from "./system-prompt.ts";
@@ -65,18 +65,18 @@ export function runFixoAgent(options: RunFixoAgentOptions) {
 
   return streamText({
     model: google(modelId),
-    system: options.systemPrompt ?? SYSTEM_PROMPT,
+    instructions: options.systemPrompt ?? SYSTEM_PROMPT,
     messages: options.messages,
     tools,
     // emit_diagnosis is the terminal capture tool for the one-shot structured
     // path — stop as soon as it's called so we don't burn an extra model step
     // (or wander into more tool calls) after the payload is captured.
     stopWhen: [
-      stepCountIs(10),
+      isStepCount(10),
       hasToolCall("ask_user_question"),
       hasToolCall("emit_diagnosis"),
     ],
-    onStepFinish: (step) => {
+    onStepEnd: (step) => {
       const toolCalls = step.toolCalls ?? [];
       if (toolCalls.length > 0) {
         logger.debug("Step tool calls", {
