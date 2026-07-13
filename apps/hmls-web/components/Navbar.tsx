@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { ShopSwitcher } from "@/components/admin/ShopSwitcher";
+import { useSignOut } from "@/hooks/useSignOut";
 import {
   adminLink,
   chatCta,
@@ -19,7 +20,8 @@ import ThemeToggle from "./ThemeToggle";
 
 export default function Navbar() {
   const pathname = usePathname();
-  const { user, supabase, isLoading, isAdmin, isMechanic, isOwner } = useAuth();
+  const { user, isLoading, isAdmin, isMechanic, isOwner } = useAuth();
+  const signOut = useSignOut();
   const isUserLoggedIn = !!user;
   const isHome = pathname === "/";
   const [scrolled, setScrolled] = useState(false);
@@ -108,7 +110,7 @@ export default function Navbar() {
             (isUserLoggedIn ? (
               <button
                 type="button"
-                onClick={() => supabase.auth.signOut()}
+                onClick={() => void signOut()}
                 className={`flex items-center gap-2 text-sm transition-colors rounded focus-visible:ring-2 focus-visible:ring-red-primary ${
                   isTransparent
                     ? "text-white/70 hover:text-white"

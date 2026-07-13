@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { ShopSwitcher } from "@/components/admin/ShopSwitcher";
+import { useSignOut } from "@/hooks/useSignOut";
 import {
   adminLink,
   chatCta,
@@ -25,7 +26,8 @@ export default function MobileNav({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
-  const { user, supabase, isLoading, isAdmin, isMechanic, isOwner } = useAuth();
+  const { user, isLoading, isAdmin, isMechanic, isOwner } = useAuth();
+  const signOut = useSignOut();
 
   const close = useCallback(() => setIsOpen(false), []);
 
@@ -168,7 +170,7 @@ export default function MobileNav({
                 <button
                   type="button"
                   onClick={() => {
-                    supabase.auth.signOut();
+                    void signOut();
                     close();
                   }}
                   className="flex items-center gap-2 text-sm text-text-secondary hover:text-text transition-colors"
