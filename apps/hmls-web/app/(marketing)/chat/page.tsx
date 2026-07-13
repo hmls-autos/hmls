@@ -1,6 +1,5 @@
 "use client";
 
-import { isToolUIPart } from "ai";
 import { Wrench } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -31,7 +30,11 @@ import {
   PromptInputToolbar,
 } from "@/components/ai-elements/prompt-input";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
-import { ChatMessage } from "@/components/chat/ChatMessage";
+import {
+  ChatMessage,
+  mapNextUserAnswers,
+  renderableMessages,
+} from "@/components/chat/ChatMessage";
 import { askConfirm } from "@/components/ui/ConfirmDialog";
 import { useAgentChat } from "@/hooks/useAgentChat";
 
@@ -188,41 +191,16 @@ function ChatPageInner() {
     setInput("");
   };
 
-  // Filter out empty messages so a transient assistant chunk before the
-  // model emits anything doesn't render an empty bubble. Reasoning parts
-  // are intentionally skipped — customer chat hides chain-of-thought.
+  // Customer chat hides chain-of-thought, so reasoning-only messages must not
+  // render (they'd be empty bubbles) — includeReasoning: false.
   const renderable = useMemo(
-    () =>
-      uiMessages.filter((msg) => {
-        if (msg.role !== "user" && msg.role !== "assistant") return false;
-        return msg.parts.some(
-          (p) =>
-            (p.type === "text" && p.text.trim().length > 0) || isToolUIPart(p),
-        );
-      }),
+    () => renderableMessages(uiMessages, { includeReasoning: false }),
     [uiMessages],
   );
-
-  // Map each assistant message id to the text of the first user message
-  // that follows it. Replaces an O(n²) slice+find inside the render loop.
-  const nextUserAnswerByAssistantId = useMemo(() => {
-    const map = new Map<string, string>();
-    let pendingAssistantIds: string[] = [];
-    for (const msg of renderable) {
-      if (msg.role === "assistant") {
-        pendingAssistantIds.push(msg.id);
-      } else if (msg.role === "user") {
-        const text = msg.parts.find(
-          (p): p is { type: "text"; text: string } => p.type === "text",
-        )?.text;
-        if (text) {
-          for (const id of pendingAssistantIds) map.set(id, text);
-        }
-        pendingAssistantIds = [];
-      }
-    }
-    return map;
-  }, [renderable]);
+  const nextUserAnswerByAssistantId = useMemo(
+    () => mapNextUserAnswers(renderable),
+    [renderable],
+  );
 
   // Show loading state while auth resolves, or while redirecting
   // unauthenticated users to /login / admins to /admin/chat.

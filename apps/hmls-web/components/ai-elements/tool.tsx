@@ -19,9 +19,15 @@ import {
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 
-import { CodeBlock } from "./code-block";
-
 export type ToolProps = ComponentProps<typeof Collapsible>;
+
+// Staff-only debug panel: pretty-print JSON tool I/O. Plain <pre> — chat-text
+// code blocks are rendered by streamdown's own @streamdown/code, not this.
+const JsonBlock = ({ text }: { text: string }) => (
+  <pre className="overflow-x-auto p-4 font-mono text-xs whitespace-pre-wrap">
+    {text}
+  </pre>
+);
 
 export const Tool = ({ className, ...props }: ToolProps) => (
   <Collapsible
@@ -124,7 +130,7 @@ export const ToolInput = ({ className, input, ...props }: ToolInputProps) => (
       Parameters
     </h4>
     <div className="rounded-md bg-muted/50">
-      <CodeBlock code={JSON.stringify(input, null, 2)} language="json" />
+      <JsonBlock text={JSON.stringify(input, null, 2)} />
     </div>
   </div>
 );
@@ -147,11 +153,9 @@ export const ToolOutput = ({
   let Output = <div>{output as ReactNode}</div>;
 
   if (typeof output === "object" && !isValidElement(output)) {
-    Output = (
-      <CodeBlock code={JSON.stringify(output, null, 2)} language="json" />
-    );
+    Output = <JsonBlock text={JSON.stringify(output, null, 2)} />;
   } else if (typeof output === "string") {
-    Output = <CodeBlock code={output} language="json" />;
+    Output = <JsonBlock text={output} />;
   }
 
   return (

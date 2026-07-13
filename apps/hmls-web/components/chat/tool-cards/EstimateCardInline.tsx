@@ -34,7 +34,6 @@ export function EstimateCardInline({
   const data: EstimateCardData = {
     success: true,
     orderId: output.orderId,
-    estimateId: output.orderId,
     status: output.status,
     pendingReview: output.pendingReview,
     vehicle: output.vehicle ?? "Unknown vehicle",

@@ -1,6 +1,5 @@
 "use client";
 
-import { isToolUIPart } from "ai";
 import { Wrench } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -23,7 +22,11 @@ import {
   PromptInputToolbar,
 } from "@/components/ai-elements/prompt-input";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
-import { ChatMessage } from "@/components/chat/ChatMessage";
+import {
+  ChatMessage,
+  mapNextUserAnswers,
+  renderableMessages,
+} from "@/components/chat/ChatMessage";
 import { Button } from "@/components/ui/button";
 import { askConfirm } from "@/components/ui/ConfirmDialog";
 import { useAgentChat } from "@/hooks/useAgentChat";
@@ -120,39 +123,13 @@ export default function AdminChatPage() {
   };
 
   const renderable = useMemo(
-    () =>
-      uiMessages.filter((msg) => {
-        if (msg.role !== "user" && msg.role !== "assistant") return false;
-        return msg.parts.some(
-          (p) =>
-            (p.type === "text" && p.text.trim().length > 0) ||
-            p.type === "reasoning" ||
-            isToolUIPart(p),
-        );
-      }),
+    () => renderableMessages(uiMessages),
     [uiMessages],
   );
-
-  // Map each assistant message id to the text of the first user message
-  // that follows it. Replaces an O(n²) slice+find inside the render loop.
-  const nextUserAnswerByAssistantId = useMemo(() => {
-    const map = new Map<string, string>();
-    let pendingAssistantIds: string[] = [];
-    for (const msg of renderable) {
-      if (msg.role === "assistant") {
-        pendingAssistantIds.push(msg.id);
-      } else if (msg.role === "user") {
-        const text = msg.parts.find(
-          (p): p is { type: "text"; text: string } => p.type === "text",
-        )?.text;
-        if (text) {
-          for (const id of pendingAssistantIds) map.set(id, text);
-        }
-        pendingAssistantIds = [];
-      }
-    }
-    return map;
-  }, [renderable]);
+  const nextUserAnswerByAssistantId = useMemo(
+    () => mapNextUserAnswers(renderable),
+    [renderable],
+  );
 
   return (
     <main className="flex flex-col flex-1 bg-background text-foreground">

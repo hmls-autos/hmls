@@ -7,7 +7,6 @@ import { AGENT_URL } from "@/lib/config";
 export interface EstimateCardData {
   success: boolean;
   orderId?: number;
-  estimateId?: number;
   status?: string;
   pendingReview?: boolean;
   vehicle: string;
@@ -34,7 +33,7 @@ export function EstimateCard({ data, accountLink }: EstimateCardProps) {
   const downloadLink = data.downloadUrl
     ? `${AGENT_URL}${data.downloadUrl}`
     : pdfUrl;
-  const orderRef = data.orderId ?? data.estimateId;
+  const orderRef = data.orderId;
   const badge = data.pendingReview
     ? { label: "Pending review", color: "text-amber-500 bg-amber-500/10" }
     : data.note && !orderRef
