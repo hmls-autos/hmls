@@ -129,7 +129,7 @@ export function groupOnlineReferenceParts(
 ): OnlineReferenceGroup[] {
   const groups = new Map<string, OnlineReferenceGroup>();
   for (const reference of references) {
-    if (reference.source !== "google_search") continue;
+    if (reference.source !== "web_search") continue;
     const engineVariant =
       reference.engineVariant?.trim() || "Engine not specified";
     const key = `${reference.serviceId}\u0000${engineVariant.toLowerCase()}`;

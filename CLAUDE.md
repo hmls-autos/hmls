@@ -299,6 +299,7 @@ Required in `.env`:
 DATABASE_URL=postgres://postgres.[ref]:[password]@aws-1-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
 DEEPSEEK_API_KEY=sk-...         # DeepSeek key for the HMLS customer + staff agents (gateway fail-fasts at boot if missing)
 GOOGLE_API_KEY=...              # Google AI Studio key for the Fixo agent (Gemini) + Fixo media
+TAVILY_API_KEY=tvly-...         # Tavily retrieval for the manual Tech prep part-number lookup
 STRIPE_SECRET_KEY=sk_test_...
 SUPABASE_URL=...                # Supabase project URL
 SUPABASE_ANON_KEY=...           # Supabase anon key
@@ -310,10 +311,11 @@ Optional in API (`.env`):
 ```
 HMLS_AGENT_MODEL=deepseek-v4-pro   # override the HMLS agent model (default: deepseek-v4-pro)
 AGENT_MODEL=gemini-3.1-flash-lite  # override the Fixo agent model (default: gemini-3.1-flash-lite)
+PART_LOOKUP_DEEPSEEK_MODEL=deepseek-v4-flash # override manual part-number extraction
 ```
 
-(The two model overrides are deliberately separate env vars so the DeepSeek-backed HMLS agent and
-the Gemini-backed Fixo agent never share a model id.)
+(The model overrides are deliberately separate so the DeepSeek-backed HMLS agent, Gemini-backed
+Fixo agent, and isolated DeepSeek part-number extractor never share a model id accidentally.)
 
 Optional in web (`.env.local`):
 

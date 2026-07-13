@@ -1,8 +1,8 @@
 # Tavily and DeepSeek part-number search implementation plan
 
-**Goal:** Replace only the manual part-number lookup's Gemini runtime with one combined Tavily
-Basic Search request and a DeepSeek structured extraction pass, while preserving its stateless API
-and browser-local persistence.
+**Goal:** Replace only the manual part-number lookup's Gemini runtime with one combined Tavily Basic
+Search request and a DeepSeek structured extraction pass, while preserving its stateless API and
+browser-local persistence.
 
 **Design:** `docs/superpowers/specs/2026-07-13-tavily-deepseek-part-search-design.md`
 
@@ -27,12 +27,12 @@ and browser-local persistence.
 - Modify `apps/agent/src/hmls/part-number-research.ts`
 - Modify `apps/agent/src/hmls/part-number-research_test.ts`
 
-1. Call Tavily's `/search` endpoint directly with `TAVILY_API_KEY`, Basic Search, US boost, raw text,
-   no generated answer, usage reporting, and a 20-second abort timeout.
+1. Call Tavily's `/search` endpoint directly with `TAVILY_API_KEY`, Basic Search, US boost, raw
+   text, no generated answer, usage reporting, and a 20-second abort timeout.
 2. Sanitize missing-key, authentication, quota, rate-limit, timeout, malformed-response, and 5xx
    failures without logging credentials or response bodies.
-3. Replace the Gemini extraction runner with `@ai-sdk/deepseek`, default
-   `deepseek-v4-flash`, and optional `PART_LOOKUP_DEEPSEEK_MODEL` override.
+3. Replace the Gemini extraction runner with `@ai-sdk/deepseek`, default `deepseek-v4-flash`, and
+   optional `PART_LOOKUP_DEEPSEEK_MODEL` override.
 4. Preserve strict structured output and deterministic literal-part-number binding; source titles
    and URLs continue to come only from accepted evidence.
 5. Skip DeepSeek when Tavily yields no qualifying evidence. Return Tavily credit and DeepSeek token
@@ -79,5 +79,5 @@ and browser-local persistence.
    key and existing DeepSeek key.
 4. Confirm exactly one Tavily credit, source-backed engine/part results, linked HTTPS sources,
    browser refresh persistence, no Google invocation in this path, and no order/database mutation.
-5. Push the stacked branch and open its pull request against
-   `codex/tech-prep-part-number-lookup`; retarget it to `main` after PR #140 merges.
+5. Push the stacked branch and open its pull request against `codex/tech-prep-part-number-lookup`;
+   retarget it to `main` after PR #140 merges.

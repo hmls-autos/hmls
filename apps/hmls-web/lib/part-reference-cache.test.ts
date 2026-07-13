@@ -15,7 +15,7 @@ const reference: OnlinePartReference = {
   partName: "Serpentine Belt Replacement",
   brand: "Toyota",
   partNumber: "90916-A2027",
-  source: "google_search",
+  source: "web_search",
   engineVariant: "2.5L I4",
   partType: "oem",
   fitmentNote: "2.5L catalog fitment",
@@ -43,7 +43,7 @@ function memoryStorage(
 describe("part-reference browser cache", () => {
   it("uses shop and order scope in the cache key", () => {
     expect(partReferenceCacheKey("shop-a", 554)).toBe(
-      "hmls:tech-prep-part-references:v1:shop-a:554",
+      "hmls:tech-prep-part-references:v2:shop-a:554",
     );
   });
 
@@ -70,7 +70,7 @@ describe("part-reference browser cache", () => {
   it("ignores stale fingerprints and malformed or unsafe data", () => {
     const envelope = (sourceUrl: string) =>
       JSON.stringify({
-        version: 1,
+        version: 2,
         fingerprint,
         savedAt: "2026-07-13T00:00:00.000Z",
         referencesByItemId: { belt: [{ ...reference, sourceUrl }] },
@@ -101,5 +101,21 @@ describe("part-reference browser cache", () => {
         { belt: [reference] },
       ),
     ).toBe(false);
+  });
+
+  it("ignores legacy v1 Google-search cache entries", () => {
+    expect(
+      parsePartReferenceCache(
+        JSON.stringify({
+          version: 1,
+          fingerprint,
+          savedAt: "2026-07-13T00:00:00.000Z",
+          referencesByItemId: {
+            belt: [{ ...reference, source: "google_search" }],
+          },
+        }),
+        fingerprint,
+      ),
+    ).toBeNull();
   });
 });

@@ -2,10 +2,11 @@ import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 import {
   buildEvidenceBlocks,
   buildExtractionPrompt,
-  buildSearchPrompt,
+  buildSearchQuery,
   normalizePartResearch,
   type PartResearchInput,
   researchPartNumbers,
+  runTavilySearch,
 } from "./part-number-research.ts";
 
 const input: PartResearchInput = {
@@ -13,29 +14,50 @@ const input: PartResearchInput = {
   services: [{ itemId: "belt", name: "Serpentine Belt Replacement" }],
 };
 
-const metadata = {
-  groundingChunks: [
-    { web: { uri: "https://parts.example/oem", title: "Toyota Parts" } },
-    { web: { uri: "http://unsafe.example/belt", title: "Unsafe" } },
-    { web: { uri: "https://parts.example/gates", title: "Gates Catalog" } },
-  ],
-  groundingSupports: [
+const searchResponse = {
+  results: [
     {
-      segment: { text: "2.5L OEM belt 90916-A2027" },
-      groundingChunkIndices: [0, 1],
+      title: "Toyota Parts",
+      url: "https://parts.example/oem",
+      content: "2.5L OEM belt 90916-A2027",
+      raw_content: null,
+      score: 0.92,
     },
     {
-      segment_text: "2.5L aftermarket Gates K060615",
-      supportChunkIndices: [2],
+      title: "Unsafe",
+      url: "http://unsafe.example/belt",
+      content: "unsafe BELT-HTTP",
+      raw_content: null,
+      score: 0.99,
+    },
+    {
+      title: "Low score",
+      url: "https://parts.example/low",
+      content: "unsupported BELT-LOW",
+      raw_content: null,
+      score: 0.49,
+    },
+    {
+      title: "Gates Catalog",
+      url: "https://parts.example/gates",
+      content: "2.5L aftermarket Gates K060615",
+      raw_content: null,
+      score: 0.81,
     },
   ],
+  usage: { credits: 1 },
 };
 
 Deno.test("search and extraction prompts contain bounded repair data only", () => {
-  const search = buildSearchPrompt(input);
-  assertStringIncludes(search, '"year": "2018"');
+  const search = buildSearchQuery({
+    ...input,
+    services: [...input.services, { itemId: "brakes", name: "Front Brake Pads" }],
+  });
+  assertStringIncludes(search, "2018 Toyota Camry");
+  assertStringIncludes(search, "[belt] Serpentine Belt Replacement");
+  assertStringIncludes(search, "[brakes] Front Brake Pads");
   assert(!search.includes("customer"));
-  const extraction = buildExtractionPrompt(input, "answer", [{
+  const extraction = buildExtractionPrompt(input, [{
     id: "E1",
     text: "90916-A2027",
     sourceTitle: "Toyota Parts",
@@ -45,26 +67,37 @@ Deno.test("search and extraction prompts contain bounded repair data only", () =
   assert(!extraction.includes("https://secret.example"));
 });
 
-Deno.test("buildEvidenceBlocks maps supported text to grounded HTTPS chunks", () => {
-  assertEquals(buildEvidenceBlocks(metadata), [
+Deno.test("buildEvidenceBlocks maps relevant Tavily results to bounded HTTPS evidence", () => {
+  assertEquals(buildEvidenceBlocks(searchResponse), [
     {
       id: "E1",
-      text: "2.5L OEM belt 90916-A2027",
+      text: "Toyota Parts\n2.5L OEM belt 90916-A2027",
       sourceTitle: "Toyota Parts",
       sourceUrl: "https://parts.example/oem",
     },
     {
       id: "E2",
-      text: "2.5L aftermarket Gates K060615",
+      text: "Gates Catalog\n2.5L aftermarket Gates K060615",
       sourceTitle: "Gates Catalog",
       sourceUrl: "https://parts.example/gates",
     },
   ]);
   assertEquals(buildEvidenceBlocks(undefined), []);
+
+  const bounded = buildEvidenceBlocks({
+    results: [{
+      title: "Long catalog",
+      url: "https://parts.example/long",
+      content: "BELT-LONG",
+      raw_content: "x".repeat(10_000),
+      score: 0.9,
+    }],
+  });
+  assertEquals(bounded[0].text.length, 4_000);
 });
 
 Deno.test("normalizePartResearch requires cited evidence containing the part number", () => {
-  const evidence = buildEvidenceBlocks(metadata);
+  const evidence = buildEvidenceBlocks(searchResponse);
   const result = normalizePartResearch(
     input,
     {
@@ -166,7 +199,12 @@ Deno.test("normalizePartResearch rejects marketplace-only evidence", () => {
 Deno.test("researchPartNumbers skips extraction without grounding evidence", async () => {
   let extracted = false;
   const result = await researchPartNumbers(input, {
-    search: () => Promise.resolve({ answer: "unsourced", groundingMetadata: null }),
+    search: () =>
+      Promise.resolve({
+        response: { results: [] },
+        provider: "tavily",
+        usage: { credits: 1 },
+      }),
     extract: () => {
       extracted = true;
       throw new Error("should not run");
@@ -178,15 +216,16 @@ Deno.test("researchPartNumbers skips extraction without grounding evidence", asy
 });
 
 Deno.test("researchPartNumbers runs both passes and combines usage", async () => {
+  let searchCalls = 0;
   const result = await researchPartNumbers(input, {
     now: () => new Date("2026-07-13T01:02:03.000Z"),
-    search: (_input, prompt) => {
-      assertStringIncludes(prompt, "Serpentine Belt Replacement");
+    search: (_input, query) => {
+      searchCalls += 1;
+      assertStringIncludes(query, "Serpentine Belt Replacement");
       return Promise.resolve({
-        answer: "2.5L OEM belt 90916-A2027",
-        groundingMetadata: metadata,
-        usage: { inputTokens: 100, outputTokens: 200, totalTokens: 300 },
-        model: "search-model",
+        response: searchResponse,
+        usage: { credits: 1 },
+        provider: "tavily",
       });
     },
     extract: (_input, prompt) => {
@@ -212,7 +251,85 @@ Deno.test("researchPartNumbers runs both passes and combines usage", async () =>
     },
   });
 
+  assertEquals(searchCalls, 1);
   assertEquals(result.referencesByItemId.belt[0].searchedAt, "2026-07-13T01:02:03.000Z");
-  assertEquals(result.totalUsage, { inputTokens: 150, outputTokens: 275, totalTokens: 425 });
+  assertEquals(result.searchUsage, { credits: 1 });
+  assertEquals(result.totalUsage, { inputTokens: 50, outputTokens: 75, totalTokens: 125 });
+  assertEquals(result.searchProvider, "tavily");
   assertEquals(result.sourceCount, 2);
+});
+
+Deno.test("runTavilySearch sends one bounded Basic Search request", async () => {
+  let calls = 0;
+  const result = await runTavilySearch(input, buildSearchQuery(input), {
+    apiKey: "test-key",
+    timeoutMs: 100,
+    fetcher: (_url, init) => {
+      calls += 1;
+      const headers = new Headers(init?.headers);
+      assertEquals(headers.get("authorization"), "Bearer test-key");
+      assert(init?.signal instanceof AbortSignal);
+      const body = JSON.parse(String(init?.body));
+      assertEquals(body.search_depth, "basic");
+      assertEquals(body.max_results, 10);
+      assertEquals(body.include_answer, false);
+      assertEquals(body.include_raw_content, "text");
+      assertEquals(body.include_usage, true);
+      return Promise.resolve(Response.json(searchResponse));
+    },
+  });
+
+  assertEquals(calls, 1);
+  assertEquals(result.provider, "tavily");
+  assertEquals(result.usage, { credits: 1 });
+});
+
+Deno.test("runTavilySearch sanitizes provider and timeout failures", async () => {
+  for (
+    const [status, message] of [
+      [401, "Part-number search is not configured correctly"],
+      [429, "Part-number search quota or rate limit was reached"],
+      [503, "Part-number search provider is temporarily unavailable"],
+    ] as const
+  ) {
+    await runTavilySearch(input, "query", {
+      apiKey: "test-key",
+      fetcher: () => Promise.resolve(new Response("secret body", { status })),
+    }).then(
+      () => {
+        throw new Error("expected failure");
+      },
+      (error) => assertEquals(error.message, message),
+    );
+  }
+
+  await runTavilySearch(input, "query", {
+    apiKey: "test-key",
+    fetcher: () => Promise.reject(new DOMException("private", "AbortError")),
+  }).then(
+    () => {
+      throw new Error("expected timeout");
+    },
+    (error) => assertEquals(error.message, "Part-number search timed out"),
+  );
+
+  await runTavilySearch(input, "query", {
+    apiKey: "test-key",
+    fetcher: () => Promise.resolve(Response.json({ results: "not-an-array" })),
+  }).then(
+    () => {
+      throw new Error("expected invalid response");
+    },
+    (error) =>
+      assertEquals(error.message, "Part-number search provider returned an invalid response"),
+  );
+});
+
+Deno.test("part-number research has no Google provider dependency", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./part-number-research.ts", import.meta.url),
+  );
+  assert(!source.includes("GOOGLE_API_KEY"));
+  assert(!source.includes("@ai-sdk/google"));
+  assert(!source.includes("createGoogleGenerativeAI"));
 });

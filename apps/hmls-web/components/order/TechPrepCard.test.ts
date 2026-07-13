@@ -96,7 +96,7 @@ describe("groupOnlineReferenceParts", () => {
       partName: "Spark Plug Replacement",
       brand,
       partNumber,
-      source: "google_search",
+      source: "web_search",
       engineVariant,
       partType: "aftermarket",
       fitmentNote: `${engineVariant} fitment`,

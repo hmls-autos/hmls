@@ -10,10 +10,10 @@ supersedes: Google/Gemini provider runtime in the dependent design
 
 ## Problem and scope
 
-The manual Tech prep part-number lookup currently uses Gemini twice: a Google-grounded research
-pass followed by a structured extraction pass. HMLS otherwise uses DeepSeek as its primary agent
-model. The lookup should instead use Tavily only for on-demand web retrieval and DeepSeek for all
-part identification, engine-variant reasoning, and structured extraction.
+The manual Tech prep part-number lookup currently uses Gemini twice: a Google-grounded research pass
+followed by a structured extraction pass. HMLS otherwise uses DeepSeek as its primary agent model.
+The lookup should instead use Tavily only for on-demand web retrieval and DeepSeek for all part
+identification, engine-variant reasoning, and structured extraction.
 
 This change affects only the manual **Look up part numbers** action introduced by the dependent
 design. It does not change order creation, the HMLS agent's existing database-backed repair-job
@@ -36,16 +36,16 @@ services the order contains. The bounded query contains only:
 - all eligible Tech prep service IDs and names.
 
 It contains no customer identity, phone, email, address, VIN, notes, order ID, price, or other
-customer data. The stateless lookup endpoint remains isolated from the HMLS database and performs
-no application-table reads or writes.
+customer data. The stateless lookup endpoint remains isolated from the HMLS database and performs no
+application-table reads or writes.
 
 ## Provider flow
 
 ### Tavily retrieval
 
-Call `POST https://api.tavily.com/search` directly with bearer authentication from
-`TAVILY_API_KEY`; do not add a Tavily SDK dependency. Use a deterministic combined query and the
-following bounded behavior:
+Call `POST https://api.tavily.com/search` directly with bearer authentication from `TAVILY_API_KEY`;
+do not add a Tavily SDK dependency. Use a deterministic combined query and the following bounded
+behavior:
 
 - `search_depth: "basic"`;
 - `topic: "general"`;
@@ -63,8 +63,8 @@ data, never model instructions.
 
 There is no automatic per-service search, follow-up Tavily Extract request, retry, advanced search,
 or Google fallback. If the combined request lacks evidence for one service, that service returns no
-verified match. A user may explicitly press **Refresh part numbers** later to perform another
-single search.
+verified match. A user may explicitly press **Refresh part numbers** later to perform another single
+search.
 
 ### DeepSeek extraction
 
@@ -81,10 +81,10 @@ returns the existing strict structured shape:
 - short fitment note.
 
 DeepSeek does not create or select source URLs. The deterministic normalizer accepts a candidate
-only when its service ID came from the request and its normalized part number appears literally in
-a qualifying evidence block. It rejects duplicates, marketplace-only evidence, malformed values,
-and candidates beyond the existing three-per-engine cap. Source title and URL come directly from
-the matched Tavily evidence block.
+only when its service ID came from the request and its normalized part number appears literally in a
+qualifying evidence block. It rejects duplicates, marketplace-only evidence, malformed values, and
+candidates beyond the existing three-per-engine cap. Source title and URL come directly from the
+matched Tavily evidence block.
 
 ## Provider-neutral browser data
 

@@ -2,7 +2,7 @@ export type OnlinePartReference = {
   partName: string;
   brand: string;
   partNumber: string;
-  source: "google_search";
+  source: "web_search";
   engineVariant: string;
   partType: "oem" | "aftermarket";
   fitmentNote: string;
@@ -30,13 +30,13 @@ export type PartReferenceService = {
 type StorageLike = Pick<Storage, "getItem" | "setItem">;
 
 type CacheEnvelope = {
-  version: 1;
+  version: 2;
   fingerprint: string;
   savedAt: string;
   referencesByItemId: OnlinePartReferencesByItemId;
 };
 
-const CACHE_PREFIX = "hmls:tech-prep-part-references:v1";
+const CACHE_PREFIX = "hmls:tech-prep-part-references:v2";
 
 export function partReferenceCacheKey(
   shopId: string,
@@ -102,7 +102,7 @@ function parseReference(value: unknown): OnlinePartReference | null {
     !partName ||
     !brand ||
     !partNumber ||
-    raw.source !== "google_search" ||
+    raw.source !== "web_search" ||
     !engineVariant ||
     !partType ||
     !fitmentNote ||
@@ -115,7 +115,7 @@ function parseReference(value: unknown): OnlinePartReference | null {
     partName,
     brand,
     partNumber,
-    source: "google_search",
+    source: "web_search",
     engineVariant,
     partType,
     fitmentNote,
@@ -155,7 +155,7 @@ export function parsePartReferenceCache(
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     if (
-      parsed.version !== 1 ||
+      parsed.version !== 2 ||
       parsed.fingerprint !== fingerprint ||
       !parsed.referencesByItemId ||
       typeof parsed.referencesByItemId !== "object" ||
@@ -191,7 +191,7 @@ export function writePartReferenceCache(
   const validated = validateOnlinePartReferences(referencesByItemId);
   if (!validated) return false;
   const envelope: CacheEnvelope = {
-    version: 1,
+    version: 2,
     fingerprint,
     savedAt,
     referencesByItemId: validated,

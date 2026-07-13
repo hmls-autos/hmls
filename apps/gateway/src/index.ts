@@ -46,6 +46,7 @@ for (
     "STRIPE_WEBHOOK_SECRET",
     "SUPABASE_URL",
     "SUPABASE_ANON_KEY",
+    "TAVILY_API_KEY",
   ]
 ) {
   if (!Deno.env.get(key)) {

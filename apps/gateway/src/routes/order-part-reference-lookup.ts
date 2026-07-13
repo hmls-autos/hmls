@@ -98,13 +98,14 @@ export function createPartReferenceLookup(
           sourceCount: result.sourceCount,
         },
       });
-    } catch (error) {
+    } catch {
       lookupStartedAt.delete(key);
+      // Provider errors may contain request metadata. Keep the public response fixed and sanitized.
       return c.json<ApiError>(
         {
           error: {
             code: "LOOKUP_FAILED",
-            message: error instanceof Error ? error.message : "Part lookup failed",
+            message: "Part-number lookup is temporarily unavailable",
           },
         },
         502,

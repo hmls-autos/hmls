@@ -36,7 +36,7 @@ Deno.test("part lookup: returns stateless research results", async () => {
             partName: "Serpentine Belt Replacement",
             brand: "Toyota",
             partNumber: "90916-A2027",
-            source: "google_search",
+            source: "web_search",
             engineVariant: "2.5L I4",
             partType: "oem",
             fitmentNote: "2.5L fitment",
@@ -71,4 +71,28 @@ Deno.test("part lookup route has no HMLS database dependency", async () => {
   assert(!source.includes("@hmls/agent/db"));
   assert(!source.includes("schema.orders"));
   assert(!source.includes("dbAdmin"));
+});
+
+Deno.test("part lookup: sanitizes provider failures", async () => {
+  resetPartLookupCooldownForTests();
+  Deno.env.set("SKIP_AUTH", "true");
+  try {
+    const router = createPartReferenceLookup(() =>
+      Promise.reject(new Error("secret provider response and credential metadata"))
+    );
+    const response = await router.request("/lookup", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(validInput),
+    });
+    assertEquals(response.status, 502);
+    assertEquals(await response.json(), {
+      error: {
+        code: "LOOKUP_FAILED",
+        message: "Part-number lookup is temporarily unavailable",
+      },
+    });
+  } finally {
+    Deno.env.delete("SKIP_AUTH");
+  }
 });
