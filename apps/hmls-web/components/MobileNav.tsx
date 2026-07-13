@@ -1,44 +1,28 @@
 "use client";
 
-import {
-  ClipboardList,
-  LayoutDashboard,
-  LogIn,
-  LogOut,
-  Menu,
-  User,
-  Users,
-  X,
-} from "lucide-react";
+import { LogIn, LogOut, Menu, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import { isSectionNavActive } from "@/lib/nav";
+import {
+  adminNavItems,
+  isSectionNavActive,
+  mechanicNavItems,
+  portalNavItems,
+} from "@/lib/nav";
 import ThemeToggle from "./ThemeToggle";
 
 const marketingLinks = [
   { href: "/", label: "Home" },
   { href: "/contact", label: "Contact" },
 ];
+// Customer chat only — admins get Chat in the admin sub-nav above.
 const customerChatLink = { href: "/chat", label: "Chat" };
-const adminChatLink = { href: "/admin/chat", label: "Chat" };
 
 const portalLink = { href: "/portal", label: "My Portal" };
 const adminLink = { href: "/admin", label: "Admin" };
 const mechanicLink = { href: "/mechanic", label: "Mechanic" };
-
-const portalSubNav = [
-  { href: "/portal", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/portal/orders", label: "My Orders", icon: ClipboardList },
-  { href: "/portal/profile", label: "Profile", icon: User },
-];
-
-const adminSubNav = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/orders", label: "Orders", icon: ClipboardList },
-  { href: "/admin/customers", label: "Customers", icon: Users },
-];
 
 export default function MobileNav({
   isTransparent = false,
@@ -66,14 +50,27 @@ export default function MobileNav({
     close();
   }, [pathname, close]);
 
-  const isOnPortal = pathname.startsWith("/portal");
-  const isOnAdmin = pathname.startsWith("/admin");
-  const subNav = isOnPortal
-    ? portalSubNav
-    : isOnAdmin && isAdmin
-      ? adminSubNav
-      : null;
-  const subNavRoot = isOnPortal ? "/portal" : "/admin";
+  // Section sub-nav — the single mobile menu carries the dashboard nav
+  // (the desktop sidebar's items) so dashboard pages don't need a second
+  // hamburger of their own. Inside a section the menu stays focused: section
+  // nav + links to the OTHER sections + theme/sign-out. Marketing links only
+  // show outside sections (the logo already links home).
+  const section = pathname.startsWith("/portal")
+    ? "portal"
+    : pathname.startsWith("/admin") && isAdmin
+      ? "admin"
+      : pathname.startsWith("/mechanic") && (isMechanic || isAdmin)
+        ? "mechanic"
+        : null;
+  const subNav =
+    section === "portal"
+      ? portalNavItems
+      : section === "admin"
+        ? adminNavItems
+        : section === "mechanic"
+          ? mechanicNavItems
+          : null;
+  const subNavRoot = subNav?.[0]?.href ?? "/";
 
   return (
     <div className="md:hidden">
@@ -127,71 +124,62 @@ export default function MobileNav({
               </>
             )}
 
-            {marketingLinks.map(({ href, label }) => (
+            {!section &&
+              marketingLinks.map(({ href, label }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={close}
+                  className={`text-sm transition-colors ${
+                    pathname === href
+                      ? "text-red-400 font-medium"
+                      : "text-text-secondary hover:text-text"
+                  }`}
+                >
+                  {label}
+                </Link>
+              ))}
+            {!section && !isAdmin && (
               <Link
-                key={href}
-                href={href}
+                href={customerChatLink.href}
                 onClick={close}
                 className={`text-sm transition-colors ${
-                  pathname === href
+                  pathname === customerChatLink.href
                     ? "text-red-400 font-medium"
                     : "text-text-secondary hover:text-text"
                 }`}
               >
-                {label}
+                {customerChatLink.label}
               </Link>
-            ))}
-            {(() => {
-              const link = isAdmin ? adminChatLink : customerChatLink;
-              return (
-                <Link
-                  href={link.href}
-                  onClick={close}
-                  className={`text-sm transition-colors ${
-                    pathname === link.href
-                      ? "text-red-400 font-medium"
-                      : "text-text-secondary hover:text-text"
-                  }`}
-                >
-                  {link.label}
-                </Link>
-              );
-            })()}
+            )}
             {user && (
               <>
-                <Link
-                  href={portalLink.href}
-                  onClick={close}
-                  className={`text-sm transition-colors ${
-                    pathname.startsWith(portalLink.href)
-                      ? "text-red-400 font-medium"
-                      : "text-text-secondary hover:text-text"
-                  }`}
-                >
-                  {isAdmin ? "View as Customer" : portalLink.label}
-                </Link>
-                {isAdmin && (
+                {section !== "portal" && (
+                  <Link
+                    href={portalLink.href}
+                    onClick={close}
+                    className="text-sm text-text-secondary hover:text-text transition-colors"
+                  >
+                    {isAdmin ? "View as Customer" : portalLink.label}
+                  </Link>
+                )}
+                {isAdmin && section !== "admin" && (
                   <Link
                     href={adminLink.href}
                     onClick={close}
-                    className={`text-sm transition-colors ${
-                      pathname.startsWith(adminLink.href)
-                        ? "text-red-400 font-medium"
-                        : "text-text-secondary hover:text-text"
-                    }`}
+                    className="text-sm text-text-secondary hover:text-text transition-colors"
                   >
                     {adminLink.label}
                   </Link>
                 )}
-                {isMechanic && (
+                {/* Mechanics only — for admins this link mostly 403s (needs a
+                    linked provider row) and reads confusingly next to the
+                    admin "Mechanics" nav item. */}
+                {isMechanic && section !== "mechanic" && (
                   <Link
                     href={mechanicLink.href}
                     onClick={close}
-                    className={`text-sm transition-colors ${
-                      pathname.startsWith(mechanicLink.href)
-                        ? "text-red-400 font-medium"
-                        : "text-text-secondary hover:text-text"
-                    }`}
+                    className="text-sm text-text-secondary hover:text-text transition-colors"
                   >
                     {mechanicLink.label}
                   </Link>
