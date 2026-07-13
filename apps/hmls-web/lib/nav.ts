@@ -64,6 +64,7 @@ export const sectionNavItems: Record<Section, NavItem[]> = {
 // define their own copies.
 export const marketingLinks = [
   { href: "/", label: "Home" },
+  { href: "/services", label: "Services" },
   { href: "/contact", label: "Contact" },
 ] as const;
 
