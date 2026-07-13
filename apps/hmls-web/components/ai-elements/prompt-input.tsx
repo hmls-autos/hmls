@@ -3,7 +3,6 @@
 import { ArrowUpIcon } from "lucide-react";
 import {
   type ComponentProps,
-  type FormEvent,
   forwardRef,
   type HTMLAttributes,
   type KeyboardEvent,
@@ -129,15 +128,6 @@ export const PromptInputToolbar = ({
   />
 );
 
-export type PromptInputToolsProps = HTMLAttributes<HTMLDivElement>;
-
-export const PromptInputTools = ({
-  className,
-  ...props
-}: PromptInputToolsProps) => (
-  <div className={cn("flex items-center gap-1", className)} {...props} />
-);
-
 export type PromptInputSubmitProps = ComponentProps<typeof Button> & {
   /** When true (default), shows an arrow-up icon. Pass children to override. */
   defaultIcon?: boolean;
@@ -164,7 +154,3 @@ export const PromptInputSubmit = ({
     <span className="sr-only">Send</span>
   </Button>
 );
-
-export type PromptInputBodyProps = ComponentProps<"form"> & {
-  onSubmit?: (e: FormEvent<HTMLFormElement>) => void;
-};

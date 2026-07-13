@@ -24,14 +24,21 @@ import {
 import { renderToolCard } from "./tool-cards";
 
 /** Filter to messages worth rendering (non-empty text, reasoning, or tool
- * parts). Same rule the full-page chats apply inline. */
-export function renderableMessages(msgs: UIMessage[]): UIMessage[] {
+ * parts). Single source of truth for all three chat surfaces.
+ *
+ * `includeReasoning` (default true): staff surfaces render reasoning parts, so
+ * a reasoning-only message is worth showing. Customer chat passes `false` — it
+ * hides reasoning, so a reasoning-only message would render as an empty bubble. */
+export function renderableMessages(
+  msgs: UIMessage[],
+  { includeReasoning = true }: { includeReasoning?: boolean } = {},
+): UIMessage[] {
   return msgs.filter((msg) => {
     if (msg.role !== "user" && msg.role !== "assistant") return false;
     return msg.parts.some(
       (p) =>
         (p.type === "text" && p.text.trim().length > 0) ||
-        p.type === "reasoning" ||
+        (includeReasoning && p.type === "reasoning") ||
         isToolUIPart(p),
     );
   });

@@ -22,7 +22,12 @@ const loadMermaid = () => {
   return mermaidPromise;
 };
 
-const MATH_RE = /\$\$[\s\S]+?\$\$|\$[^$\n]+\$|\\\(|\\\[/;
+// Only $$…$$, \( and \[ trigger KaTeX. The single-$ form is deliberately
+// excluded: this is an auto-repair estimate chat, the money-densest text there
+// is ("labor $180, parts $95") — a single-$ alternative would match a pair of
+// prices and lazy-load ~280KB of KaTeX (and risk rendering the span between two
+// prices as math). The mechanic agents never emit inline LaTeX.
+const MATH_RE = /\$\$[\s\S]+?\$\$|\\\(|\\\[/;
 const MERMAID_RE = /```mermaid\s/;
 
 export function useStreamdownPlugins(
