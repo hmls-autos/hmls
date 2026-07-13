@@ -1,6 +1,6 @@
 // apps/agent/src/skills/estimate/types.ts
 
-import type { ItemTier } from "@hmls/shared/db/schema";
+import type { ItemTier, PartReference } from "@hmls/shared/db/schema";
 
 export interface ServiceInput {
   name: string;
@@ -24,6 +24,8 @@ export interface ServiceInput {
    *  internal tech-prep (tools / difficulty / HV-safety) from the repair_jobs
    *  catalog onto the labor item. Optional; enrichment is skipped if absent. */
   jobSlug?: string;
+  /** Exact catalog option(s) that supplied this service's parts pricing. */
+  referenceParts?: PartReference[];
 }
 
 export interface LineItem {

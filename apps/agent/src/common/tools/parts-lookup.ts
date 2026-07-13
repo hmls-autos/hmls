@@ -492,7 +492,7 @@ function buildFallbackPaths(
 // ── HTML parsing for parts listings ──
 // Works on both full pages and AJAX HTML fragments.
 
-interface PartResult {
+export interface PartResult {
   brand: string;
   partNumber: string;
   description: string;
@@ -689,7 +689,7 @@ export const lookupPartsPrice = {
 
 // ── Result formatting ──
 
-function formatResults(
+export function formatResults(
   vehicle: string,
   partName: string,
   results: PartResult[],
@@ -712,15 +712,20 @@ function formatResults(
 
   // Always use premium tier for estimates. Fall back to daily driver, then economy.
   const preferredTier = premium.length > 0 ? premium : daily.length > 0 ? daily : economy;
-  const recommendedPrice = preferredTier.length > 0
-    ? preferredTier[Math.floor(preferredTier.length / 2)].price
-    : results[Math.floor(results.length / 2)].price;
+  const recommendedPart = preferredTier.length > 0
+    ? preferredTier[Math.floor(preferredTier.length / 2)]
+    : results[Math.floor(results.length / 2)];
 
   return toolResult({
     found: true,
     vehicle,
     partName,
-    recommendedPrice,
+    recommendedPrice: recommendedPart.price,
+    recommendedPart: {
+      partName,
+      source: "rockauto" as const,
+      ...formatPart(recommendedPart),
+    },
     recommendedTier: premium.length > 0 ? "Premium" : daily.length > 0 ? "Daily Driver" : "Economy",
     premium: premium.slice(0, 3).map(formatPart),
     dailyDriver: daily.slice(0, 3).map(formatPart),
