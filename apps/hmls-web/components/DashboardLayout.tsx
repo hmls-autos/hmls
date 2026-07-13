@@ -17,6 +17,7 @@ export function DashboardLayout({
   maxWidth = "max-w-5xl",
   adminCheck,
   mechanicCheck,
+  portalCheck,
   adminPanelLabel,
   fullHeight,
   children,
@@ -25,6 +26,7 @@ export function DashboardLayout({
   maxWidth?: string;
   adminCheck?: boolean;
   mechanicCheck?: boolean;
+  portalCheck?: boolean;
   adminPanelLabel?: string;
   /** When true, children fill the remaining height with no padding wrapper */
   fullHeight?: boolean;
@@ -41,7 +43,9 @@ export function DashboardLayout({
     ? "/api/admin/me"
     : mechanicCheck
       ? "/api/mechanic/me"
-      : null;
+      : portalCheck
+        ? "/api/portal/me"
+        : null;
   const { error: adminError, isLoading: adminLoading } = useSWR(
     guardEndpoint && (session || skipAuth) ? guardEndpoint : null,
     (p: string) => api.get<unknown>(p),
@@ -57,7 +61,8 @@ export function DashboardLayout({
 
   const isLoading =
     !skipAuth &&
-    (authLoading || ((adminCheck || mechanicCheck) && adminLoading));
+    (authLoading ||
+      ((adminCheck || mechanicCheck || portalCheck) && adminLoading));
 
   if (isLoading) {
     return (
@@ -69,8 +74,12 @@ export function DashboardLayout({
 
   if (!skipAuth && !session) return null;
 
-  if (!skipAuth && (adminCheck || mechanicCheck) && adminError) {
-    const deniedRoleLabel = adminCheck ? "admin" : "mechanic";
+  if (!skipAuth && (adminCheck || mechanicCheck || portalCheck) && adminError) {
+    const deniedMessage = adminCheck
+      ? "You don't have admin access."
+      : mechanicCheck
+        ? "You don't have mechanic access."
+        : "No customer account is linked to this login.";
     return (
       <main className="flex flex-1 items-center justify-center">
         <div className="text-center">
@@ -78,9 +87,7 @@ export function DashboardLayout({
           <h1 className="text-lg font-display font-semibold text-foreground mb-1">
             Access Denied
           </h1>
-          <p className="text-sm text-muted-foreground">
-            You don&apos;t have {deniedRoleLabel} access.
-          </p>
+          <p className="text-sm text-muted-foreground">{deniedMessage}</p>
         </div>
       </main>
     );
