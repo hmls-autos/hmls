@@ -2,7 +2,7 @@
 
 import { BarChart3 } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import useSWR from "swr";
 import { useAuth } from "@/components/AuthProvider";
@@ -35,6 +35,7 @@ export function DashboardLayout({
   const api = useApi();
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const guardEndpoint = adminCheck
     ? "/api/admin/me"
@@ -48,9 +49,11 @@ export function DashboardLayout({
 
   useEffect(() => {
     if (!skipAuth && !authLoading && !session) {
-      router.push("/login");
+      const qs = searchParams.toString();
+      const next = qs ? `${pathname}?${qs}` : pathname;
+      router.push(`/login?next=${encodeURIComponent(next)}`);
     }
-  }, [skipAuth, authLoading, session, router]);
+  }, [skipAuth, authLoading, session, router, pathname, searchParams]);
 
   const isLoading =
     !skipAuth &&

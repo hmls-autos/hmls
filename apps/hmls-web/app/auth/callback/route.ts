@@ -1,15 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { safeNextPath } from "@/lib/auth-redirect";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/chat";
-
-  const redirectTo = request.nextUrl.clone();
-  redirectTo.pathname = next;
-  redirectTo.searchParams.delete("code");
-  redirectTo.searchParams.delete("next");
+  const next = safeNextPath(searchParams.get("next")) ?? "/chat";
 
   if (code) {
     const supabase = await createClient();
@@ -17,12 +13,12 @@ export async function GET(request: NextRequest) {
 
     if (!error) {
       // Customer record is auto-created/linked by DB trigger on auth.users INSERT
-      return NextResponse.redirect(redirectTo);
+      return NextResponse.redirect(new URL(next, request.nextUrl.origin));
     }
   }
 
   // Auth failed — redirect to login with error
-  redirectTo.pathname = "/login";
-  redirectTo.searchParams.set("error", "Could not authenticate");
-  return NextResponse.redirect(redirectTo);
+  const failure = new URL("/login", request.nextUrl.origin);
+  failure.searchParams.set("error", "Could not authenticate");
+  return NextResponse.redirect(failure);
 }

@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import { roleHomePath, safeNextPath } from "@/lib/auth-redirect";
 
 function GoogleLogo() {
   return (
@@ -36,9 +37,10 @@ function GoogleLogo() {
 
 type Step = "email" | "password";
 
-export default function LoginPage() {
+function LoginPageInner() {
   const router = useRouter();
-  const { supabase, session } = useAuth();
+  const { supabase, session, isAdmin, isMechanic } = useAuth();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [step, setStep] = useState<Step>("email");
@@ -48,19 +50,27 @@ export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "signup">("login");
 
   useEffect(() => {
-    if (session) {
-      router.push("/chat");
-    }
-  }, [session, router]);
+    if (!session) return;
+    const next = safeNextPath(searchParams.get("next"));
+    router.push(next ?? roleHomePath({ isAdmin, isMechanic }));
+  }, [session, isAdmin, isMechanic, searchParams, router]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const callbackError = params.get("error");
     if (callbackError) {
       setError(callbackError);
-      window.history.replaceState({}, "", "/login");
+      params.delete("error");
+      const qs = params.toString();
+      window.history.replaceState({}, "", qs ? `/login?${qs}` : "/login");
     }
   }, []);
+
+  const nextParam = safeNextPath(searchParams.get("next"));
+  const callbackUrl = () =>
+    `${window.location.origin}/auth/callback${
+      nextParam ? `?next=${encodeURIComponent(nextParam)}` : ""
+    }`;
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
@@ -68,7 +78,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: callbackUrl(),
       },
     });
     if (error) {
@@ -102,7 +112,7 @@ export default function LoginPage() {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            emailRedirectTo: callbackUrl(),
           },
         });
         if (error) throw error;
@@ -291,5 +301,17 @@ export default function LoginPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex flex-1 flex-col items-center justify-center bg-background text-text px-4 pb-16" />
+      }
+    >
+      <LoginPageInner />
+    </Suspense>
   );
 }
