@@ -1,5 +1,4 @@
 import {
-  Calendar,
   CalendarCheck,
   CalendarDays,
   CalendarOff,
@@ -31,7 +30,6 @@ export const adminNavItems: NavItem[] = [
 export const portalNavItems: NavItem[] = [
   { href: "/portal", label: "Dashboard", icon: LayoutDashboard },
   { href: "/portal/orders", label: "My Orders", icon: ClipboardList },
-  { href: "/portal/bookings", label: "Bookings", icon: Calendar },
   { href: "/portal/profile", label: "Profile", icon: User },
 ];
 
@@ -66,6 +64,7 @@ export const sectionNavItems: Record<Section, NavItem[]> = {
 // define their own copies.
 export const marketingLinks = [
   { href: "/", label: "Home" },
+  { href: "/services", label: "Services" },
   { href: "/contact", label: "Contact" },
 ] as const;
 

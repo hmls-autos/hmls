@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
+  applyVirtualOrderFilters,
   getAdminOrderDetailHref,
   getAdminOrdersListHref,
   parseAdminOrdersFilter,
   parseAdminOrdersSearch,
+  parseAdminOrdersToday,
 } from "./admin-order-filters";
 
 describe("admin order filter URL helpers", () => {
@@ -63,6 +65,41 @@ describe("admin order filter URL helpers", () => {
     );
     expect(getAdminOrderDetailHref(380, "", "brake")).toBe(
       "/admin/orders/380?search=brake",
+    );
+  });
+});
+
+describe("virtual filters", () => {
+  const now = new Date("2026-07-12T15:00:00");
+  const rows = [
+    { id: 1, status: "approved", scheduledAt: "2026-07-12T09:00:00" },
+    { id: 2, status: "approved", scheduledAt: "2026-07-13T09:00:00" },
+    { id: 3, status: "in_progress", scheduledAt: null },
+    { id: 4, status: "draft", scheduledAt: "2026-07-12T10:00:00" },
+  ];
+
+  test("'active' parses and unions approved + in_progress", () => {
+    expect(parseAdminOrdersFilter("active")).toBe("active");
+    expect(
+      applyVirtualOrderFilters(rows, "active", false, now).map((r) => r.id),
+    ).toEqual([1, 2, 3]);
+  });
+
+  test("today=1 keeps only rows scheduled within the local day", () => {
+    expect(parseAdminOrdersToday("1")).toBe(true);
+    expect(parseAdminOrdersToday(null)).toBe(false);
+    expect(
+      applyVirtualOrderFilters(rows, "active", true, now).map((r) => r.id),
+    ).toEqual([1]);
+  });
+
+  test("plain status filters pass through untouched", () => {
+    expect(applyVirtualOrderFilters(rows, "draft", false, now)).toHaveLength(4);
+  });
+
+  test("href builder carries today", () => {
+    expect(getAdminOrdersListHref("active", undefined, { today: true })).toBe(
+      "/admin/orders?status=active&today=1",
     );
   });
 });

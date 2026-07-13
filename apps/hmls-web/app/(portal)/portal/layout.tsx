@@ -12,7 +12,9 @@ export default function PortalLayout({
   return (
     <>
       <Navbar />
-      <DashboardLayout navItems={portalNavItems}>{children}</DashboardLayout>
+      <DashboardLayout navItems={portalNavItems} portalCheck>
+        {children}
+      </DashboardLayout>
     </>
   );
 }

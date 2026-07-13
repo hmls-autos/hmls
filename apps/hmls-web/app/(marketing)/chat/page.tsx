@@ -105,7 +105,7 @@ function ChatPageInner() {
     if (skipAuth) return;
     if (authLoading) return;
     if (!session) {
-      router.replace("/login");
+      router.replace(`/login?next=${encodeURIComponent("/chat")}`);
       return;
     }
     if (isAdmin) {

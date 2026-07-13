@@ -108,7 +108,7 @@ export default function ThemeToggle() {
       {open && (
         <div
           role="menu"
-          className="absolute left-0 md:left-auto md:right-0 bottom-full mb-2 md:bottom-auto md:top-full md:mb-0 md:mt-2 w-36 rounded-lg border border-border bg-surface shadow-lg py-1 z-50"
+          className="absolute right-0 bottom-full mb-2 md:bottom-auto md:top-full md:mb-0 md:mt-2 w-36 rounded-lg border border-border bg-surface shadow-lg py-1 z-50"
         >
           {options.map(({ value, label, icon: Icon }) => (
             <button

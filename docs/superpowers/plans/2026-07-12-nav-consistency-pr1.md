@@ -1,15 +1,17 @@
 # Nav Consistency PR-1 (nav layer) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
+> (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make every navigation surface (desktop Navbar, MobileNav) obey one set of role/section
 visibility rules, with the nav vocabulary defined once in `lib/nav.ts`.
 
-**Architecture:** `lib/nav.ts` becomes the single source for nav items, link constants, and
-section detection. `Navbar.tsx` (desktop) and `MobileNav.tsx` (mobile) both consume it and apply
-identical rules: inside a section show section nav + other-section links + Theme/Sign Out;
-marketing links only outside sections; Mechanic link for mechanics only; one `/chat` entry
-("Get a Quote") for non-staff; sign-out lands on `/`.
+**Architecture:** `lib/nav.ts` becomes the single source for nav items, link constants, and section
+detection. `Navbar.tsx` (desktop) and `MobileNav.tsx` (mobile) both consume it and apply identical
+rules: inside a section show section nav + other-section links + Theme/Sign Out; marketing links
+only outside sections; Mechanic link for mechanics only; one `/chat` entry ("Get a Quote") for
+non-staff; sign-out lands on `/`.
 
 **Tech Stack:** Next.js 16 App Router (client components), Tailwind, Bun test for `lib/`.
 
@@ -22,8 +24,8 @@ marketing links only outside sections; Mechanic link for mechanics only; one `/c
 - TypeScript strict; `bun run typecheck` must pass.
 - Commits: conventional format (`feat(web): …`, `refactor(web): …`).
 - All paths below are relative to `apps/hmls-web/` unless prefixed with `docs/`.
-- Component changes have no unit-test harness in this repo — verify via typecheck + build +
-  browser preview; only `lib/` logic gets bun tests.
+- Component changes have no unit-test harness in this repo — verify via typecheck + build + browser
+  preview; only `lib/` logic gets bun tests.
 - Do NOT commit `.claude/launch.json` (session-local dev config).
 
 ---
@@ -34,14 +36,16 @@ The worktree already contains the mobile-menu rework (uncommitted). Lock it in a
 commit so later tasks diff cleanly.
 
 **Files (already modified, just commit):**
+
 - `components/DashboardLayout.tsx`, `components/MobileNav.tsx`, `components/Navbar.tsx`
 - `lib/nav.ts`
-- `app/(admin)/admin/layout.tsx`, `app/(portal)/portal/layout.tsx`, `app/(mechanic)/mechanic/layout.tsx`
+- `app/(admin)/admin/layout.tsx`, `app/(portal)/portal/layout.tsx`,
+  `app/(mechanic)/mechanic/layout.tsx`
 
 - [ ] **Step 1: Verify the tree state and gates**
 
-Run: `cd apps/hmls-web && bun run lint && bun run typecheck && bun run test`
-Expected: all pass (they passed at the end of the interactive session).
+Run: `cd apps/hmls-web && bun run lint && bun run typecheck && bun run test` Expected: all pass
+(they passed at the end of the interactive session).
 
 - [ ] **Step 2: Commit (exclude .claude/launch.json)**
 
@@ -60,15 +64,17 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 1: `lib/nav.ts` — section detection + shared link constants (+ "My Jobs" rename)
 
 **Files:**
+
 - Modify: `lib/nav.ts`
 - Test: `lib/nav.test.ts` (new)
 
 **Interfaces:**
+
 - Produces: `type Section = "admin" | "portal" | "mechanic"`;
   `detectSection(pathname: string, roles: { isAdmin: boolean; isMechanic: boolean }): Section | null`;
   `sectionNavItems: Record<Section, NavItem[]>`;
-  `marketingLinks: readonly { href: string; label: string }[]`;
-  `portalLink`, `adminLink`, `mechanicLink`, `chatCta`: `{ href: string; label: string }`.
+  `marketingLinks: readonly { href: string; label: string }[]`; `portalLink`, `adminLink`,
+  `mechanicLink`, `chatCta`: `{ href: string; label: string }`.
 - Consumes: existing `NavItem`, `adminNavItems`, `portalNavItems`, `mechanicNavItems`.
 
 - [ ] **Step 1: Write the failing test**
@@ -117,8 +123,8 @@ describe("nav vocabulary", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd apps/hmls-web && bun test lib/nav.test.ts`
-Expected: FAIL — `detectSection` / `sectionNavItems` not exported; label is "My Bookings".
+Run: `cd apps/hmls-web && bun test lib/nav.test.ts` Expected: FAIL — `detectSection` /
+`sectionNavItems` not exported; label is "My Bookings".
 
 - [ ] **Step 3: Implement in `lib/nav.ts`**
 
@@ -172,8 +178,7 @@ export const chatCta = { href: "/chat", label: "Get a Quote" } as const;
 
 - [ ] **Step 4: Run tests**
 
-Run: `cd apps/hmls-web && bun test lib/nav.test.ts`
-Expected: PASS.
+Run: `cd apps/hmls-web && bun test lib/nav.test.ts` Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
@@ -189,26 +194,32 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 2: MobileNav — consume shared nav, ShopSwitcher for owners, single /chat entry
 
 **Files:**
+
 - Modify: `components/MobileNav.tsx`
 
 **Interfaces:**
+
 - Consumes (from Task 1): `detectSection`, `sectionNavItems`, `marketingLinks`, `portalLink`,
   `adminLink`, `mechanicLink`, `chatCta`, `isSectionNavActive`.
-- Consumes: `ShopSwitcher` from `@/components/admin/ShopSwitcher` (self-hides unless owner with shops).
+- Consumes: `ShopSwitcher` from `@/components/admin/ShopSwitcher` (self-hides unless owner with
+  shops).
 
 Behavior after this task (mobile menu):
-- anonymous/customer marketing: Home, Contact, [My Portal if logged in], Theme, Sign In/Out, Get a Quote.
-- customer in /portal: portal nav, Theme, Sign Out, Get a Quote (portal is customer space — CTA stays).
-- mechanic anywhere: never sees Get a Quote. In /mechanic: mechanic nav + My Portal + Theme/Sign
-  Out (hiding My Portal for mechanics lands in PR-2, together with the portal-403 fix).
+
+- anonymous/customer marketing: Home, Contact, [My Portal if logged in], Theme, Sign In/Out, Get a
+  Quote.
+- customer in /portal: portal nav, Theme, Sign Out, Get a Quote (portal is customer space — CTA
+  stays).
+- mechanic anywhere: never sees Get a Quote. In /mechanic: mechanic nav + My Portal + Theme/Sign Out
+  (hiding My Portal for mechanics lands in PR-2, together with the portal-403 fix).
 - admin in /admin: admin nav, View as Customer, Theme, Sign Out.
 - owner: additionally a ShopSwitcher row above Theme, in every menu state.
 
 - [ ] **Step 1: Replace imports and local constants**
 
 Top of `components/MobileNav.tsx` — replace the current import block and constants
-(`marketingLinks`, `customerChatLink`, `portalLink`, `adminLink`, `mechanicLink` local consts all
-go away):
+(`marketingLinks`, `customerChatLink`, `portalLink`, `adminLink`, `mechanicLink` local consts all go
+away):
 
 ```tsx
 "use client";
@@ -237,38 +248,40 @@ import ThemeToggle from "./ThemeToggle";
 Replace the destructure and the section/subNav computation inside the component:
 
 ```tsx
-  const { user, supabase, isLoading, isAdmin, isMechanic, isOwner } = useAuth();
+const { user, supabase, isLoading, isAdmin, isMechanic, isOwner } = useAuth();
 ```
 
 ```tsx
-  // Section sub-nav — the single mobile menu carries the dashboard nav
-  // (the desktop sidebar's items) so dashboard pages don't need a second
-  // hamburger of their own. Inside a section the menu stays focused: section
-  // nav + links to the OTHER sections + theme/sign-out. Marketing links only
-  // show outside sections (the logo already links home).
-  const section = detectSection(pathname, { isAdmin, isMechanic });
-  const subNav = section ? sectionNavItems[section] : null;
-  const subNavRoot = subNav?.[0]?.href ?? "/";
+// Section sub-nav — the single mobile menu carries the dashboard nav
+// (the desktop sidebar's items) so dashboard pages don't need a second
+// hamburger of their own. Inside a section the menu stays focused: section
+// nav + links to the OTHER sections + theme/sign-out. Marketing links only
+// show outside sections (the logo already links home).
+const section = detectSection(pathname, { isAdmin, isMechanic });
+const subNav = section ? sectionNavItems[section] : null;
+const subNavRoot = subNav?.[0]?.href ?? "/";
 ```
 
 - [ ] **Step 3: Delete the plain "Chat" link block**
 
-Remove the whole `{!section && !isAdmin && (<Link href={customerChatLink.href} …>…</Link>)}`
-block (the one rendering the plain "Chat" text link between the marketing links and the
-`{user && …}` role links) — it duplicated the CTA.
+Remove the whole `{!section && !isAdmin && (<Link href={customerChatLink.href} …>…</Link>)}` block
+(the one rendering the plain "Chat" text link between the marketing links and the `{user && …}` role
+links) — it duplicated the CTA.
 
 - [ ] **Step 4: Add ShopSwitcher row above the Theme row**
 
 ```tsx
-            {isOwner && (
-              <div className="flex items-center gap-2">
-                <ShopSwitcher />
-              </div>
-            )}
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
-              <span className="text-sm text-text-secondary">Theme</span>
-            </div>
+{
+  isOwner && (
+    <div className="flex items-center gap-2">
+      <ShopSwitcher />
+    </div>
+  );
+}
+<div className="flex items-center gap-2">
+  <ThemeToggle />
+  <span className="text-sm text-text-secondary">Theme</span>
+</div>;
 ```
 
 - [ ] **Step 5: Re-gate the Get a Quote CTA and use chatCta**
@@ -276,21 +289,23 @@ block (the one rendering the plain "Chat" text link between the marketing links 
 Replace the bottom CTA block:
 
 ```tsx
-            {!isAdmin && !isMechanic && (
-              <Link
-                href={chatCta.href}
-                onClick={close}
-                className="px-4 py-3 bg-red-primary text-white text-center rounded-lg font-medium hover:bg-red-dark transition-colors"
-              >
-                {chatCta.label}
-              </Link>
-            )}
+{
+  !isAdmin && !isMechanic && (
+    <Link
+      href={chatCta.href}
+      onClick={close}
+      className="px-4 py-3 bg-red-primary text-white text-center rounded-lg font-medium hover:bg-red-dark transition-colors"
+    >
+      {chatCta.label}
+    </Link>
+  );
+}
 ```
 
 - [ ] **Step 6: Typecheck + lint**
 
-Run: `cd apps/hmls-web && bun run typecheck && bun run lint`
-Expected: PASS (no unused imports — `customerChatLink` local const must be gone).
+Run: `cd apps/hmls-web && bun run typecheck && bun run lint` Expected: PASS (no unused imports —
+`customerChatLink` local const must be gone).
 
 - [ ] **Step 7: Commit**
 
@@ -306,13 +321,16 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 3: Navbar (desktop) — section-aware, mechanic link for mechanics only
 
 **Files:**
+
 - Modify: `components/Navbar.tsx`
 
 **Interfaces:**
-- Consumes (Task 1): `detectSection`, `marketingLinks`, `portalLink`, `adminLink`,
-  `mechanicLink`, `chatCta`.
+
+- Consumes (Task 1): `detectSection`, `marketingLinks`, `portalLink`, `adminLink`, `mechanicLink`,
+  `chatCta`.
 
 Desktop rules after this task (mirrors mobile):
+
 - Inside a section: no Home/Contact, no current-section link; other-section links + ShopSwitcher
   (owner) + Theme + Sign Out (+ Get a Quote for customers in /portal).
 - Mechanic link: `isMechanic` only (admins 403 on /mechanic; owners always 403).
@@ -338,7 +356,7 @@ Inside the component, after the `useAuth()` destructure (which already provides 
 `isMechanic`, `isOwner`):
 
 ```tsx
-  const section = detectSection(pathname, { isAdmin, isMechanic });
+const section = detectSection(pathname, { isAdmin, isMechanic });
 ```
 
 - [ ] **Step 2: Rewrite the desktop nav block**
@@ -347,65 +365,68 @@ Replace the whole `{/* Desktop nav */}` div content with (link className helper 
 pattern — factor the ternary into a small local `linkCls(active: boolean)` to avoid five copies):
 
 ```tsx
-        {/* Desktop nav */}
-        <div className="hidden md:flex items-center gap-8">
-          {!section &&
-            marketingLinks.map(({ href, label }) => (
-              <Link key={href} href={href} prefetch={false} className={linkCls(pathname === href)}>
-                {label}
-              </Link>
-            ))}
-          {isUserLoggedIn && section !== "portal" && (
-            <Link href={portalLink.href} prefetch={false} className={linkCls(false)}>
-              {isAdmin ? "View as Customer" : portalLink.label}
-            </Link>
-          )}
-          {isAdmin && section !== "admin" && (
-            <Link href={adminLink.href} prefetch={false} className={linkCls(false)}>
-              {adminLink.label}
-            </Link>
-          )}
-          {isMechanic && section !== "mechanic" && (
-            <Link href={mechanicLink.href} prefetch={false} className={linkCls(false)}>
-              {mechanicLink.label}
-            </Link>
-          )}
-          {isOwner && <ShopSwitcher />}
-          <ThemeToggle />
-          {/* KEEP the existing `{!isLoading && (isUserLoggedIn ? <button…Sign Out…> : <Link…Sign In…>)}`
-              block here verbatim — only its onClick changes later, in Task 4. */}
-          {!isAdmin && !isMechanic && (
-            <Link
-              href={chatCta.href}
-              prefetch={false}
-              className="px-5 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
-            >
-              {chatCta.label}
-            </Link>
-          )}
-        </div>
+{/* Desktop nav */}
+<div className="hidden md:flex items-center gap-8">
+  {!section &&
+    marketingLinks.map(({ href, label }) => (
+      <Link key={href} href={href} prefetch={false} className={linkCls(pathname === href)}>
+        {label}
+      </Link>
+    ))}
+  {isUserLoggedIn && section !== "portal" && (
+    <Link href={portalLink.href} prefetch={false} className={linkCls(false)}>
+      {isAdmin ? "View as Customer" : portalLink.label}
+    </Link>
+  )}
+  {isAdmin && section !== "admin" && (
+    <Link href={adminLink.href} prefetch={false} className={linkCls(false)}>
+      {adminLink.label}
+    </Link>
+  )}
+  {isMechanic && section !== "mechanic" && (
+    <Link href={mechanicLink.href} prefetch={false} className={linkCls(false)}>
+      {mechanicLink.label}
+    </Link>
+  )}
+  {isOwner && <ShopSwitcher />}
+  <ThemeToggle />
+  {
+    /* KEEP the existing `{!isLoading && (isUserLoggedIn ? <button…Sign Out…> : <Link…Sign In…>)}`
+              block here verbatim — only its onClick changes later, in Task 4. */
+  }
+  {!isAdmin && !isMechanic && (
+    <Link
+      href={chatCta.href}
+      prefetch={false}
+      className="px-5 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+    >
+      {chatCta.label}
+    </Link>
+  )}
+</div>;
 ```
 
 with the helper defined above the `return`:
 
 ```tsx
-  const linkCls = (active: boolean) =>
-    `text-sm transition-colors rounded focus-visible:ring-2 focus-visible:ring-red-primary ${
-      active
-        ? "text-red-400"
-        : isTransparent
-          ? "text-white/70 hover:text-white"
-          : "text-text-secondary hover:text-text"
-    }`;
+const linkCls = (active: boolean) =>
+  `text-sm transition-colors rounded focus-visible:ring-2 focus-visible:ring-red-primary ${
+    active
+      ? "text-red-400"
+      : isTransparent
+      ? "text-white/70 hover:text-white"
+      : "text-text-secondary hover:text-text"
+  }`;
 ```
 
 Notes: the old active-state ternaries on Portal/Admin/Mechanic links are dead once the
-current-section link is suppressed (you can never be *in* the section a rendered link points to) —
+current-section link is suppressed (you can never be _in_ the section a rendered link points to) —
 pass `linkCls(false)`. Delete the stale comment about admins entering the mechanic panel.
 
 - [ ] **Step 3: Typecheck + lint + build**
 
-Run: `cd apps/hmls-web && bun run typecheck && bun run lint && infisical run --env=dev -- bun run build`
+Run:
+`cd apps/hmls-web && bun run typecheck && bun run lint && infisical run --env=dev -- bun run build`
 Expected: PASS.
 
 - [ ] **Step 4: Commit**
@@ -422,10 +443,12 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 4: Shared sign-out that lands on the homepage
 
 **Files:**
+
 - Create: `hooks/useSignOut.ts`
 - Modify: `components/Navbar.tsx` (sign-out button), `components/MobileNav.tsx` (sign-out button)
 
 **Interfaces:**
+
 - Produces: `useSignOut(): () => Promise<void>` — signs out then `router.push("/")`.
 
 - [ ] **Step 1: Create the hook**
@@ -453,23 +476,21 @@ export function useSignOut() {
 
 - [ ] **Step 2: Wire into both navs**
 
-Navbar: `const signOut = useSignOut();` and the button becomes
-`onClick={() => void signOut()}` (drop the inline `supabase.auth.signOut()`).
-MobileNav: same, keeping the `close()` call:
+Navbar: `const signOut = useSignOut();` and the button becomes `onClick={() => void signOut()}`
+(drop the inline `supabase.auth.signOut()`). MobileNav: same, keeping the `close()` call:
 
 ```tsx
-                <button
-                  type="button"
-                  onClick={() => {
-                    void signOut();
-                    close();
-                  }}
+<button
+  type="button"
+  onClick={() => {
+    void signOut();
+    close();
+  }}
 ```
 
 - [ ] **Step 3: Typecheck + lint**
 
-Run: `cd apps/hmls-web && bun run typecheck && bun run lint`
-Expected: PASS.
+Run: `cd apps/hmls-web && bun run typecheck && bun run lint` Expected: PASS.
 
 - [ ] **Step 4: Commit**
 
@@ -485,16 +506,17 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 5: Portal orders empty state gets a "Start a chat" action
 
 **Files:**
+
 - Modify: `app/(portal)/portal/orders/page.tsx:181-184`
 
 - [ ] **Step 1: Pass the action prop**
 
 ```tsx
-        <EmptyState
-          icon={ClipboardList}
-          message="No orders yet. Start a chat to get an estimate!"
-          action={{ label: "Start a chat", href: "/chat" }}
-        />
+<EmptyState
+  icon={ClipboardList}
+  message="No orders yet. Start a chat to get an estimate!"
+  action={{ label: "Start a chat", href: "/chat" }}
+/>;
 ```
 
 - [ ] **Step 2: Typecheck, commit**
@@ -514,18 +536,18 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Full local CI**
 
-Run from `apps/hmls-web`: `bun run lint && bun run typecheck && bun run test && infisical run --env=dev -- bun run build`
-Then from repo root: `deno task check` (unchanged code, but it's the pre-push contract).
-Expected: all pass.
+Run from `apps/hmls-web`:
+`bun run lint && bun run typecheck && bun run test && infisical run --env=dev -- bun run build` Then
+from repo root: `deno task check` (unchanged code, but it's the pre-push contract). Expected: all
+pass.
 
 - [ ] **Step 2: Browser QA (preview server, anonymous flows)**
 
-With the dev server (`.claude/launch.json` config "web"): at mobile width open `/` menu
-(expect Home/Contact/Theme/Sign In/Get a Quote — NO plain Chat link), `/portal` menu (portal nav
-with NO Bookings label change yet — Bookings stays until PR-2; Theme/Sign In/Get a Quote). At
-desktop width check `/` (marketing links + Get a Quote) and `/portal` (no Home/Contact, no
-My Portal self-link). Role-gated states (admin/owner/mechanic) are verified by code review — no
-local role simulation.
+With the dev server (`.claude/launch.json` config "web"): at mobile width open `/` menu (expect
+Home/Contact/Theme/Sign In/Get a Quote — NO plain Chat link), `/portal` menu (portal nav with NO
+Bookings label change yet — Bookings stays until PR-2; Theme/Sign In/Get a Quote). At desktop width
+check `/` (marketing links + Get a Quote) and `/portal` (no Home/Contact, no My Portal self-link).
+Role-gated states (admin/owner/mechanic) are verified by code review — no local role simulation.
 
 - [ ] **Step 3: Push and open PR-1**
 
