@@ -176,8 +176,9 @@ export default function OrderDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb + back, timestamps opposite */}
-      <div className="flex items-center justify-between gap-3">
+      {/* Breadcrumb + back, timestamps opposite. Stacks below sm so the
+          breadcrumb and the two datetime strings don't cram one row on phones. */}
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
