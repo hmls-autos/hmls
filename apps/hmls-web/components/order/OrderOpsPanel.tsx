@@ -1,15 +1,11 @@
 "use client";
 
 import type { Order } from "@hmls/shared/db/types";
-import { STATUS_PROFILES } from "@hmls/shared/order/profiles";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import {
-  ACTION_REGISTRY,
   leadAction,
   type OrderInvoker,
+  visibleOpsActions,
 } from "@/lib/order-actions";
-import { canonicalStatus } from "@/lib/status-display";
 import { ActionButton } from "./ActionButton";
 import { DialogHost } from "./DialogHost";
 
@@ -21,85 +17,53 @@ type Props = {
 };
 
 // Schedule / mechanic edits have a contextual home in the Appointment section
-// (ScheduleSection), shown whenever schedule is editable. Keep the Actions
-// panel to lifecycle transitions only so the two don't render the same
+// (ScheduleSection), shown whenever schedule is editable. Keep this row to
+// lifecycle transitions only so the two don't render the same
 // "Reschedule" / "Reassign" buttons side by side.
-const INLINE_ACTIONS = new Set(["set_time", "reschedule", "reassign_mechanic"]);
 
+/** Inline lifecycle-action row for the order title bar — quiet actions first,
+ *  the lead action last (rightmost). Also mounts DialogHost, so any surface
+ *  that calls `invoker.openDialog` (e.g. ScheduleSection) relies on this
+ *  rendering whenever the order is non-terminal. */
 export function OrderOpsPanel({
   order,
   invoker,
   revalidate,
   suggestedDurationMinutes,
 }: Props) {
-  // Canonicalize so window-period legacy rows ('scheduled'/'revised') get
-  // their collapsed profile; a row with an unknown status (corrupt data)
-  // shouldn't crash the page, so bail on null.
-  const status = canonicalStatus(order.status);
-  if (!status) return null;
-  const profile = STATUS_PROFILES[status];
-
-  const visible = profile.actions
-    .filter((id) => !INLINE_ACTIONS.has(id))
-    .map((id) => ACTION_REGISTRY[id])
-    .filter((a) => a.visible(order));
+  const visible = visibleOpsActions(order);
+  // Nothing to show on terminal statuses with no actions.
+  if (visible.length === 0) return null;
 
   const primary = leadAction(order);
-  const secondary = visible.filter(
-    (a) => a !== primary && a.variant(order) === "secondary",
-  );
-  const danger = visible.filter(
-    (a) => a !== primary && a.variant(order) === "danger",
-  );
-
-  // Nothing to show on terminal statuses with no actions.
-  if (!primary && secondary.length === 0 && danger.length === 0) return null;
+  const rest = visible.filter((a) => a !== primary);
 
   return (
-    <>
-      <Card className="gap-0 py-0 border-0">
-        <CardHeader className="px-4 py-4">
-          <CardTitle className="text-sm">Actions</CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-4">
-          <div className="flex flex-col gap-2">
-            {primary && (
-              <ActionButton
-                action={primary}
-                order={order}
-                onClick={invoker.invoke}
-                disabled={invoker.transitioning}
-                prominent
-              />
-            )}
-            {secondary.map((a) => (
-              <ActionButton
-                key={a.id}
-                action={a}
-                order={order}
-                onClick={invoker.invoke}
-                disabled={invoker.transitioning}
-              />
-            ))}
-            {danger.length > 0 && <Separator className="my-1" />}
-            {danger.map((a) => (
-              <ActionButton
-                key={a.id}
-                action={a}
-                order={order}
-                onClick={invoker.invoke}
-                disabled={invoker.transitioning}
-              />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+    <div className="flex items-center gap-1.5 shrink-0">
+      {rest.map((a) => (
+        <ActionButton
+          key={a.id}
+          action={a}
+          order={order}
+          onClick={invoker.invoke}
+          disabled={invoker.transitioning}
+        />
+      ))}
+      {primary && (
+        <ActionButton
+          action={primary}
+          order={order}
+          onClick={invoker.invoke}
+          disabled={invoker.transitioning}
+          prominent
+        />
+      )}
       <DialogHost
         order={order}
         invoker={invoker}
         revalidate={revalidate}
         suggestedDurationMinutes={suggestedDurationMinutes}
       />
-    </>
+    </div>
   );
 }

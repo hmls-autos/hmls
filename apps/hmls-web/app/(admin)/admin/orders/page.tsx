@@ -16,6 +16,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -69,11 +75,15 @@ function OrderStatusBadge({ entry }: { entry: StatusConfig }) {
 /* ── Grouped filters (7-state machine — scheduling is a property of
       `approved`, revisions are drafts; see orderSubBadge) ─────────────── */
 
+// Chip labels reuse the ORDER_STATUS badge vocabulary — the chips and the row
+// badges name the same state on the same screen, so they must agree. (The old
+// "Pending Review" chip was also wrong: the draft bucket includes "Revising"
+// pull-backs, which are not pending review.)
 const FILTER_GROUPS = [
   { value: "", label: "All" },
   { value: "active", label: "Active" },
-  { value: "draft", label: "Pending Review" },
-  { value: "estimated", label: "Sent" },
+  { value: "draft", label: "Draft" },
+  { value: "estimated", label: "Estimated" },
   { value: "approved", label: "Approved" },
   { value: "in_progress", label: "In Progress" },
   { value: "completed", label: "Completed" },
@@ -83,6 +93,10 @@ const MORE_FILTERS = [
   { value: "declined", label: "Declined" },
   { value: "cancelled", label: "Cancelled" },
 ] satisfies { value: AdminOrdersFilter; label: string }[];
+
+const FILTER_LABEL = new Map<AdminOrdersFilter, string>(
+  [...FILTER_GROUPS, ...MORE_FILTERS].map((f) => [f.value, f.label]),
+);
 
 /* ── Manual create order dialog ──────────────────────────────────────── */
 
@@ -588,7 +602,6 @@ export default function OrdersPage() {
   const [searchInput, setSearchInput] = useState(urlSearch);
   // 300ms debounce so fetch + URL sync only fire after the user pauses typing.
   const debouncedSearch = useDebouncedValue(searchInput, 300);
-  const [showMore, setShowMore] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   // 'active' is client-side: fetch unfiltered, narrow below.
   const gatewayStatus = filter === "active" ? undefined : filter || undefined;
@@ -687,42 +700,36 @@ export default function OrdersPage() {
             </button>
           );
         })}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowMore((v) => !v)}
-            className={cn(
-              "text-xs font-medium px-3 py-1.5 rounded-full transition-colors",
-              isMoreActive
-                ? "bg-primary text-white"
-                : "bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted",
-            )}
-          >
-            More {showMore ? "\u25B2" : "\u25BC"}
-          </button>
-          {showMore && (
-            <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-10 py-1 min-w-[140px]">
-              {MORE_FILTERS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => {
-                    setFilter(opt.value);
-                    setShowMore(false);
-                  }}
-                  className={cn(
-                    "w-full text-left text-xs px-3 py-1.5 hover:bg-muted transition-colors",
-                    filter === opt.value
-                      ? "text-primary font-medium"
-                      : "text-muted-foreground",
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                "text-xs font-medium px-3 py-1.5 rounded-full transition-colors",
+                isMoreActive
+                  ? "bg-primary text-white"
+                  : "bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted",
+              )}
+            >
+              {/* Surface which More-filter is active instead of a bare "More". */}
+              {isMoreActive ? FILTER_LABEL.get(filter) : "More"} {"\u25BC"}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {MORE_FILTERS.map((opt) => (
+              <DropdownMenuItem
+                key={opt.value}
+                onSelect={() => setFilter(opt.value)}
+                className={cn(
+                  "text-xs",
+                  filter === opt.value && "text-primary font-medium",
+                )}
+              >
+                {opt.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
         {today && (
           <Button
             variant="secondary"
@@ -748,7 +755,7 @@ export default function OrdersPage() {
               {debouncedSearch
                 ? `No orders match "${debouncedSearch}".`
                 : filter
-                  ? `No ${filter} orders.`
+                  ? `No ${(FILTER_LABEL.get(filter) ?? filter).toLowerCase()} orders.`
                   : "No orders yet."}
             </p>
           </CardContent>

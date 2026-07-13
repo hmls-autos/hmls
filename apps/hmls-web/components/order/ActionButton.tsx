@@ -9,10 +9,8 @@ type Props = {
   action: ActionDescriptor;
   order: Order;
   onClick(action: ActionDescriptor): void;
-  /** Render large/featured (banner button or panel primary slot). */
+  /** Render featured (the lead-action slot). */
   prominent?: boolean;
-  /** Banner styling — red background for the draft-review banner. */
-  banner?: boolean;
   disabled?: boolean;
 };
 
@@ -21,7 +19,6 @@ export function ActionButton({
   order,
   onClick,
   prominent,
-  banner,
   disabled,
 }: Props) {
   const variant = action.variant(order);
@@ -32,7 +29,7 @@ export function ActionButton({
   const hint = !actionEnabled ? action.disabledHint?.(order) : undefined;
 
   return (
-    <span title={hint} className="w-full">
+    <span title={hint}>
       <Button
         variant={
           variant === "danger" ? "outline" : prominent ? "default" : "ghost"
@@ -41,19 +38,12 @@ export function ActionButton({
         disabled={!isEnabled}
         onClick={() => onClick(action)}
         className={cn(
-          "w-full justify-center",
           variant === "danger" &&
             "text-destructive border-destructive/30 hover:bg-destructive/10",
-          banner && "bg-red-600 hover:bg-red-700 text-white",
         )}
       >
         {label}
       </Button>
-      {hint && (
-        <span className="mt-1 block text-center text-[10px] text-muted-foreground">
-          {hint}
-        </span>
-      )}
     </span>
   );
 }

@@ -6,6 +6,7 @@ import {
   ACTION_REGISTRY,
   type ActionContext,
   leadAction,
+  visibleOpsActions,
 } from "./order-actions";
 
 function makeOrder(overrides: Partial<Order> = {}): Order {
@@ -285,5 +286,33 @@ describe("leadAction", () => {
     // — none are variant "primary".
     const o = makeOrder({ status: "estimated" });
     expect(leadAction(o)).toBeUndefined();
+  });
+});
+
+describe("visibleOpsActions", () => {
+  test("cancelled has none — the page drops the sidebar column", () => {
+    expect(visibleOpsActions(makeOrder({ status: "cancelled" }))).toHaveLength(
+      0,
+    );
+  });
+
+  test("completed keeps mark_paid until paid, then empties", () => {
+    const unpaid = makeOrder({ status: "completed" });
+    expect(visibleOpsActions(unpaid).map((a) => a.id)).toEqual(["mark_paid"]);
+    const paid = makeOrder({
+      status: "completed",
+      paidAt: "2026-07-01T10:00:00Z",
+    });
+    expect(visibleOpsActions(paid)).toHaveLength(0);
+  });
+
+  test("inline schedule actions are excluded from the panel", () => {
+    const ids = visibleOpsActions(makeOrder({ status: "approved" })).map(
+      (a) => a.id,
+    );
+    expect(ids).not.toContain("set_time");
+    expect(ids).not.toContain("reschedule");
+    expect(ids).not.toContain("reassign_mechanic");
+    expect(ids).toContain("cancel_order");
   });
 });
