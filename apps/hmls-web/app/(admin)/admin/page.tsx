@@ -363,14 +363,14 @@ export default function AdminDashboard() {
             value={stats.todayJobs}
             sub="Scheduled for today"
             icon={CalendarClock}
-            href="/admin/orders?status=approved"
+            href="/admin/orders?status=active&today=1"
           />
           <ActionTile
             label="Active jobs"
             value={stats.activeJobs}
             sub="Booked or in progress"
             icon={PlayCircle}
-            href="/admin/orders?status=in_progress"
+            href="/admin/orders?status=active"
           />
         </div>
       </section>
@@ -389,7 +389,7 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
         <ListSection
           title="Upcoming bookings"
-          href="/admin/orders?status=approved"
+          href="/admin/orders?status=active"
           empty={upcomingOrders.length === 0}
         >
           {upcomingOrders.map((o) => {
