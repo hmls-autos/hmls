@@ -5,24 +5,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import { ShopSwitcher } from "@/components/admin/ShopSwitcher";
 import {
-  adminNavItems,
+  adminLink,
+  chatCta,
+  detectSection,
   isSectionNavActive,
-  mechanicNavItems,
-  portalNavItems,
+  marketingLinks,
+  mechanicLink,
+  portalLink,
+  sectionNavItems,
 } from "@/lib/nav";
 import ThemeToggle from "./ThemeToggle";
-
-const marketingLinks = [
-  { href: "/", label: "Home" },
-  { href: "/contact", label: "Contact" },
-];
-// Customer chat only — admins get Chat in the admin sub-nav above.
-const customerChatLink = { href: "/chat", label: "Chat" };
-
-const portalLink = { href: "/portal", label: "My Portal" };
-const adminLink = { href: "/admin", label: "Admin" };
-const mechanicLink = { href: "/mechanic", label: "Mechanic" };
 
 export default function MobileNav({
   isTransparent = false,
@@ -31,7 +25,7 @@ export default function MobileNav({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
-  const { user, supabase, isLoading, isAdmin, isMechanic } = useAuth();
+  const { user, supabase, isLoading, isAdmin, isMechanic, isOwner } = useAuth();
 
   const close = useCallback(() => setIsOpen(false), []);
 
@@ -55,21 +49,8 @@ export default function MobileNav({
   // hamburger of their own. Inside a section the menu stays focused: section
   // nav + links to the OTHER sections + theme/sign-out. Marketing links only
   // show outside sections (the logo already links home).
-  const section = pathname.startsWith("/portal")
-    ? "portal"
-    : pathname.startsWith("/admin") && isAdmin
-      ? "admin"
-      : pathname.startsWith("/mechanic") && (isMechanic || isAdmin)
-        ? "mechanic"
-        : null;
-  const subNav =
-    section === "portal"
-      ? portalNavItems
-      : section === "admin"
-        ? adminNavItems
-        : section === "mechanic"
-          ? mechanicNavItems
-          : null;
+  const section = detectSection(pathname, { isAdmin, isMechanic });
+  const subNav = section ? sectionNavItems[section] : null;
   const subNavRoot = subNav?.[0]?.href ?? "/";
 
   return (
@@ -139,19 +120,6 @@ export default function MobileNav({
                   {label}
                 </Link>
               ))}
-            {!section && !isAdmin && (
-              <Link
-                href={customerChatLink.href}
-                onClick={close}
-                className={`text-sm transition-colors ${
-                  pathname === customerChatLink.href
-                    ? "text-red-400 font-medium"
-                    : "text-text-secondary hover:text-text"
-                }`}
-              >
-                {customerChatLink.label}
-              </Link>
-            )}
             {user && (
               <>
                 {section !== "portal" && (
@@ -186,6 +154,11 @@ export default function MobileNav({
                 )}
               </>
             )}
+            {isOwner && (
+              <div className="flex items-center gap-2">
+                <ShopSwitcher />
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <ThemeToggle />
               <span className="text-sm text-text-secondary">Theme</span>
@@ -213,13 +186,13 @@ export default function MobileNav({
                   Sign In
                 </Link>
               ))}
-            {!isAdmin && (
+            {!isAdmin && !isMechanic && (
               <Link
-                href="/chat"
+                href={chatCta.href}
                 onClick={close}
                 className="px-4 py-3 bg-red-primary text-white text-center rounded-lg font-medium hover:bg-red-dark transition-colors"
               >
-                Get a Quote
+                {chatCta.label}
               </Link>
             )}
           </div>
