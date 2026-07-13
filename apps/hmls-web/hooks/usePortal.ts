@@ -3,7 +3,6 @@ import type {
   CustomerOrderEvent,
   Order,
   OrderIntake,
-  OrderWithIntake,
 } from "@hmls/shared/db/types";
 import useSWR from "swr";
 import { useApi } from "@/hooks/useApi";
@@ -12,9 +11,6 @@ import { useStableArray } from "@/lib/swr-stable";
 
 export type PortalCustomer = Customer;
 export type PortalOrder = Order;
-/** Bookings list rows carry intake inline (LEFT JOIN on the gateway side) so
- *  the bookings page can show the customer's own notes without an N+1. */
-export type PortalBookingRow = OrderWithIntake;
 
 /** Shape returned by GET /api/portal/me/orders/:id — order + intake + events
  *  (no customer join; portal route is customer-scoped). Events are the
@@ -51,21 +47,4 @@ export function usePortalOrder(id: string | number | null) {
     api.get<PortalOrderDetail>(p),
   );
   return { data, isLoading, isError: !!error, mutate };
-}
-
-/**
- * Bookings view = orders with scheduledAt set. The server filters server-side.
- */
-export function usePortalBookings() {
-  const api = useApi();
-  const { data, error, isLoading, mutate } = useSWR(
-    portalPaths.bookings(),
-    (p: string) => api.get<PortalBookingRow[]>(p),
-  );
-  return {
-    bookings: useStableArray(data),
-    isLoading,
-    isError: !!error,
-    mutate,
-  };
 }

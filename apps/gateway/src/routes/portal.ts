@@ -17,7 +17,6 @@ import type {
   CustomerRow,
   OrderIntakeRow,
   OrderRow,
-  OrderRowWithIntake,
 } from "@hmls/shared/db/types";
 
 type ApiError = { error: { code: string; message: string } };
@@ -25,7 +24,6 @@ type ApiError = { error: { code: string; message: string } };
 // Order shapes as the customer sees them: internal-only columns (adminNotes,
 // fixoPredictionId) stripped by toCustomerOrder before the row leaves the API.
 type CustomerOrderRow = Omit<OrderRow, "adminNotes" | "fixoPredictionId">;
-type CustomerOrderRowWithIntake = Omit<OrderRowWithIntake, "adminNotes" | "fixoPredictionId">;
 
 const ZIP_ONLY = /^\d{5}(-\d{4})?$/;
 /** An estimate whose stored location is a bare ZIP still needs a street address before approval. */
@@ -78,28 +76,6 @@ portal.put("/me", zValidator("json", updateProfileInput), async (c) => {
 
   if (!updated) throw Errors.notFound("Customer", customerId);
   return c.json<CustomerRow>(updated);
-});
-
-// GET /me/bookings — orders with scheduling (unified after Layer 3)
-// Joins intake so the bookings page can show the customer's own notes
-// inline without a per-row roundtrip.
-portal.get("/me/bookings", async (c) => {
-  const customerId = c.get("customerId");
-  const rows = await db
-    .select({ order: schema.orders, intake: schema.orderIntake })
-    .from(schema.orders)
-    .leftJoin(
-      schema.orderIntake,
-      eq(schema.orderIntake.orderId, schema.orders.id),
-    )
-    .where(eq(schema.orders.customerId, customerId)) // tenant-ok: customer-owned rows, scoped by customerId across shops; RLS app.customer_id backs it
-    .orderBy(desc(schema.orders.scheduledAt));
-
-  // Filter in JS so we still include orders without scheduled_at if none match
-  const withIntake: CustomerOrderRowWithIntake[] = rows
-    .filter((r) => r.order.scheduledAt != null)
-    .map((r) => ({ ...toCustomerOrder(r.order), intake: r.intake }));
-  return c.json<CustomerOrderRowWithIntake[]>(withIntake);
 });
 
 // GET /me/orders — customer's orders (unified — replaces estimates + quotes)
@@ -268,39 +244,9 @@ portal.post("/me/orders/:id/decline", zValidator("json", orderReasonInput), asyn
   return sendOrderStateResult(c, result);
 });
 
-// POST /me/orders/:id/cancel-booking — customer cancels a booked (approved +
-// scheduled slot) order before the shop has started work.
-portal.post(
-  "/me/orders/:id/cancel-booking",
-  zValidator("json", orderReasonInput),
-  async (c) => {
-    const customerId = c.get("customerId");
-    const id = Number(c.req.param("id"));
-    if (!Number.isInteger(id) || id <= 0) {
-      return c.json<ApiError>({ error: { code: "BAD_REQUEST", message: "Invalid order ID" } }, 400);
-    }
-
-    const [order] = await db
-      .select({ id: schema.orders.id, customerId: schema.orders.customerId }) // tenant-ok: customer-owned row; ownership asserted below, RLS app.customer_id scopes it
-      .from(schema.orders)
-      .where(eq(schema.orders.id, id))
-      .limit(1);
-    if (!order || order.customerId !== customerId) {
-      return c.json<ApiError>({ error: { code: "NOT_FOUND", message: "Order not found" } }, 404);
-    }
-
-    const { reason } = c.req.valid("json");
-    const result = await transition(id, "cancelled", { kind: "customer", customerId }, {
-      reason,
-    });
-    return sendOrderStateResult(c, result);
-  },
-);
-
 // POST /me/orders/:id/cancel — customer cancels an order they no longer want,
 // from the order detail page. The harness gates which states a customer may
 // cancel from (draft / estimated / approved — never in_progress).
-// `cancel-booking` above is the Bookings-page equivalent for booked orders.
 portal.post("/me/orders/:id/cancel", zValidator("json", orderReasonInput), async (c) => {
   const customerId = c.get("customerId");
   const id = Number(c.req.param("id"));
