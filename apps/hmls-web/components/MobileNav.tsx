@@ -124,7 +124,7 @@ export default function MobileNav({
               ))}
             {user && (
               <>
-                {section !== "portal" && (
+                {!isMechanic && section !== "portal" && (
                   <Link
                     href={portalLink.href}
                     onClick={close}

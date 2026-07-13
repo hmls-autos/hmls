@@ -77,7 +77,7 @@ export default function Navbar() {
                 {label}
               </Link>
             ))}
-          {isUserLoggedIn && section !== "portal" && (
+          {isUserLoggedIn && !isMechanic && section !== "portal" && (
             <Link
               href={portalLink.href}
               prefetch={false}
