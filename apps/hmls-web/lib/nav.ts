@@ -36,10 +36,44 @@ export const portalNavItems: NavItem[] = [
 ];
 
 export const mechanicNavItems: NavItem[] = [
-  { href: "/mechanic", label: "My Bookings", icon: CalendarCheck },
+  { href: "/mechanic", label: "My Jobs", icon: CalendarCheck },
   { href: "/mechanic/availability", label: "Weekly Hours", icon: CalendarDays },
   { href: "/mechanic/time-off", label: "Time Off", icon: CalendarOff },
 ];
+
+export type Section = "admin" | "portal" | "mechanic";
+
+/** Which dashboard section a pathname belongs to, for the CURRENT viewer.
+ *  Admin/mechanic paths only count when the viewer can actually use that
+ *  section (roles are mutually exclusive; admins 403 on /mechanic). */
+export function detectSection(
+  pathname: string,
+  roles: { isAdmin: boolean; isMechanic: boolean },
+): Section | null {
+  if (pathname.startsWith("/portal")) return "portal";
+  if (pathname.startsWith("/admin") && roles.isAdmin) return "admin";
+  if (pathname.startsWith("/mechanic") && roles.isMechanic) return "mechanic";
+  return null;
+}
+
+export const sectionNavItems: Record<Section, NavItem[]> = {
+  admin: adminNavItems,
+  portal: portalNavItems,
+  mechanic: mechanicNavItems,
+};
+
+// Shared link vocabulary — Navbar (desktop) and MobileNav must not each
+// define their own copies.
+export const marketingLinks = [
+  { href: "/", label: "Home" },
+  { href: "/contact", label: "Contact" },
+] as const;
+
+export const portalLink = { href: "/portal", label: "My Portal" } as const;
+export const adminLink = { href: "/admin", label: "Admin" } as const;
+export const mechanicLink = { href: "/mechanic", label: "Mechanic" } as const;
+/** The single customer entry to /chat. The plain "Chat" text link is gone. */
+export const chatCta = { href: "/chat", label: "Get a Quote" } as const;
 
 /**
  * Active state for a link inside a section nav — exact match for the section
