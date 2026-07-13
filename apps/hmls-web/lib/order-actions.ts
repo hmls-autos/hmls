@@ -246,6 +246,32 @@ export const ACTION_REGISTRY: Readonly<Record<ActionId, ActionDescriptor>> = {
   },
 };
 
+// Schedule / mechanic edits have a contextual home in the Appointment section
+// (ScheduleSection), shown whenever schedule is editable. Keep the Actions
+// panel to lifecycle transitions only so the two don't render the same
+// "Reschedule" / "Reassign" buttons side by side.
+const INLINE_ACTIONS = new Set<ActionId>([
+  "set_time",
+  "reschedule",
+  "reassign_mechanic",
+]);
+
+/** Non-inline actions currently visible for this order — what the Actions
+ *  panel renders. Empty on terminal states (cancelled, completed-and-paid);
+ *  the order detail page uses this to decide whether to reserve the sidebar
+ *  column at all, so the two never disagree. */
+export function visibleOpsActions(order: Order): ActionDescriptor[] {
+  // Canonicalize so window-period legacy rows ('scheduled'/'revised') get
+  // their collapsed profile; a row with an unknown status (corrupt data)
+  // shouldn't crash the page, so bail on null.
+  const status = canonicalStatus(order.status);
+  if (!status) return [];
+  return STATUS_PROFILES[status].actions
+    .filter((id) => !INLINE_ACTIONS.has(id))
+    .map((id) => ACTION_REGISTRY[id])
+    .filter((a) => a.visible(order));
+}
+
 export function leadAction(order: Order): ActionDescriptor | undefined {
   // Canonicalize so window-period physical rows (legacy 'scheduled' /
   // 'revised' labels) still resolve to a profile; unknown junk gets none.

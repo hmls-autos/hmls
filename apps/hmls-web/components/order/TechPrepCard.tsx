@@ -68,38 +68,42 @@ export function TechPrepCard({ order }: { order: Order }) {
         </div>
       </CardHeader>
       <CardContent className="px-4 pb-4 text-xs space-y-3">
-        {/* Tools to bring */}
-        <div>
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">
-            Tools to bring
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {tools.map(([name, specialty]) => (
-              <span
-                key={name}
-                className={cn(
-                  "px-1.5 py-0.5 rounded border text-[11px]",
-                  specialty
-                    ? "border-foreground/40 text-foreground font-medium"
-                    : "border-border text-muted-foreground",
-                )}
-              >
-                {specialty ? "★ " : ""}
-                {name}
-              </span>
-            ))}
+        {tools.length > 0 && (
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">
+              Tools to bring
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {tools.map(([name, specialty]) => (
+                <span
+                  key={name}
+                  className={cn(
+                    "px-1.5 py-0.5 rounded border text-[11px]",
+                    specialty
+                      ? "border-foreground/40 text-foreground font-medium"
+                      : "border-border text-muted-foreground",
+                  )}
+                >
+                  {specialty ? "★ " : ""}
+                  {name}
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Per-job detail */}
-        <div className="space-y-1.5">
+        <div className="divide-y divide-border">
           {jobs.map((j) => (
-            <div key={j.item.id} className="border-t border-border pt-1.5">
+            <div key={j.item.id} className="py-1.5 first:pt-0 last:pb-0">
               <div className="flex justify-between gap-2">
                 <span className="text-foreground">{j.item.name}</span>
-                <span className="shrink-0 text-muted-foreground">
-                  Diff {j.tp.difficulty}/5
-                </span>
+                {/* One job's difficulty already lives in the header badge. */}
+                {jobs.length > 1 && (
+                  <span className="shrink-0 text-muted-foreground">
+                    Diff {j.tp.difficulty}/5
+                  </span>
+                )}
               </div>
               {j.tp.notes && (
                 <p className="text-muted-foreground mt-0.5">{j.tp.notes}</p>
@@ -114,7 +118,10 @@ export function TechPrepCard({ order }: { order: Order }) {
         </div>
 
         <p className="text-[10px] text-muted-foreground">
-          ★ specialty tool · internal only · AI-estimated, verify on site
+          {tools.some(([, specialty]) => specialty)
+            ? "★ specialty tool · "
+            : ""}
+          internal only · AI-estimated, verify on site
         </p>
       </CardContent>
     </Card>

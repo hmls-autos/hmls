@@ -4,15 +4,15 @@ import type { Order } from "@hmls/shared/db/types";
 import { hasBeenSentToCustomer } from "@hmls/shared/order/status";
 import { AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { leadAction, type OrderInvoker } from "@/lib/order-actions";
-import { ActionButton } from "./ActionButton";
+import { leadAction } from "@/lib/order-actions";
 
 type Props = {
   order: Order;
-  invoker: OrderInvoker;
 };
 
-export function DraftBanner({ order, invoker }: Props) {
+// Informational only — the lead action itself lives in the title-bar action
+// row (OrderOpsPanel), so the banner never duplicates the CTA.
+export function DraftBanner({ order }: Props) {
   const lead = leadAction(order);
 
   if (!lead) return null;
@@ -46,16 +46,6 @@ export function DraftBanner({ order, invoker }: Props) {
                   : "AI drafted this estimate from the customer chat. Review line items and pricing, then send it to the customer."}
             </p>
           </div>
-        </div>
-        <div className="shrink-0">
-          <ActionButton
-            action={lead}
-            order={order}
-            onClick={invoker.invoke}
-            disabled={invoker.transitioning}
-            prominent
-            banner
-          />
         </div>
       </CardContent>
     </Card>

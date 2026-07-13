@@ -75,9 +75,20 @@ export function CustomerSection({
       </CardHeader>
       <CardContent className="px-4 pb-4 text-xs space-y-1">
         <p className="text-foreground">{order.contactName ?? "—"}</p>
-        <p className="text-muted-foreground">{order.contactPhone ?? "—"}</p>
-        <p className="text-muted-foreground">{order.contactEmail ?? "—"}</p>
-        <p className="text-muted-foreground">{order.contactAddress ?? "—"}</p>
+        {order.contactPhone && (
+          <p className="text-muted-foreground">{order.contactPhone}</p>
+        )}
+        {order.contactEmail && (
+          <p className="text-muted-foreground">{order.contactEmail}</p>
+        )}
+        {order.contactAddress && (
+          <p className="text-muted-foreground">{order.contactAddress}</p>
+        )}
+        {!order.contactPhone &&
+          !order.contactEmail &&
+          !order.contactAddress && (
+            <p className="text-muted-foreground">No contact details</p>
+          )}
         {preferred && (
           <p className="flex items-center gap-1.5 pt-1 font-medium text-foreground">
             {(() => {
