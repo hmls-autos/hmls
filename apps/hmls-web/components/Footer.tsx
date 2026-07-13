@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BUSINESS, BUSINESS_ADDRESS_ONELINE } from "@/lib/business";
+import { BUSINESS } from "@/lib/business";
 import { CITIES, SERVICES } from "@/lib/seo-content";
 
 export default function Footer() {
@@ -14,14 +14,15 @@ export default function Footer() {
             <div className="text-sm text-white/40 mt-1">
               Mobile Mechanic &bull; Orange County &amp; San Jose, CA
             </div>
-            <div className="text-xs text-white/30 mt-3">
-              {BUSINESS_ADDRESS_ONELINE}
-            </div>
+            {/* Service-area business — no public street address or phone in
+                the footer (matches the GBP hidden-address setup); email is
+                the contact channel here, the service-area line above is the
+                location signal. */}
             <a
-              href={`tel:${BUSINESS.phone}`}
-              className="block text-xs text-white/40 hover:text-white mt-2 transition-colors"
+              href={`mailto:${BUSINESS.email}`}
+              className="block text-xs text-white/40 hover:text-white mt-3 transition-colors"
             >
-              {BUSINESS.phoneDisplay}
+              {BUSINESS.email}
             </a>
             <a
               href={BUSINESS.gmb.shareUrl}
