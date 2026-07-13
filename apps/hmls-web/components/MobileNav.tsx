@@ -161,33 +161,35 @@ export default function MobileNav({
                 <ShopSwitcher />
               </div>
             )}
-            <div className="flex items-center gap-2">
+            {/* Utility footer — account action left, theme control right.
+                Theme is a setting, not a destination; it doesn't belong in
+                the link list. */}
+            <div className="flex items-center justify-between border-t border-border pt-4">
+              {!isLoading &&
+                (user ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void signOut();
+                      close();
+                    }}
+                    className="flex items-center gap-2 text-sm text-text-secondary hover:text-text transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </button>
+                ) : (
+                  <Link
+                    href="/login"
+                    onClick={close}
+                    className="flex items-center gap-2 text-sm text-text-secondary hover:text-text transition-colors"
+                  >
+                    <LogIn className="w-4 h-4" />
+                    Sign In
+                  </Link>
+                ))}
               <ThemeToggle />
-              <span className="text-sm text-text-secondary">Theme</span>
             </div>
-            {!isLoading &&
-              (user ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    void signOut();
-                    close();
-                  }}
-                  className="flex items-center gap-2 text-sm text-text-secondary hover:text-text transition-colors"
-                >
-                  <LogOut className="w-4 h-4" />
-                  Sign Out
-                </button>
-              ) : (
-                <Link
-                  href="/login"
-                  onClick={close}
-                  className="flex items-center gap-2 text-sm text-text-secondary hover:text-text transition-colors"
-                >
-                  <LogIn className="w-4 h-4" />
-                  Sign In
-                </Link>
-              ))}
             {!isAdmin && !isMechanic && (
               <Link
                 href={chatCta.href}
