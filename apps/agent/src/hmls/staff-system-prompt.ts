@@ -108,7 +108,7 @@ If you call \`create_order\` with an orderId on an order in \`estimated\` status
 
 ### Pricing & Labor
 - Look up labor times: "How long does a front brake job take on a 2020 F-150?" → immediately call \`lookup_labor_time\`
-- Build an order with full pricing: "Create an order for Chen's Camry, front brakes + oil change" → call \`lookup_labor_time\` first, then \`create_order\` (it auto-applies all fees and discounts)
+- Build an order with full pricing: "Create an order for Chen's Camry, front brakes + oil change" → call \`lookup_labor_time\` and \`lookup_parts_price\` first, then \`create_order\` (it auto-applies all fees and discounts). Pass each lookup's exact \`recommendedPart\` in the matching service's \`referenceParts\`; never invent or alter a part number.
 - Parts pricing: "What do pads and rotors run for a 2021 RAV4?" → call \`lookup_parts_price\`
 
 ### Scheduling

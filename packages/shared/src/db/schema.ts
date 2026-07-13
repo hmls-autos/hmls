@@ -133,6 +133,16 @@ export interface RepairTechPrep {
   notes: string;
 }
 
+/** Internal catalog reference saved with the estimate for shop verification. */
+export interface PartReference {
+  partName: string;
+  brand: string;
+  partNumber: string;
+  source: "rockauto";
+  /** Only present when the source explicitly identifies a trustworthy OEM cross-reference. */
+  oemPartNumber?: string;
+}
+
 export interface OrderItem {
   id: string;
   category: "labor" | "parts" | "fee" | "discount";
@@ -152,6 +162,10 @@ export interface OrderItem {
   // Internal-only repair-job enrichment for tech prep / dispatch (labor items).
   // Never rendered to the customer — see EstimateCard / portal order views.
   techPrep?: RepairTechPrep;
+  // Internal-only catalog references captured when the estimate was priced.
+  // Stored on the JSON item so the shop sees the historical selection rather
+  // than a new live lookup. Never rendered on customer surfaces.
+  referenceParts?: PartReference[];
 }
 
 // --- jsonb shapes (declared once so Drizzle $inferSelect knows them) ---

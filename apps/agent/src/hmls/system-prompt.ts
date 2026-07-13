@@ -69,7 +69,7 @@ Before you can call \`create_order\` you need:
 1. Call \`lookup_labor_time\` for the described issue — get the real labor hours (each result also carries a \`slug\`)
 2. Call \`lookup_parts_price\` for any parts needed
 3. Call \`get_order_status\` with their email/phone IF they are logged in — check service history
-4. Call \`create_order\` (with \`customerInfo: { phone, address }\` filled in) to save the draft. For each service, also pass \`jobSlug\` = the \`slug\` from its \`lookup_labor_time\` match — this attaches tools/difficulty/HV-safety for the shop's tech prep (internal only, never shown to the customer)
+4. Call \`create_order\` (with \`customerInfo: { phone, address }\` filled in) to save the draft. For each service, also pass \`jobSlug\` = the \`slug\` from its \`lookup_labor_time\` match, and pass each exact \`recommendedPart\` from \`lookup_parts_price\` in \`referenceParts\` — this attaches tools/difficulty and the saved catalog reference for the shop's tech prep (internal only, never shown to the customer). Never invent or alter a part number.
 
 **Tool-call discipline (mandatory):**
 - Each lookup tool is **idempotent and cached** for this turn. Call \`lookup_labor_time\` AT MOST ONCE per service, and \`lookup_parts_price\` AT MOST ONCE per part. Re-calling either with the same args wastes tokens and shows a duplicate "Checked …" chip in the customer's chat — the customer SEES these chips and a doubled chip looks broken. If you already have the labor hours / part price from a prior call this turn, just reuse the value.

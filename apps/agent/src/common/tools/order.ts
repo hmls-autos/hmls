@@ -32,7 +32,7 @@ import {
 import { toolResult } from "@hmls/shared/tool-result";
 import { type ContactMethod, contactMethodInput } from "@hmls/shared/api/contracts/orders";
 import type { DiscountType, LineItem, ServiceInput } from "../../hmls/skills/estimate/types.ts";
-import type { OrderItem, RepairTechPrep } from "@hmls/shared/db/schema";
+import type { OrderItem, PartReference, RepairTechPrep } from "@hmls/shared/db/schema";
 import { getRepairJobs } from "../../hmls/tools/olp-client.ts";
 import { patchItems } from "../../services/order-state.ts";
 import { upsertOrderIntake } from "../../services/order-intake.ts";
@@ -43,6 +43,7 @@ import {
   toolResultFromOrderState,
 } from "../../services/order-state-tool.ts";
 import type { ToolContext } from "../convert-tools.ts";
+import { normalizePartReferences } from "../part-references.ts";
 
 const discountEnum = z.enum([
   "returning_customer",
@@ -53,6 +54,13 @@ const discountEnum = z.enum([
   "first_responder",
 ]);
 
+const partReferenceInput = z.object({
+  partName: z.string(),
+  brand: z.string(),
+  partNumber: z.string(),
+  source: z.literal("rockauto"),
+});
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -60,9 +68,15 @@ const discountEnum = z.enum([
 function toOrderItem(
   item: LineItem,
   category: OrderItem["category"],
-  opts?: { laborHours?: number; quantity?: number; techPrep?: RepairTechPrep },
+  opts?: {
+    laborHours?: number;
+    quantity?: number;
+    techPrep?: RepairTechPrep;
+    referenceParts?: PartReference[];
+  },
 ): OrderItem {
   const quantity = opts?.quantity ?? 1;
+  const referenceParts = normalizePartReferences(opts?.referenceParts);
   return {
     id: crypto.randomUUID(),
     category,
@@ -74,6 +88,7 @@ function toOrderItem(
     taxable: category !== "discount",
     ...(opts?.laborHours ? { laborHours: opts.laborHours } : {}),
     ...(opts?.techPrep ? { techPrep: opts.techPrep } : {}),
+    ...(referenceParts ? { referenceParts } : {}),
   };
 }
 
@@ -306,6 +321,7 @@ async function priceServices(input: PriceServicesInput): Promise<{
       return toOrderItem(li, "labor", {
         laborHours: services[i]?.laborHours,
         techPrep: slug ? techPrepBySlug.get(slug) : undefined,
+        referenceParts: services[i]?.referenceParts,
       });
     }),
     ...customLineItems.map((li) => toOrderItem(li, "labor")),
@@ -441,6 +457,12 @@ export const createOrderTool = {
             .optional()
             .describe(
               "The `slug` for this job from lookup_labor_time results. Pass it through so the shop gets tools/difficulty/HV-safety for tech prep (internal — never shown to the customer).",
+            ),
+          referenceParts: z
+            .array(partReferenceInput)
+            .optional()
+            .describe(
+              "Exact `recommendedPart` values returned by lookup_parts_price for this service. Pass through unchanged so the shop can verify fitment; never guess a part number.",
             ),
         }),
       )
