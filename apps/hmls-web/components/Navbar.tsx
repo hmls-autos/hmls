@@ -1,31 +1,31 @@
 "use client";
 
-import { LayoutDashboard, LogIn, LogOut, Wrench } from "lucide-react";
+import { LogIn, LogOut } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { ShopSwitcher } from "@/components/admin/ShopSwitcher";
+import { useSignOut } from "@/hooks/useSignOut";
+import {
+  adminLink,
+  chatCta,
+  detectSection,
+  marketingLinks,
+  mechanicLink,
+  portalLink,
+} from "@/lib/nav";
 import MobileNav from "./MobileNav";
 import ThemeToggle from "./ThemeToggle";
 
-const marketingLinks = [
-  { href: "/", label: "Home" },
-  { href: "/contact", label: "Contact" },
-];
-const customerChatLink = { href: "/chat", label: "Chat" };
-const adminChatLink = { href: "/admin/chat", label: "Chat" };
-
-const portalLink = { href: "/portal", label: "My Portal" };
-const adminLink = { href: "/admin", label: "Admin", icon: LayoutDashboard };
-const mechanicLink = { href: "/mechanic", label: "Mechanic", icon: Wrench };
-
 export default function Navbar() {
   const pathname = usePathname();
-  const { user, supabase, isLoading, isAdmin, isMechanic, isOwner } = useAuth();
+  const { user, isLoading, isAdmin, isMechanic, isOwner } = useAuth();
+  const signOut = useSignOut();
   const isUserLoggedIn = !!user;
   const isHome = pathname === "/";
   const [scrolled, setScrolled] = useState(false);
+  const section = detectSection(pathname, { isAdmin, isMechanic });
 
   useEffect(() => {
     if (!isHome) return;
@@ -36,6 +36,15 @@ export default function Navbar() {
   }, [isHome]);
 
   const isTransparent = isHome && !scrolled;
+
+  const linkCls = (active: boolean) =>
+    `text-sm transition-colors rounded focus-visible:ring-2 focus-visible:ring-red-primary ${
+      active
+        ? "text-red-400"
+        : isTransparent
+          ? "text-white/70 hover:text-white"
+          : "text-text-secondary hover:text-text"
+    }`;
 
   return (
     <header
@@ -57,89 +66,43 @@ export default function Navbar() {
 
         {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-8">
-          {marketingLinks.map(({ href, label }) => (
+          {!section &&
+            marketingLinks.map(({ href, label }) => (
+              <Link
+                key={href}
+                href={href}
+                prefetch={false}
+                className={linkCls(pathname === href)}
+              >
+                {label}
+              </Link>
+            ))}
+          {isUserLoggedIn && section !== "portal" && (
             <Link
-              key={href}
-              href={href}
+              href={portalLink.href}
               prefetch={false}
-              className={`text-sm transition-colors rounded focus-visible:ring-2 focus-visible:ring-red-primary ${
-                pathname === href
-                  ? "text-red-400"
-                  : isTransparent
-                    ? "text-white/70 hover:text-white"
-                    : "text-text-secondary hover:text-text"
-              }`}
+              className={linkCls(false)}
             >
-              {label}
+              {isAdmin ? "View as Customer" : portalLink.label}
             </Link>
-          ))}
-          {(() => {
-            const link = isAdmin ? adminChatLink : customerChatLink;
-            return (
-              <Link
-                href={link.href}
-                prefetch={false}
-                className={`text-sm transition-colors rounded focus-visible:ring-2 focus-visible:ring-red-primary ${
-                  pathname === link.href
-                    ? "text-red-400"
-                    : isTransparent
-                      ? "text-white/70 hover:text-white"
-                      : "text-text-secondary hover:text-text"
-                }`}
-              >
-                {link.label}
-              </Link>
-            );
-          })()}
-          {isUserLoggedIn && (
-            <>
-              <Link
-                href={portalLink.href}
-                prefetch={false}
-                className={`text-sm transition-colors rounded focus-visible:ring-2 focus-visible:ring-red-primary ${
-                  pathname.startsWith(portalLink.href)
-                    ? "text-red-400"
-                    : isTransparent
-                      ? "text-white/70 hover:text-white"
-                      : "text-text-secondary hover:text-text"
-                }`}
-              >
-                {isAdmin ? "View as Customer" : portalLink.label}
-              </Link>
-              {isAdmin && (
-                <Link
-                  href={adminLink.href}
-                  prefetch={false}
-                  className={`text-sm transition-colors rounded focus-visible:ring-2 focus-visible:ring-red-primary ${
-                    pathname.startsWith(adminLink.href)
-                      ? "text-red-400"
-                      : isTransparent
-                        ? "text-white/70 hover:text-white"
-                        : "text-text-secondary hover:text-text"
-                  }`}
-                >
-                  {adminLink.label}
-                </Link>
-              )}
-              {/* Admins with a linked provider row can also enter the
-                  mechanic panel; non-linked admins hit a 403 from the
-                  layout. */}
-              {(isMechanic || isAdmin) && (
-                <Link
-                  href={mechanicLink.href}
-                  prefetch={false}
-                  className={`text-sm transition-colors rounded focus-visible:ring-2 focus-visible:ring-red-primary ${
-                    pathname.startsWith(mechanicLink.href)
-                      ? "text-red-400"
-                      : isTransparent
-                        ? "text-white/70 hover:text-white"
-                        : "text-text-secondary hover:text-text"
-                  }`}
-                >
-                  {mechanicLink.label}
-                </Link>
-              )}
-            </>
+          )}
+          {isAdmin && section !== "admin" && (
+            <Link
+              href={adminLink.href}
+              prefetch={false}
+              className={linkCls(false)}
+            >
+              {adminLink.label}
+            </Link>
+          )}
+          {isMechanic && section !== "mechanic" && (
+            <Link
+              href={mechanicLink.href}
+              prefetch={false}
+              className={linkCls(false)}
+            >
+              {mechanicLink.label}
+            </Link>
           )}
           {isOwner && <ShopSwitcher />}
           <ThemeToggle />
@@ -147,7 +110,7 @@ export default function Navbar() {
             (isUserLoggedIn ? (
               <button
                 type="button"
-                onClick={() => supabase.auth.signOut()}
+                onClick={() => void signOut()}
                 className={`flex items-center gap-2 text-sm transition-colors rounded focus-visible:ring-2 focus-visible:ring-red-primary ${
                   isTransparent
                     ? "text-white/70 hover:text-white"
@@ -171,13 +134,13 @@ export default function Navbar() {
                 Sign In
               </Link>
             ))}
-          {!isAdmin && (
+          {!isAdmin && !isMechanic && (
             <Link
-              href="/chat"
+              href={chatCta.href}
               prefetch={false}
               className="px-5 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
             >
-              Get a Quote
+              {chatCta.label}
             </Link>
           )}
         </div>

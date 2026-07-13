@@ -1,14 +1,8 @@
 "use client";
 
-import { CalendarCheck, CalendarDays, CalendarOff } from "lucide-react";
-import { DashboardLayout, type NavItem } from "@/components/DashboardLayout";
+import { DashboardLayout } from "@/components/DashboardLayout";
 import Navbar from "@/components/Navbar";
-
-const navItems: NavItem[] = [
-  { href: "/mechanic", label: "My Bookings", icon: CalendarCheck },
-  { href: "/mechanic/availability", label: "Weekly Hours", icon: CalendarDays },
-  { href: "/mechanic/time-off", label: "Time Off", icon: CalendarOff },
-];
+import { mechanicNavItems } from "@/lib/nav";
 
 export default function MechanicLayout({
   children,
@@ -19,8 +13,7 @@ export default function MechanicLayout({
     <>
       <Navbar />
       <DashboardLayout
-        navItems={navItems}
-        title="Mechanic"
+        navItems={mechanicNavItems}
         maxWidth="max-w-5xl"
         mechanicCheck
         adminPanelLabel="Mechanic Panel"

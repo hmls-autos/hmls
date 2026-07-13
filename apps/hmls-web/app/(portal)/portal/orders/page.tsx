@@ -181,6 +181,7 @@ export default function PortalOrdersPage() {
         <EmptyState
           icon={ClipboardList}
           message="No orders yet. Start a chat to get an estimate!"
+          action={{ label: "Start a chat", href: "/chat" }}
         />
       ) : (
         <div className="space-y-3">
