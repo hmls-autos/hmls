@@ -145,9 +145,8 @@ export const REGIONS: Record<RegionId, Region> = {
     shopSlug: "san-jose",
     label: "San Jose",
     baseCity: "San Jose",
-    // Shared line for now — swap in a local 408 number when SJ gets one.
-    phone: BUSINESS.phone,
-    phoneDisplay: BUSINESS.phoneDisplay,
+    phone: "+14087647788",
+    phoneDisplay: "(408) 764-7788",
     // Service-area business: no public street address yet (set during GBP setup).
     address: {
       city: "San Jose",
