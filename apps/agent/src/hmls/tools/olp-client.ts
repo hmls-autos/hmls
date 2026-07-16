@@ -1,10 +1,11 @@
+import { env } from "@hmls/shared/env";
 import { getLogger } from "@logtape/logtape";
 
 const logger = getLogger(["hmls", "agent", "olp-client"]);
 
-const OLP_WORKER_URL = Deno.env.get("OLP_WORKER_URL") ??
+const OLP_WORKER_URL = env("OLP_WORKER_URL") ??
   "https://olp-worker.spencerzhyp.workers.dev";
-const OLP_WORKER_SECRET = Deno.env.get("OLP_WORKER_SECRET") ?? "";
+const OLP_WORKER_SECRET = env("OLP_WORKER_SECRET") ?? "";
 
 function authHeaders(): Record<string, string> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };

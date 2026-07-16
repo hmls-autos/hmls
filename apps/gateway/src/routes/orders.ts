@@ -5,7 +5,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { type AdminEnv, requireAdmin } from "../middleware/admin.ts";
 import { OWNER_ALL_SHOPS, requireShopContext, type WithShop } from "../middleware/shop-context.ts";
 import { withTenantTx } from "../middleware/with-tenant-tx.ts";
-import { EstimatePdf } from "@hmls/agent";
+import { EstimatePdf } from "@hmls/agent/hmls-pdf";
 import type { OrderItem } from "@hmls/agent/db";
 import {
   type Actor,

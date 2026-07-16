@@ -5,7 +5,11 @@
 // boot. `readSkillBody` strips the YAML frontmatter (metadata for skill
 // selection, not for the model's reasoning) and returns the body.
 
-const SKILLS_DIR = new URL("../../.skills/", import.meta.url);
+// Skill bodies come from the vendored bundle (skills-bundle.ts) rather than the
+// filesystem — the Cloudflare Workers runtime has no FS. See that file's header
+// for why plain strings (not text imports) are used. Diagnosis skills stay
+// Fixo-only.
+import { SKILL_BUNDLE } from "./skills-bundle.ts";
 
 function stripFrontmatter(md: string): string {
   if (!md.startsWith("---")) return md;
@@ -20,12 +24,10 @@ export const LOADABLE_SKILLS = ["order", "scheduling"] as const;
 export type LoadableSkill = (typeof LOADABLE_SKILLS)[number];
 
 /** Read one skill's body (frontmatter stripped). null if missing or empty. */
+// deno-lint-ignore require-await
 export async function readSkillBody(name: string): Promise<string | null> {
-  try {
-    const raw = await Deno.readTextFile(new URL(`${name}/skill.md`, SKILLS_DIR));
-    const body = stripFrontmatter(raw).trim();
-    return body || null;
-  } catch {
-    return null;
-  }
+  const raw = SKILL_BUNDLE[name];
+  if (!raw) return null;
+  const body = stripFrontmatter(raw).trim();
+  return body || null;
 }

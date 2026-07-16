@@ -1,3 +1,4 @@
+import { env } from "@hmls/shared/env";
 import { hasToolCall, isStepCount, type ModelMessage, streamText } from "ai";
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import { getLogger } from "@logtape/logtape";
@@ -36,9 +37,9 @@ export interface RunStaffAgentOptions {
 
 export function runStaffAgent(options: RunStaffAgentOptions) {
   const { messages, adminEmail, shopId, orderContext } = options;
-  const apiKey = Deno.env.get("DEEPSEEK_API_KEY");
+  const apiKey = env("DEEPSEEK_API_KEY");
   if (!apiKey) throw new Error("DEEPSEEK_API_KEY is required");
-  const modelId = Deno.env.get("HMLS_AGENT_MODEL") || DEFAULT_MODEL;
+  const modelId = env("HMLS_AGENT_MODEL") || DEFAULT_MODEL;
   // ponytail: DeepSeek is text-only — any in-chat image part is silently dropped.
   // Staff chat is text-only today.
   const deepseek = createDeepSeek({ apiKey });

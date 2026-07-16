@@ -1,3 +1,4 @@
+import { env } from "@hmls/shared/env";
 import { getLogger } from "@logtape/logtape";
 import { dbAdmin } from "../db/client.ts";
 import * as schema from "@hmls/shared/db/schema";
@@ -40,17 +41,17 @@ interface EmailTemplate {
 
 // --- Config ---
 
-const BASE_URL = Deno.env.get("BASE_URL") || "https://hmls.autos";
-const PORTAL_URL = Deno.env.get("PORTAL_URL") || `${BASE_URL}/portal`;
-const BUSINESS_ADDRESS = Deno.env.get("BUSINESS_ADDRESS") ?? "";
+const BASE_URL = env("BASE_URL") || "https://hmls.autos";
+const PORTAL_URL = env("PORTAL_URL") || `${BASE_URL}/portal`;
+const BUSINESS_ADDRESS = env("BUSINESS_ADDRESS") ?? "";
 
 // Fixo推广 CTA targets (CEO plan 2026-05-14 Lane D — HMLS rejection
 // flow becomes fixo's first dogfood channel). The CTA in rejection /
 // cancellation emails routes through the fixo gateway's
 // /funnel/track GET endpoint so we capture the click before the
 // browser leaves for fixo.ink, then redirects to FIXO_PUBLIC_URL.
-const FIXO_PUBLIC_URL = Deno.env.get("FIXO_PUBLIC_URL") || "https://fixo.ink";
-const FIXO_API_URL = Deno.env.get("FIXO_API_URL") || "https://api.fixo.ink";
+const FIXO_PUBLIC_URL = env("FIXO_PUBLIC_URL") || "https://fixo.ink";
+const FIXO_API_URL = env("FIXO_API_URL") || "https://api.fixo.ink";
 
 if (!BUSINESS_ADDRESS) {
   logger.warn(
@@ -392,7 +393,7 @@ async function sendEmail(
   text: string,
   html?: string,
 ): Promise<boolean> {
-  const apiKey = Deno.env.get("RESEND_API_KEY");
+  const apiKey = env("RESEND_API_KEY");
   if (!apiKey) {
     logger.warn("RESEND_API_KEY not set — skipping email to {to}: {subject}", {
       to,
@@ -401,7 +402,7 @@ async function sendEmail(
     return false;
   }
 
-  const from = Deno.env.get("NOTIFY_FROM_EMAIL") || "HMLS <noreply@hmls.autos>";
+  const from = env("NOTIFY_FROM_EMAIL") || "HMLS <noreply@hmls.autos>";
 
   try {
     const body: Record<string, unknown> = { from, to: [to], subject, text };
@@ -693,7 +694,7 @@ export async function notifyOrderStatusChange(
 
     // Notify admin for certain statuses
     if (ADMIN_NOTIFY_STATUSES.has(newStatus)) {
-      const adminEmail = Deno.env.get("ADMIN_NOTIFY_EMAIL");
+      const adminEmail = env("ADMIN_NOTIFY_EMAIL");
       if (adminEmail) {
         const label = adminStatusLabel(newStatus);
         const adminSubject = `[HMLS Admin] Order #${order.id} → ${label}`;

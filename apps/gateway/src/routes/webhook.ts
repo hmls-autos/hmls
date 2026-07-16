@@ -1,3 +1,4 @@
+import { env } from "@hmls/shared/env";
 import { Hono } from "hono";
 import Stripe from "stripe";
 import { getLogger } from "@logtape/logtape";
@@ -21,7 +22,7 @@ export function createWebhookRoute(stripeSecretKey: string) {
   const webhook = new Hono();
 
   webhook.post("/stripe", async (c) => {
-    const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
+    const webhookSecret = env("STRIPE_WEBHOOK_SECRET");
     if (!webhookSecret) {
       logger.error("STRIPE_WEBHOOK_SECRET not set");
       return c.json({ error: "Webhook not configured" }, 500);

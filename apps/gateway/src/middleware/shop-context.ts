@@ -1,3 +1,4 @@
+import { env } from "@hmls/shared/env";
 import type { Env } from "hono";
 import { createMiddleware } from "hono/factory";
 import { dbAdmin, schema } from "@hmls/agent/db";
@@ -55,8 +56,8 @@ type ShopCtx = Env & { Variables: { shopId: string; isOwner: boolean } };
 
 /** Resolves ctx.shopId + ctx.isOwner. Mount AFTER requireAdmin/requireAuth/requireMechanic. */
 export const requireShopContext = createMiddleware<ShopCtx>(async (c, next) => {
-  if (Deno.env.get("SKIP_AUTH") === "true") {
-    const devShop = Deno.env.get("DEV_SHOP_ID");
+  if (env("SKIP_AUTH") === "true") {
+    const devShop = env("DEV_SHOP_ID");
     if (!devShop) {
       return c.json({ error: { code: "NO_SHOP", message: "DEV_SHOP_ID not set" } }, 500);
     }

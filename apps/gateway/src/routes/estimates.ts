@@ -3,7 +3,7 @@ import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { db, dbAdmin, schema, withAdminScope, withTenantScope } from "@hmls/agent/db";
 import { and, eq } from "drizzle-orm";
-import { EstimatePdf } from "@hmls/agent";
+import { EstimatePdf } from "@hmls/agent/hmls-pdf";
 import { transition } from "@hmls/agent/order-state";
 import { canonicalizeStatus, hasBeenSentToCustomer } from "@hmls/shared/order/status";
 import { Errors } from "@hmls/shared/errors";

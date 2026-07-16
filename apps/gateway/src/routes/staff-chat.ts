@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { convertToModelMessages } from "ai";
-import { runStaffAgent } from "@hmls/agent";
+import { runStaffAgent } from "@hmls/agent/staff-agent";
 import { db, schema, withAdminScope, withTenantScope } from "@hmls/agent/db";
 import { and, eq } from "drizzle-orm";
 import { canonicalizeStatus } from "@hmls/shared/order/status";

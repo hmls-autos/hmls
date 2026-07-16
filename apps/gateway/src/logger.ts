@@ -1,8 +1,9 @@
+import { env } from "@hmls/shared/env";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { configure, getConsoleSink, getJsonLinesFormatter } from "@logtape/logtape";
 
 export async function setupLogging() {
-  const level = Deno.env.get("LOG_LEVEL") === "debug" ? "debug" : "info";
+  const level = env("LOG_LEVEL") === "debug" ? "debug" : "info";
 
   await configure({
     reset: true,

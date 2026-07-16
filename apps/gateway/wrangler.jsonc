@@ -1,0 +1,31 @@
+{
+  // HMLS API on Cloudflare Workers. Fixo stays on Deno Deploy (api.fixo.ink).
+  // Validate with `wrangler dev` / deploy with `wrangler deploy`.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hmls-api",
+  "main": "src/worker.ts",
+  // nodejs_compat unlocks: postgres-js (TCP sockets), AsyncLocalStorage, Buffer.
+  // Sept 2024+ compat date is required for the Node TCP socket support.
+  "compatibility_date": "2025-07-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "triggers": {
+    // Daily abandoned-draft reap (was Deno.cron). 03:00 UTC.
+    "crons": ["0 3 * * *"]
+  },
+  "vars": {
+    "HMLS_AGENT_MODEL": "deepseek-v4-pro",
+    "LOG_LEVEL": "info"
+  }
+  // DB: connect directly to Supabase's TRANSACTION-mode pooler (host
+  // ...pooler.supabase.com, port 6543). No Hyperdrive — the client uses
+  // prepare:false, which transaction pooling requires. If cold-connection
+  // latency ever becomes a measured problem, add a Hyperdrive binding and
+  // point these two connection strings at it (small change, no rewrite).
+  //
+  // Secrets (wrangler secret put ...):
+  //   DATABASE_URL          — service_role @ 6543 pooler (admin/system)
+  //   TENANT_DATABASE_URL   — restricted role @ 6543 pooler (RLS-enforcing)
+  //   DEEPSEEK_API_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
+  //   SLACK_WEBHOOK_URL, SUPABASE_URL, SUPABASE_ANON_KEY
+}

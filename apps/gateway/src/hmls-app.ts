@@ -1,3 +1,4 @@
+import { env } from "@hmls/shared/env";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { getLogger } from "@logtape/logtape";
@@ -81,7 +82,7 @@ export function createHmlsApp() {
     return c.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+  const stripeKey = env("STRIPE_SECRET_KEY");
   if (stripeKey) {
     app.route("/webhook", createWebhookRoute(stripeKey));
   }

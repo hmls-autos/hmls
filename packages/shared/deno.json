@@ -2,6 +2,7 @@
   "name": "@hmls/shared",
   "version": "0.1.0",
   "exports": {
+    "./env": "./src/lib/env.ts",
     "./tool-result": "./src/lib/tool-result.ts",
     "./errors": "./src/lib/errors.ts",
     "./db": "./src/db/client.ts",

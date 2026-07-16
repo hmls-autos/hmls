@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { convertToModelMessages } from "ai";
 import { eq } from "drizzle-orm";
-import { runHmlsAgent, type UserContext } from "@hmls/agent";
+import { runHmlsAgent } from "@hmls/agent/hmls-agent";
+import type { UserContext } from "@hmls/agent/user-context";
 import { dbAdmin, schema } from "@hmls/agent/db";
 import { routeOrderToShop } from "@hmls/agent/common/shop-routing";
 import { Errors } from "@hmls/shared/errors";
