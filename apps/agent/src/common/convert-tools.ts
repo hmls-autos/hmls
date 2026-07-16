@@ -25,6 +25,15 @@ export interface LegacyTool<P = any> {
   execute: (params: P, ctx?: ToolContext) => Promise<unknown>;
 }
 
+/** AI SDK v7 strictly validates tool outputs as JSON values when it builds the
+ *  next step's prompt (standardizePrompt) — a Date (e.g. create_order's
+ *  expiresAt, get_order's scheduledAt) fails validation and kills the stream
+ *  mid-turn as "An error occurred.". Round-trip through JSON so every tool
+ *  result is exactly what the wire would carry (Dates → ISO strings). */
+function toJsonSafe(value: unknown): unknown {
+  return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+}
+
 /** Convert existing tool arrays (name/schema/execute) to AI SDK tool records. */
 // deno-lint-ignore no-explicit-any
 export function convertTools(existingTools: LegacyTool[], ctx?: ToolContext): Record<string, any> {
@@ -34,21 +43,23 @@ export function convertTools(existingTools: LegacyTool[], ctx?: ToolContext): Re
     result[t.name] = {
       description: t.description,
       inputSchema: t.schema,
-      execute: (input: unknown) => {
+      execute: async (input: unknown) => {
         // Owner viewing all shops → cross-shop read on the admin connection.
         if (ctx?.shopId === OWNER_ALL_SHOPS) {
-          return withAdminScope(() => t.execute(input, ctx));
+          return toJsonSafe(await withAdminScope(() => t.execute(input, ctx)));
         }
         // A concrete shop (staff) or a customer → RLS-scoped transaction.
         if (ctx?.customerId != null || ctx?.shopId) {
-          return withTenantScope(
-            { shopId: ctx.shopId, customerId: ctx.customerId },
-            () => t.execute(input, ctx),
+          return toJsonSafe(
+            await withTenantScope(
+              { shopId: ctx.shopId, customerId: ctx.customerId },
+              () => t.execute(input, ctx),
+            ),
           );
         }
         // No tenant context (e.g. Fixo tools) → run unscoped on the base pool.
         // Fixo tables are not RLS'd; tenant_app has grants on them.
-        return t.execute(input, ctx);
+        return toJsonSafe(await t.execute(input, ctx));
       },
     };
   }
