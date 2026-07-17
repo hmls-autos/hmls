@@ -1,4 +1,3 @@
-import { env } from "@hmls/shared/env";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { getLogger } from "@logtape/logtape";
@@ -82,10 +81,10 @@ export function createHmlsApp() {
     return c.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  const stripeKey = env("STRIPE_SECRET_KEY");
-  if (stripeKey) {
-    app.route("/webhook", createWebhookRoute(stripeKey));
-  }
+  // Mounted unconditionally: on workerd, createHmlsApp() runs at module init
+  // where env() can't resolve yet (C3 in docs/cloudflare-migration.md). The
+  // route re-checks the Stripe keys per request and 500s if unconfigured.
+  app.route("/webhook", createWebhookRoute());
 
   app.route("/api/estimates", estimates);
   app.route("/api/orders", ordersPdf);

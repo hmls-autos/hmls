@@ -14,19 +14,23 @@ const logger = getLogger(["hmls", "gateway", "webhook"]);
 //
 // When a shop opts into Stripe auto-capture, restore the handlers to
 // transition the order's `paidAt` / `paymentMethod` / `paidAmountCents`.
-export function createWebhookRoute(stripeSecretKey: string) {
-  const stripe = new Stripe(stripeSecretKey, {
-    apiVersion: "2026-02-25.clover",
-  });
-
+//
+// Keys are read per request, not at mount: on workerd the app is composed at
+// module init, where env() can't resolve yet (C3 in
+// docs/cloudflare-migration.md).
+export function createWebhookRoute() {
   const webhook = new Hono();
 
   webhook.post("/stripe", async (c) => {
+    const stripeSecretKey = env("STRIPE_SECRET_KEY");
     const webhookSecret = env("STRIPE_WEBHOOK_SECRET");
-    if (!webhookSecret) {
-      logger.error("STRIPE_WEBHOOK_SECRET not set");
+    if (!stripeSecretKey || !webhookSecret) {
+      logger.error("STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET not set");
       return c.json({ error: "Webhook not configured" }, 500);
     }
+    const stripe = new Stripe(stripeSecretKey, {
+      apiVersion: "2026-02-25.clover",
+    });
 
     const signature = c.req.header("stripe-signature");
     if (!signature) {

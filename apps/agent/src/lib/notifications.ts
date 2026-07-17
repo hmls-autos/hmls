@@ -40,24 +40,23 @@ interface EmailTemplate {
 }
 
 // --- Config ---
+// Read lazily, not at module init: on workerd, env() only resolves inside a
+// request's runWithEnv scope — module-scope reads would freeze to the
+// defaults (C3 in docs/cloudflare-migration.md).
 
-const BASE_URL = env("BASE_URL") || "https://hmls.autos";
-const PORTAL_URL = env("PORTAL_URL") || `${BASE_URL}/portal`;
-const BUSINESS_ADDRESS = env("BUSINESS_ADDRESS") ?? "";
+const baseUrl = () => env("BASE_URL") || "https://hmls.autos";
+const portalUrl = () => env("PORTAL_URL") || `${baseUrl()}/portal`;
+const businessAddress = () => env("BUSINESS_ADDRESS") ?? "";
 
 // Fixo推广 CTA targets (CEO plan 2026-05-14 Lane D — HMLS rejection
 // flow becomes fixo's first dogfood channel). The CTA in rejection /
 // cancellation emails routes through the fixo gateway's
 // /funnel/track GET endpoint so we capture the click before the
-// browser leaves for fixo.ink, then redirects to FIXO_PUBLIC_URL.
-const FIXO_PUBLIC_URL = env("FIXO_PUBLIC_URL") || "https://fixo.ink";
-const FIXO_API_URL = env("FIXO_API_URL") || "https://api.fixo.ink";
+// browser leaves for fixo.ink, then redirects to fixoPublicUrl().
+const fixoPublicUrl = () => env("FIXO_PUBLIC_URL") || "https://fixo.ink";
+const fixoApiUrl = () => env("FIXO_API_URL") || "https://api.fixo.ink";
 
-if (!BUSINESS_ADDRESS) {
-  logger.warn(
-    "BUSINESS_ADDRESS env var not set — outgoing emails will lack the physical address required by CAN-SPAM",
-  );
-}
+let warnedNoBusinessAddress = false;
 
 // --- HTML helpers ---
 
@@ -158,9 +157,9 @@ function fixoCtaUrl(channelDetail: string): string {
     event: "hmls_rejection_click",
     channel: "hmls",
     channel_detail: channelDetail,
-    to: FIXO_PUBLIC_URL,
+    to: fixoPublicUrl(),
   });
-  return `${FIXO_API_URL}/funnel/track?${qs.toString()}`;
+  return `${fixoApiUrl()}/funnel/track?${qs.toString()}`;
 }
 
 // Subtle "by the way, here's a free tool" CTA. Honest, not over-sell —
@@ -201,9 +200,9 @@ function htmlWrapper(content: string): string {
     <div style="background:#ffffff;border-radius:12px;border:1px solid #e4e4e7;overflow:hidden;">
       ${content}
     </div>
-    <p style="text-align:center;font-size:11px;color:#a1a1aa;margin:16px 0;line-height:1.5;">HMLS &middot; <a href="${BASE_URL}" style="color:#a1a1aa;">${
-    BASE_URL.replace("https://", "")
-  }</a>${BUSINESS_ADDRESS ? `<br>${BUSINESS_ADDRESS}` : ""}</p>
+    <p style="text-align:center;font-size:11px;color:#a1a1aa;margin:16px 0;line-height:1.5;">HMLS &middot; <a href="${baseUrl()}" style="color:#a1a1aa;">${
+    baseUrl().replace("https://", "")
+  }</a>${businessAddress() ? `<br>${businessAddress()}` : ""}</p>
   </div>
 </td></tr>
 </table>
@@ -402,6 +401,13 @@ async function sendEmail(
     return false;
   }
 
+  if (!businessAddress() && !warnedNoBusinessAddress) {
+    warnedNoBusinessAddress = true;
+    logger.warn(
+      "BUSINESS_ADDRESS env var not set — outgoing emails will lack the physical address required by CAN-SPAM",
+    );
+  }
+
   const from = env("NOTIFY_FROM_EMAIL") || "HMLS <noreply@hmls.autos>";
 
   try {
@@ -540,7 +546,7 @@ export async function notifyMechanic(
       : "Time TBD";
     const customer = order.contactName || "Customer";
     const phone = order.contactPhone || "";
-    const jobsUrl = `${BASE_URL}/mechanic`;
+    const jobsUrl = `${baseUrl()}/mechanic`;
 
     let subject: string;
     let intro: string;
@@ -644,8 +650,8 @@ export async function notifyOrderStatusChange(
     const ctx: NotificationContext = {
       customerName,
       orderId: order.id,
-      baseUrl: BASE_URL,
-      portalUrl: PORTAL_URL,
+      baseUrl: baseUrl(),
+      portalUrl: portalUrl(),
     };
 
     // Pricing
@@ -681,14 +687,14 @@ export async function notifyOrderStatusChange(
 
     // Magic link: points to /estimate/[id] (no /portal prefix)
     if (order.shareToken) {
-      ctx.reviewUrl = `${BASE_URL}/estimate/${order.id}?token=${order.shareToken}`;
+      ctx.reviewUrl = `${baseUrl()}/estimate/${order.id}?token=${order.shareToken}`;
     }
 
     // Send customer email
     const template = STATUS_EMAILS[newStatus];
     if (template) {
       const html = template.html ? template.html(ctx) : undefined;
-      const textFooter = BUSINESS_ADDRESS ? `\n\n--\n${BUSINESS_ADDRESS}` : "";
+      const textFooter = businessAddress() ? `\n\n--\n${businessAddress()}` : "";
       await sendEmail(toEmail, template.subject, template.text(ctx) + textFooter, html);
     }
 
@@ -699,7 +705,7 @@ export async function notifyOrderStatusChange(
         const label = adminStatusLabel(newStatus);
         const adminSubject = `[HMLS Admin] Order #${order.id} → ${label}`;
         const adminBody =
-          `Order #${order.id} (${customerName} / ${toEmail}) changed to: ${label}\n\nAdmin portal: ${PORTAL_URL}/admin/orders/${order.id}`;
+          `Order #${order.id} (${customerName} / ${toEmail}) changed to: ${label}\n\nAdmin portal: ${portalUrl()}/admin/orders/${order.id}`;
         await sendEmail(adminEmail, adminSubject, adminBody);
       }
     }

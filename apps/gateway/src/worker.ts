@@ -19,14 +19,24 @@ import { getLogger } from "@logtape/logtape";
 import { createHmlsApp } from "./hmls-app.ts";
 import { setupLogging } from "./logger.ts";
 
-await setupLogging();
 const logger = getLogger(["hmls", "gateway", "worker"]);
 const app = createHmlsApp();
 
+// Logging is configured on the first request, not at isolate init: LOG_LEVEL
+// arrives in the per-request env bindings, which env() can only see inside a
+// runWithEnv scope (C3 in docs/cloudflare-migration.md). getLogger() calls
+// before configure() are fine — logtape buffers category objects and binds
+// sinks when configure() runs.
+let loggingReady: Promise<void> | undefined;
+const ensureLogging = () => (loggingReady ??= setupLogging());
+
 export default {
   // deno-lint-ignore no-explicit-any
-  fetch(req: Request, env: any, ctx: any): Response | Promise<Response> {
-    return runWithEnv(env, () => app.fetch(req, env, ctx));
+  fetch(req: Request, env: any, ctx: any): Promise<Response> {
+    return runWithEnv(env, async () => {
+      await ensureLogging();
+      return app.fetch(req, env, ctx);
+    });
   },
 
   // Daily reap of abandoned draft orders — replaces the `Deno.cron` job in
@@ -37,6 +47,7 @@ export default {
   scheduled(_event: any, env: any, ctx: any): void {
     ctx.waitUntil(
       runWithEnv(env, async () => {
+        await ensureLogging();
         try {
           const rows = await dbAdmin.execute(sql`SELECT cancel_abandoned_drafts(14) AS n`);
           const n = (rows as unknown as Array<{ n: number }>)[0]?.n ?? 0;
