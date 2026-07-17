@@ -3,7 +3,11 @@
   // Validate with `wrangler dev` / deploy with `wrangler deploy`.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "hmls-api",
-  "main": "src/worker.ts",
+  // Pre-built by `deno task build:worker` (esbuild + @deno/esbuild-plugin).
+  // wrangler's own bundler can't resolve deno.json imports (JSR deps, Deno
+  // workspace packages) — see docs/cloudflare-migration.md C1/C2.
+  "main": "dist/worker.js",
+  "no_bundle": true,
   // nodejs_compat unlocks: postgres-js (TCP sockets), AsyncLocalStorage, Buffer.
   // Sept 2024+ compat date is required for the Node TCP socket support.
   "compatibility_date": "2025-07-01",

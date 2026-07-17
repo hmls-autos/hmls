@@ -15,6 +15,7 @@
     "app": "hmls-api"
   },
   "tasks": {
+    "build:worker": "deno run -A scripts/build-worker.ts",
     "dev": "deno run --env=../../.env.local --allow-net --allow-env --allow-read --allow-write --allow-run --allow-sys --allow-ffi --watch src/index.ts",
     "start": "deno run --env=../../.env.local --allow-net --allow-env --allow-read --allow-write --allow-run --allow-sys --allow-ffi src/index.ts",
     "test": "deno test --allow-env --allow-read --allow-net --allow-sys --allow-ffi src/"

@@ -2,6 +2,8 @@
   "workspace": ["./apps/gateway", "./apps/agent", "./packages/shared"],
   "nodeModulesDir": "auto",
   "imports": {
+    "@deno/esbuild-plugin": "jsr:@deno/esbuild-plugin@^1.2.1",
+    "esbuild": "npm:esbuild@^0.25.5",
     "ai": "npm:ai@^7.0.22",
     "@ai-sdk/google": "npm:@ai-sdk/google@^4.0.12",
     "@ai-sdk/deepseek": "npm:@ai-sdk/deepseek@^3.0.7",
@@ -34,6 +36,7 @@
   },
   "tasks": {
     "dev:api": "deno task --cwd apps/gateway dev",
+    "build:worker": "deno task --cwd apps/gateway build:worker",
     "check:gateway": "deno check apps/gateway/src/index.ts",
     "check:agent": "deno check apps/agent/src/mod.ts",
     "check": "deno task check:gateway && deno task check:agent",
