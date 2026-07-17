@@ -13,6 +13,7 @@
     "./order-intake": "./src/services/order-intake.ts",
     "./auto-assign": "./src/services/auto-assign.ts",
     "./fixo-brain": "./src/fixo/fixo-brain.ts",
+    "./prediction-log": "./src/fixo/prediction-log.ts",
     "./common/shop-routing": "./src/common/shop-routing.ts"
   },
   "imports": {

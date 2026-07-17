@@ -18,7 +18,7 @@ import {
   transition,
 } from "@hmls/agent/order-state";
 import { autoAssignProvider } from "@hmls/agent/auto-assign";
-import { recordOutcome } from "@hmls/agent/fixo-brain";
+import { recordOutcome } from "@hmls/agent/prediction-log";
 import { sendOrderStateResult } from "../lib/order-state-http.ts";
 import { pdfResponse } from "../lib/pdf-response.ts";
 import {

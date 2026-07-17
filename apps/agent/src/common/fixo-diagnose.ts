@@ -1,4 +1,4 @@
-import { diagnoseStructured, type StructuredDiagnosis } from "../fixo/diagnose-structured.ts";
+import type { StructuredDiagnosis } from "../fixo/diagnose-structured.ts";
 import type { DiagnoseOnceInput } from "../fixo/run-once-prompt.ts";
 
 export interface DiagnoseInput {
@@ -20,11 +20,17 @@ export interface DiagnoseInput {
  */
 export async function diagnose(
   input: DiagnoseInput,
-  run: (i: DiagnoseOnceInput) => Promise<StructuredDiagnosis> = diagnoseStructured,
+  run?: (i: DiagnoseOnceInput) => Promise<StructuredDiagnosis>,
 ): Promise<StructuredDiagnosis | null> {
   try {
+    // Default transport resolved lazily: a static diagnoseStructured import
+    // would drag the fixo agent into the HMLS Worker's eager module graph
+    // (blocker #8 in docs/cloudflare-migration.md). On workerd without
+    // GOOGLE_API_KEY the run fails soft into this catch → null.
+    const doRun = run ??
+      (await import("../fixo/diagnose-structured.ts")).diagnoseStructured;
     // imageRefs intentionally dropped in v1 (DiagnoseOnceInput has no image field).
-    return await run({
+    return await doRun({
       vehicle: {
         year: input.vehicle.year ?? "",
         make: input.vehicle.make ?? "",

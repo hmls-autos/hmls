@@ -36,7 +36,7 @@ import type { OrderItem, RepairTechPrep } from "@hmls/shared/db/schema";
 import { getRepairJobs } from "../../hmls/tools/olp-client.ts";
 import { patchItems } from "../../services/order-state.ts";
 import { upsertOrderIntake } from "../../services/order-intake.ts";
-import { fillPrediction, openPrediction, recordEstimate } from "../../fixo/fixo-brain.ts";
+import { openPrediction, recordEstimate } from "../../fixo/prediction-log.ts";
 import {
   customerAgentActor,
   staffAgentActor,
@@ -836,8 +836,16 @@ export const createOrderTool = {
           symptom: symptomDescription,
         });
         // Fire-and-forget: the expert diagnosis (~5s agent run) must not block order create.
+        // Dynamic import keeps the fixo agent out of the Worker's eager module
+        // graph (blocker #8 in docs/cloudflare-migration.md) — on workerd the
+        // fill fails soft into this catch (no GOOGLE_API_KEY there; the fixo
+        // agent stays on Deno Deploy) and the prediction row stays unfilled.
         // ponytail: if a worker/queue ever exists, move this there; for now a detached promise is fine.
-        void fillPrediction(fixoPredictionId, { vehicle: vehicleInfo, symptom: symptomDescription })
+        const pid = fixoPredictionId;
+        void import("../../fixo/fixo-brain.ts")
+          .then(({ fillPrediction }) =>
+            fillPrediction(pid, { vehicle: vehicleInfo, symptom: symptomDescription })
+          )
           .catch((err) => console.error("fillPrediction failed:", String(err)));
       } catch (err) {
         console.error("openPrediction failed during order create:", String(err));
