@@ -28,6 +28,7 @@
     "exclude": [
       "apps/hmls-web/",
       "apps/fixo-web/",
+      "apps/gateway/.wrangler/",
       "apps/agent/src/common/data/zip-centroids.json"
     ]
   },

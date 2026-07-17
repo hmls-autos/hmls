@@ -8,6 +8,10 @@
   // workspace packages) — see docs/cloudflare-migration.md C1/C2.
   "main": "dist/worker.js",
   "no_bundle": true,
+  // dist/yoga.wasm (extracted by build:worker) uploads as a pre-compiled
+  // WebAssembly.Module — workerd forbids compiling wasm from bytes at runtime.
+  "find_additional_modules": true,
+  "rules": [{ "type": "CompiledWasm", "globs": ["**/*.wasm"] }],
   // nodejs_compat unlocks: postgres-js (TCP sockets), AsyncLocalStorage, Buffer.
   // Sept 2024+ compat date is required for the Node TCP socket support.
   "compatibility_date": "2025-07-01",

@@ -28,11 +28,12 @@ scrape-olp), which never deploy.
 
 ## Status — implemented & verified in this branch
 
-All Deno-side changes pass `deno check`, `deno test`, `deno fmt`, `deno lint`. **Caveat (from
-review):** `deno check` covers `index.ts`/`mod.ts` but **not** `worker.ts` (it's outside that graph
-— validated only by wrangler/tsc, not run here). And a `deno check`-green tree does **not** mean the
-Worker builds — the review found build blockers **C1–C4** (below) that fail `wrangler deploy` today.
-Treat the ✅ items as "Deno-side sound," not "deploys."
+**2026-07-17 update: C1–C4 and blockers #6/#8 are all FIXED and verified on local workerd
+(`wrangler dev` / miniflare).** The worker builds, boots, serves `/health`, runs `SELECT 1` through
+postgres-js, renders a real EstimatePdf via react-pdf + yoga wasm, and the env() ALS survives the
+streamed-body pull. The one thing local dev could NOT verify is postgres-js **TLS** to the Supabase
+pooler (miniflare's `startTls` emulation hangs; raw TCP + PG `SSLRequest` handshake to the 6543
+pooler works and returns `'S'`) — that needs one verification on deployed workerd.
 
 | Done | Item                                                                                                                                  |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -41,18 +42,39 @@ Treat the ✅ items as "Deno-side sound," not "deploys."
 | ✅   | DB client reads `DATABASE_URL`/`TENANT_DATABASE_URL` via `env()` + `prepare:false` — [client.ts](../packages/shared/src/db/client.ts) |
 | ✅   | Skills off the filesystem → [skills-bundle.ts](../apps/agent/src/hmls/skills-bundle.ts) (generator + drift test)                      |
 | ✅   | Workers entrypoint `fetch`+`scheduled` — [worker.ts](../apps/gateway/src/worker.ts)                                                   |
-| ✅   | [wrangler.jsonc](../apps/gateway/wrangler.jsonc) — nodejs_compat, cron, DB via secrets                                                |
-| ⏳   | Spikes (react-pdf on workerd, direct Supabase connection) — need CF account                                                           |
+| ✅   | [wrangler.jsonc](../apps/gateway/wrangler.jsonc) — nodejs_compat, cron, `no_bundle` + CompiledWasm rule                               |
+| ✅   | **C1+C2**: build pipeline — [build-worker.ts](../apps/gateway/scripts/build-worker.ts) (esbuild + @deno/esbuild-plugin)               |
+| ✅   | **C3**: module-init env reads made lazy (webhook mount, olp-client, notifications, logging)                                           |
+| ✅   | **C4**: verified on workerd — ALS readable in stream pull; tenant client created mid-pull OK                                          |
+| ✅   | **#6**: react-pdf renders on workerd (browser builds for pdfkit/png-js/image + yoga wasm as CompiledWasm module)                      |
+| ✅   | **#8**: fixo agent out of the eager worker graph ([prediction-log.ts](../apps/agent/src/fixo/prediction-log.ts) split)                |
+| ✅   | `/health/db` probe route (SELECT 1 via admin pool) for cutover verification                                                           |
+| ⏳   | Verify postgres-js TLS to the 6543 pooler on DEPLOYED workerd (local miniflare `startTls` hangs — likely local-only)                  |
+| ⏳   | CF account setup: `wrangler secret put` (see env table), first deploy, workers.dev smoke test                                         |
 | ⏳   | DNS cutover + repoint web `GATEWAY_URL` at Workers API                                                                                |
+| ⏳   | Decide: `GOOGLE_API_KEY` on the worker? (live `diagnose_symptom` in customer chat fails soft → null without it)                       |
 | —    | Web: stays on Vercel (no work)                                                                                                        |
 | —    | Auth: stays Supabase (no work)                                                                                                        |
 
+### Local dev (workerd)
+
+```bash
+deno task build:worker                     # bundle dist/worker.js + dist/yoga.wasm
+cd apps/gateway && wrangler dev            # .dev.vars holds DATABASE_URL etc. (gitignored)
+curl localhost:8787/health/db              # DB probe
+```
+
+`.dev.vars` note: point `DATABASE_URL`/`TENANT_DATABASE_URL` at a LOCAL Postgres for wrangler dev —
+TLS to the real Supabase pooler hangs under miniflare (see above), and prod-DB-from-dev is banned
+anyway (ops runbook).
+
 ---
 
-## ⚠️ Blockers found in adversarial code review (the first draft missed these)
+## ⚠️ Blockers found in adversarial code review — ALL FIXED 2026-07-17
 
 A 6-reviewer pass verified this plan against the actual module graph. Four blockers were missed —
-**two fail the build before runtime**:
+**two fail the build before runtime**. Kept for the record; every one is now resolved (see the
+status table above for the fixes):
 
 **C1 — `@logtape/logtape` is JSR-only (BUILD BLOCKER).** Declared in `deno.json` (JSR), imported by
 ~20 files in the worker graph starting at `worker.ts`. wrangler/esbuild uses **Node resolution and
@@ -103,7 +125,24 @@ wrangler's default esbuild bundling can't resolve this Deno codebase (C1/C2). Op
   it to root npm workspaces, and depend on npm builds of the JSR deps. More invasive, fights the
   Deno setup.
 
-Recommend the esbuild-deno-loader build step. This is the real Phase 1 prerequisite.
+**DECIDED + IMPLEMENTED (2026-07-17):** the esbuild + `@deno/esbuild-plugin` route —
+[build-worker.ts](../apps/gateway/scripts/build-worker.ts), run via `deno task build:worker`.
+Output: `dist/worker.js` (~9 MB raw / ~1.6 MB gzip, well under the 10 MB paid limit) +
+`dist/yoga.wasm`; wrangler deploys them with `no_bundle` + `find_additional_modules`. Three
+build-time shims proved necessary on top of the loader (all in build-worker.ts):
+
+1. **node-builtin-shims** — CJS deps (`queue`, `crypto-js`) require bare `"events"`/`"crypto"`; left
+   external those become `__require()` bombs that throw at isolate boot. Bare ids are rewritten to
+   bundled modules re-exporting the workerd-supported `node:*` equivalent. `fs` → empty stub (only
+   @react-pdf/renderer's never-called `renderToFile` touches it).
+2. **react-pdf-browser-builds** — the Deno loader resolves Node `main` entries and ignores the
+   package.json `browser` field; @react-pdf/pdfkit, png-js, and image get their fs-free browser
+   builds swapped in. The renderer keeps its Node build (its browser build stubs `renderToBuffer`
+   with a throw).
+3. **yoga-wasm-shim** — yoga-layout is emscripten wasm instantiated from base64 at runtime, which
+   workerd forbids ("Wasm code generation disallowed"). The wasm bytes are extracted to
+   `dist/yoga.wasm` (a CompiledWasm module) and `yoga-layout/load` is shimmed to feed the
+   pre-compiled `WebAssembly.Module` through the emscripten `instantiateWasm` hook.
 
 ---
 
@@ -117,7 +156,7 @@ Recommend the esbuild-deno-loader build step. This is the real Phase 1 prerequis
 | Env / secrets (`Deno.env.get` ×55)       | process env                          | **`env` binding** via `runWithEnv` ALS shim                                                       |
 | Cron (`Deno.cron` daily reap)            | Deno Deploy                          | **Cron Trigger** → `scheduled()` handler                                                          |
 | Skills (`.skills/*.md` off disk)         | `Deno.readTextFile`                  | **plain string constants** in `skills-bundle.ts` (generated from `.md`)                           |
-| PDF (`@react-pdf/renderer`)              | `renderToBuffer`                     | **spike on workerd (import-time risk); sidecar + dynamic import fallback**                        |
+| PDF (`@react-pdf/renderer`)              | `renderToBuffer`                     | **✅ renders natively on workerd** (browser builds + yoga CompiledWasm — no sidecar needed)       |
 | Auth                                     | Supabase Auth                        | **unchanged** — `getUser()` is a `fetch`, works on workerd                                        |
 | Fixo media                               | Supabase Storage                     | unchanged (Fixo deferred)                                                                         |
 
@@ -125,16 +164,16 @@ Recommend the esbuild-deno-loader build step. This is the real Phase 1 prerequis
 
 ## Blocker matrix
 
-| # | Blocker                                                                                                                                                                   | Files                                                                                                                                                                                                                             | Severity       | Fix                                                                                                                                                                                                                                                                                                                |
-| - | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1 | `Deno.env.get` ×55 — no global env on Workers                                                                                                                             | gateway + agent + shared                                                                                                                                                                                                          | **needs shim** | ✅ `env()` shim committed ([env.ts](../packages/shared/src/lib/env.ts)); sweep call sites → `env()`                                                                                                                                                                                                                |
-| 2 | `Deno.serve` + `Deno.cron`                                                                                                                                                | [index.ts:97,106,110](../apps/gateway/src/index.ts)                                                                                                                                                                               | trivial        | new `worker.ts` with `fetch` + `scheduled`; cron via `triggers.crons`                                                                                                                                                                                                                                              |
-| 3 | `postgres-js` raw TCP                                                                                                                                                     | [client.ts](../packages/shared/src/db/client.ts)                                                                                                                                                                                  | needs-config   | `nodejs_compat` + Supabase transaction pooler (6543), `prepare:false`. Hyperdrive optional (latency only)                                                                                                                                                                                                          |
-| 4 | `AsyncLocalStorage` (tx scoping + env shim)                                                                                                                               | client.ts, env.ts                                                                                                                                                                                                                 | needs-flag     | `nodejs_compat` covers it                                                                                                                                                                                                                                                                                          |
-| 5 | `.skills/*.md` FS read                                                                                                                                                    | [load-skills.ts](../apps/agent/src/hmls/load-skills.ts)                                                                                                                                                                           | ✅ done        | vendored into [skills-bundle.ts](../apps/agent/src/hmls/skills-bundle.ts) (plain strings; no FS, no unstable flags) + drift test                                                                                                                                                                                   |
-| 6 | `@react-pdf/renderer` — **import-time** risk (static top-level import, evaluated at isolate boot)                                                                         | [pdf-response.ts](../apps/gateway/src/lib/pdf-response.ts), [EstimatePdf.tsx](../apps/agent/src/hmls/pdf/EstimatePdf.tsx), routes `orders.ts`/`estimates.ts`                                                                      | **RISK**       | spike under `nodejs_compat`. If it breaks at module-eval, the **whole worker fails to boot** (not just the PDF route) — a sidecar doesn't rescue that, so the fix must ALSO make the react-pdf imports `dynamic import()` behind the PDF handlers                                                                  |
-| 7 | `verifyToken` = per-request Supabase network call                                                                                                                         | [supabase.ts](../apps/gateway/src/lib/supabase.ts)                                                                                                                                                                                | ok             | works on workerd as-is. _Optional_ later: local JWKS verify (`jose`) to drop the per-request round-trip                                                                                                                                                                                                            |
-| 8 | **Fixo bundle leak** — HMLS `create_order` + `orders.ts`/`mechanic.ts` import `fixo-brain`, which pulls `diagnoseStructured` → fixo agent → `extractVideoFrames` (ffmpeg) | [order.ts:39](../apps/agent/src/common/tools/order.ts), [orders.ts:21](../apps/gateway/src/routes/orders.ts), [mechanic.ts:10](../apps/gateway/src/routes/mechanic.ts) → [fixo-brain.ts:13](../apps/agent/src/fixo/fixo-brain.ts) | **major**      | ✅ barrel imports repointed to fixo-free subpaths. **TODO:** split DB-only telemetry (`openPrediction`/`recordEstimate`/`recordOutcome`) out of `fixo-brain.ts`; `fillPrediction` (runs the fixo agent) → drop on Worker or call Fixo brain over HTTP (the `brain-service.ts` contract was designed for this swap) |
+| # | Blocker                                                                                                                                                                   | Files                                                                                                                                                                                                                             | Severity       | Fix                                                                                                                                                                                                                                                                                                                                                                                      |
+| - | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 | `Deno.env.get` ×55 — no global env on Workers                                                                                                                             | gateway + agent + shared                                                                                                                                                                                                          | **needs shim** | ✅ `env()` shim committed ([env.ts](../packages/shared/src/lib/env.ts)); sweep call sites → `env()`                                                                                                                                                                                                                                                                                      |
+| 2 | `Deno.serve` + `Deno.cron`                                                                                                                                                | [index.ts:97,106,110](../apps/gateway/src/index.ts)                                                                                                                                                                               | trivial        | new `worker.ts` with `fetch` + `scheduled`; cron via `triggers.crons`                                                                                                                                                                                                                                                                                                                    |
+| 3 | `postgres-js` raw TCP                                                                                                                                                     | [client.ts](../packages/shared/src/db/client.ts)                                                                                                                                                                                  | needs-config   | `nodejs_compat` + Supabase transaction pooler (6543), `prepare:false`. Hyperdrive optional (latency only)                                                                                                                                                                                                                                                                                |
+| 4 | `AsyncLocalStorage` (tx scoping + env shim)                                                                                                                               | client.ts, env.ts                                                                                                                                                                                                                 | needs-flag     | `nodejs_compat` covers it                                                                                                                                                                                                                                                                                                                                                                |
+| 5 | `.skills/*.md` FS read                                                                                                                                                    | [load-skills.ts](../apps/agent/src/hmls/load-skills.ts)                                                                                                                                                                           | ✅ done        | vendored into [skills-bundle.ts](../apps/agent/src/hmls/skills-bundle.ts) (plain strings; no FS, no unstable flags) + drift test                                                                                                                                                                                                                                                         |
+| 6 | `@react-pdf/renderer` — **import-time** risk (static top-level import, evaluated at isolate boot)                                                                         | [pdf-response.ts](../apps/gateway/src/lib/pdf-response.ts), [EstimatePdf.tsx](../apps/agent/src/hmls/pdf/EstimatePdf.tsx), routes `orders.ts`/`estimates.ts`                                                                      | ✅ done        | verified on wrangler dev: boots AND renders a real EstimatePdf. Needed browser builds for pdfkit/png-js/image, an empty `fs` stub for the renderer, and yoga wasm as a CompiledWasm module (see Build pipeline). No sidecar, no dynamic import needed                                                                                                                                    |
+| 7 | `verifyToken` = per-request Supabase network call                                                                                                                         | [supabase.ts](../apps/gateway/src/lib/supabase.ts)                                                                                                                                                                                | ok             | works on workerd as-is. _Optional_ later: local JWKS verify (`jose`) to drop the per-request round-trip                                                                                                                                                                                                                                                                                  |
+| 8 | **Fixo bundle leak** — HMLS `create_order` + `orders.ts`/`mechanic.ts` import `fixo-brain`, which pulls `diagnoseStructured` → fixo agent → `extractVideoFrames` (ffmpeg) | [order.ts:39](../apps/agent/src/common/tools/order.ts), [orders.ts:21](../apps/gateway/src/routes/orders.ts), [mechanic.ts:10](../apps/gateway/src/routes/mechanic.ts) → [fixo-brain.ts:13](../apps/agent/src/fixo/fixo-brain.ts) | ✅ done        | DB-only telemetry split into [prediction-log.ts](../apps/agent/src/fixo/prediction-log.ts) (`@hmls/agent/prediction-log`); `fillPrediction` + `diagnose_symptom`'s transport are call-site dynamic imports (lazy `__esm` in the bundle — never evaluated at boot, fail-soft on workerd without `GOOGLE_API_KEY`). Verified via metafile: zero eager import edges into fixo/ from outside |
 
 **Build blockers C1–C4 (from the code review, above) are the true gating items — the matrix rows 1-8
 are runtime/bundle; C1/C2 fail the build first.**
@@ -175,11 +214,18 @@ reads must become lazy** so they resolve at request time, not isolate-startup.
 
 ### Phase 0 — Spike the two unknowns (do first, ~1 day)
 
-- [ ] `@react-pdf/renderer` `renderToBuffer` on `wrangler dev` with `nodejs_compat` — render one
-      EstimatePdf. **Kills the biggest risk before mass edits.**
-- [ ] `postgres-js` direct to Supabase pooler: one `SELECT 1` from a Worker over the **6543
-      transaction pooler** (confirms TCP socket + `prepare:false` path).
-- Decision gate: if PDF fails → adopt the sidecar plan (Phase 3b) before proceeding.
+- [x] `@react-pdf/renderer` `renderToBuffer` on `wrangler dev` with `nodejs_compat` — **rendered a
+      valid 2-page EstimatePdf** (needed the three build shims; see Build pipeline).
+- [x] `postgres-js` from workerd: `SELECT 1` works (verified against local Postgres, plaintext).
+      **Caveat:** against the real 6543 pooler with `sslmode=require`, miniflare hangs inside
+      postgres-js's `startTls` upgrade — while a raw `cloudflare:sockets` PG `SSLRequest` handshake
+      to the same pooler succeeds (`'S'` returned). Conclusion: TCP + endpoint fine; the TLS hang is
+      in miniflare's local socket emulation. Re-verify TLS once on DEPLOYED workerd via
+      `/health/db`.
+- [x] **C4 (ALS across the streamed body)**: verified on workerd — a lazy `ReadableStream` `pull`
+      created inside `runWithEnv` still reads `env()` fine after `als.run` returns, and the tenant
+      DB client's lazy first-creation mid-pull succeeds. No fetch-time warm-up needed.
+- ~~Decision gate: if PDF fails → sidecar~~ — PDF passed; sidecar plan retired.
 
 ### Phase 1 — API Worker foundation
 
@@ -205,9 +251,9 @@ reads must become lazy** so they resolve at request time, not isolate-startup.
 - [x] Skills vendored into `skills-bundle.ts` (plain strings, generated via
       `deno task --cwd apps/agent build:skills`); `load-skills.ts` reads `SKILL_BUNDLE`; drift
       guarded by `load-skills_test.ts`. No text-import, no wrangler `.md` rule.
-- [ ] **PDF (only if Phase 0 import-time spike fails):** make `pdf-response.ts`/`EstimatePdf`
-      imports `dynamic import()` behind the PDF route handlers so the core worker boots without
-      react-pdf, and stand up a Node/Deno PDF sidecar the API calls over HTTP.
+- [x] **PDF:** renders natively on workerd — no sidecar, no dynamic import. Handled entirely at
+      build time (browser builds for pdfkit/png-js/image, empty `fs` stub, yoga wasm as a
+      CompiledWasm module — see Build pipeline).
 
 ### Phase 4 — Cron
 
@@ -225,10 +271,12 @@ No migration. Only wiring:
 
 ### Phase 6 — Cutover
 
-- [ ] Deploy API Worker; point `api.hmls.autos` DNS (Cloudflare zone `hmls.autos`) at it.
-- [ ] Deploy web Worker; move `hmls.autos` off Vercel.
+- [ ] `wrangler secret put` the env table below; first `wrangler deploy`; smoke-test the workers.dev
+      URL (`/health`, `/health/db` — settles the TLS caveat, PDF route, one chat turn).
+- [ ] Point `api.hmls.autos` DNS (Cloudflare zone `hmls.autos`) at the Worker; repoint web
+      `GATEWAY_URL`.
 - [ ] Update Supabase Auth redirect URLs / CORS as needed.
-- [ ] Leave `api.fixo.ink` on Deno Deploy untouched.
+- [ ] Leave `api.fixo.ink` on Deno Deploy untouched (web stays on Vercel — split decision above).
 
 ---
 
