@@ -426,17 +426,25 @@ vercel env add NEXT_PUBLIC_AGENT_URL --scope spinsirrs-projects  # https://api.f
 When the user's request matches an available skill, invoke it via the Skill tool. When in doubt,
 invoke the skill.
 
-Key routing rules:
+Per the global config, **Matt Pocock skills are the default engineering workflow** and gstack is
+scoped to browser QA, UI/design review, security review, and deployment/release only. Planning,
+debugging, and code review run through Matt Pocock skills — never the overlapping gstack equivalents.
 
-- Product ideas/brainstorming → invoke /office-hours
-- Strategy/scope → invoke /plan-ceo-review
-- Architecture → invoke /plan-eng-review
-- Design system/plan review → invoke /design-consultation or /plan-design-review
-- Full review pipeline → invoke /autoplan
-- Bugs/errors → invoke /investigate
-- QA/testing site behavior → invoke /qa or /qa-only
-- Code review/diff check → invoke /review
-- Visual polish → invoke /design-review
-- Ship/deploy/PR → invoke /ship or /land-and-deploy
-- Save progress → invoke /context-save
-- Resume context → invoke /context-restore
+Matt Pocock (default engineering workflow):
+
+- Planning / strategy / architecture → grilling (stress-test a plan), codebase-design,
+  domain-modeling, design-an-interface, request-refactor-plan
+- Bugs / debugging → diagnosing-bugs
+- Feature or bugfix, test-first → tdd
+- Research against primary sources → research
+- Code review / diff check → Matt Pocock workflow (no dedicated skill; do NOT use gstack /review or
+  /autoplan)
+
+gstack (scoped to its four allowed areas):
+
+- Browser QA / testing site behavior → /qa or /qa-only
+- UI / design review → /design-review, /design-consultation, /plan-design-review
+- Security review → /cso
+- Ship / deploy / release validation → /ship, /land-and-deploy, /canary
+
+Utility (either system): /context-save, /context-restore

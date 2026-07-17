@@ -15,7 +15,7 @@ function stripFrontmatter(md: string): string {
 }
 
 /** Skills the agents may pull on demand via the `load_skill` tool. v1 = the two
- *  heavy bodies that used to be inlined at boot. Diagnosis skills stay Fixo-only. */
+ *  heavy bodies that used to be inlined at boot. */
 export const LOADABLE_SKILLS = ["order", "scheduling"] as const;
 export type LoadableSkill = (typeof LOADABLE_SKILLS)[number];
 
