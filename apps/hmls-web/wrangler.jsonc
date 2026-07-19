@@ -1,0 +1,24 @@
+{
+  // hmls-web on Cloudflare Workers via OpenNext. Built by
+  // `bun run cf:build` (opennextjs-cloudflare build → .open-next/).
+  // Deploy/preview with the package.json scripts. See
+  // docs/cloudflare-migration.md "Full migration (phase 2+) — Phase 1".
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hmls-web",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-03-25",
+  // nodejs_compat + global_fetch_strictly_public are both required by the
+  // OpenNext Cloudflare adapter.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true },
+  // GATEWAY_URL is the server-side target for the /api/chat + /api/staff-chat
+  // SSE proxies. Set to the migrated CF API worker (or api.hmls.autos) as a
+  // Worker var/secret. NEXT_PUBLIC_* are inlined at BUILD time, not here.
+  "vars": {
+    "GATEWAY_URL": "https://api.hmls.autos"
+  }
+}
