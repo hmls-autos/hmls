@@ -378,6 +378,21 @@ Fixo API — onto Cloudflare too. **DB stays Supabase Postgres, Auth stays Supab
 with the fewest moving parts, then the one with middleware+PWA, then the heaviest new infra (Fixo
 agent + ffmpeg container).
 
+### Progress (2026-07-19)
+
+| Phase                    | State                                          | Notes                                                                                                                                                                                                                                                                                       |
+| ------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1 — hmls-web**         | ✅ code + local workerd verify; deploy pending | next 16.2.10; OpenNext scaffold; geo→request.cf. Verified: SSG, /api/geo real coords, OG PNG, next/image, /chat shell, /api/chat 405.                                                                                                                                                       |
+| **2 — fixo-web**         | ✅ code + local workerd verify; deploy pending | next 16.2.10; **dropped next-pwa** (webpack-only SW blocks turbopack; manifest-only PWA kept); OG fonts **base64-embedded** (OpenNext runs the param-less metadata route dynamically → no fs/file:// on workerd). Verified: SSG, both OG PNGs render with Geist, middleware runs, manifest. |
+| **3 — Fixo API**         | pending                                        | env swap + mount `createFixoApp()` in worker.ts + **stub ffmpeg** + bundle-size gate.                                                                                                                                                                                                       |
+| **4 — ffmpeg Container** | **SHELVED (decided 2026-07-19)**               | Video is dead code (`/input/init` rejects non-photo; `extractVideoFrames` has no live caller). Phase 3 just stubs the tool. Build the Container only if/when video ships.                                                                                                                   |
+| **5 — CI/secrets/DNS**   | pending                                        | Needs the deploy machine (CF account/wrangler auth) + the fixo.ink zone-account resolution.                                                                                                                                                                                                 |
+
+Deploys happen on the machine with CF account / wrangler auth. This branch's work is code + config
+
+- local-workerd verification; `cf:deploy`, `NEXT_PUBLIC_*` build env, DNS cutover, and the live
+  Supabase-middleware/SSE checks are done there.
+
 ### Cross-cutting decisions (make these before Phase 1)
 
 | Decision                             | Recommendation                                                                                                                                                                                                                     | Why                                                                                                                         |
