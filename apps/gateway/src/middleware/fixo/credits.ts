@@ -1,3 +1,4 @@
+import { env } from "@hmls/shared/env";
 // Unified credit gating + charging middleware.
 //
 // Replaces the old split between Stripe-balance credits (legacy customers)
@@ -32,7 +33,7 @@ function isCreditedUser(auth: AuthContext): boolean {
   // does NOT correspond to a real user_profiles row. Routing it through
   // consumeCredits would crash with "user_profile not found". Bypass.
   // (F4 fix from prior review.)
-  if (Deno.env.get("DEV_MODE") === "true") return false;
+  if (env("DEV_MODE") === "true") return false;
   // Legacy HMLS customers (auth.customerId set) bypass credits — they're
   // a grandfathered free pass. Everyone else (SaaS users) is on credits.
   return !auth.customerId;

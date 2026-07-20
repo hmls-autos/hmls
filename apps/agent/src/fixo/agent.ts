@@ -1,8 +1,13 @@
+import { env } from "@hmls/shared/env";
 import { hasToolCall, isStepCount, type ModelMessage, streamText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { getLogger } from "@logtape/logtape";
 import { SYSTEM_PROMPT } from "./system-prompt.ts";
-import { extractVideoFramesTool } from "./tools/extractVideoFrames.ts";
+// extractVideoFramesTool intentionally NOT wired in: it spawns ffmpeg via
+// Deno.Command (no subprocess on workerd), and video is shelved — /input/init
+// rejects non-photo uploads, so the tool never had a live caller. When video
+// ships, re-add it as a Cloudflare Container call (docs/cloudflare-migration.md
+// Phase 4). The tool file stays on disk, unimported.
 import { lookupObdCodeTool } from "./tools/lookupObdCode.ts";
 import { convertTools, type LegacyTool } from "../common/convert-tools.ts";
 import { askUserQuestionTools } from "../common/tools/ask-user-question.ts";
@@ -32,16 +37,15 @@ export interface RunFixoAgentOptions {
 }
 
 export function runFixoAgent(options: RunFixoAgentOptions) {
-  const apiKey = Deno.env.get("GOOGLE_API_KEY");
+  const apiKey = env("GOOGLE_API_KEY");
   if (!apiKey) {
     throw new Error("GOOGLE_API_KEY is required");
   }
 
-  const modelId = Deno.env.get("AGENT_MODEL") || DEFAULT_MODEL;
+  const modelId = env("AGENT_MODEL") || DEFAULT_MODEL;
   const google = createGoogleGenerativeAI({ apiKey });
 
   const allTools: LegacyTool[] = [
-    extractVideoFramesTool,
     lookupObdCodeTool,
     ...askUserQuestionTools,
     ...laborLookupTools,

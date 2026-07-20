@@ -40,7 +40,9 @@ export function createWebhookRoute() {
     let event: Stripe.Event;
     try {
       const body = await c.req.text();
-      event = stripe.webhooks.constructEvent(
+      // Async variant uses Web Crypto — the sync constructEvent does node
+      // crypto synchronously, which throws on workerd.
+      event = await stripe.webhooks.constructEventAsync(
         body,
         signature,
         webhookSecret,

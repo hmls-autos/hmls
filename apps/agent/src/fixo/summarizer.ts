@@ -1,3 +1,4 @@
+import { env } from "@hmls/shared/env";
 import { generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { getLogger } from "@logtape/logtape";
@@ -38,7 +39,7 @@ export interface RunSummarizerOptions {
 export async function runSummarizer(
   opts: RunSummarizerOptions,
 ): Promise<string> {
-  const apiKey = Deno.env.get("GOOGLE_API_KEY");
+  const apiKey = env("GOOGLE_API_KEY");
   if (!apiKey) throw new Error("GOOGLE_API_KEY required for summarizer");
 
   const transcript = serializeForSummarizer(opts.messagesToFold);

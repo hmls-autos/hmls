@@ -1,3 +1,4 @@
+import { env } from "@hmls/shared/env";
 // apps/gateway/src/routes/fixo/sessions.ts
 import { Hono } from "hono";
 import { db, schema } from "@hmls/agent/db";
@@ -138,12 +139,12 @@ sessions.delete("/:id", async (c) => {
 
   // 3. best-effort storage cleanup
   if (mediaRows.length > 0) {
-    const url = Deno.env.get("SUPABASE_URL");
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const url = env("SUPABASE_URL");
+    const serviceKey = env("SUPABASE_SERVICE_ROLE_KEY");
     if (url && serviceKey) {
       const supabase = createClient(url, serviceKey);
       const keys = mediaRows.map((m) => m.storageKey);
-      const bucket = Deno.env.get("FIXO_MEDIA_BUCKET") ?? "fixo-media";
+      const bucket = env("FIXO_MEDIA_BUCKET") ?? "fixo-media";
       const { error } = await supabase.storage.from(bucket).remove(keys);
       if (error) {
         logger.warn("Storage cleanup failed (non-blocking)", {

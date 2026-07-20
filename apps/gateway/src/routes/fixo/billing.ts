@@ -1,3 +1,4 @@
+import { env } from "@hmls/shared/env";
 import { Hono } from "hono";
 import type Stripe from "stripe";
 import { getLogger } from "@logtape/logtape";
@@ -299,7 +300,7 @@ billing.get("/portal", async (c) => {
 const webhookHandler = new Hono();
 
 webhookHandler.post("/", async (c) => {
-  const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
+  const webhookSecret = env("STRIPE_WEBHOOK_SECRET");
 
   if (!webhookSecret) {
     logger.error("STRIPE_WEBHOOK_SECRET not set");

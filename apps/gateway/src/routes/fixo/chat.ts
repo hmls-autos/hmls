@@ -1,3 +1,4 @@
+import { env } from "@hmls/shared/env";
 // apps/gateway/src/routes/fixo/chat.ts
 import { Hono } from "hono";
 import { convertToModelMessages, generateText, type UIMessage } from "ai";
@@ -262,7 +263,7 @@ function maybeGenerateTitle(
   finalMessages: UIMessage[],
   auth: AuthContext,
 ): void {
-  const apiKey = Deno.env.get("GOOGLE_API_KEY");
+  const apiKey = env("GOOGLE_API_KEY");
   if (!apiKey) return;
 
   const userMsg = finalMessages.find((m) => m.role === "user");

@@ -17,10 +17,34 @@ import { sql } from "drizzle-orm";
 import { dbAdmin } from "@hmls/agent/db";
 import { getLogger } from "@logtape/logtape";
 import { createHmlsApp } from "./hmls-app.ts";
+import { createFixoApp } from "./fixo-app.ts";
 import { setupLogging } from "./logger.ts";
 
 const logger = getLogger(["hmls", "gateway", "worker"]);
-const app = createHmlsApp();
+const hmlsApp = createHmlsApp();
+const fixoApp = createFixoApp();
+
+// Hostname dispatch mirrors index.ts (the Deno path): api.fixo.* → fixoApp,
+// everything else → the HMLS app. Fixo shares this worker rather than a second
+// deployment (one worker = one DB client pair). The fixo agent's ffmpeg tool is
+// stubbed (video shelved), so no subprocess is needed. If the combined bundle
+// ever busts the 10 MB gzip limit, split fixoApp into its own worker.
+const FIXO_HOSTS = ["api.fixo.hmls.autos", "api.fixo.ink", "fixo.localhost"];
+
+// deno-lint-ignore no-explicit-any
+function dispatch(req: Request, env: any, ctx: any): Response | Promise<Response> {
+  const host = (req.headers.get("host") ?? "").split(":")[0];
+  if (FIXO_HOSTS.includes(host)) return fixoApp.fetch(req, env, ctx);
+
+  // Path-based /fixo/* fallback (strip the prefix), same as index.ts.
+  const url = new URL(req.url);
+  if (url.pathname === "/fixo" || url.pathname.startsWith("/fixo/")) {
+    const newPath = url.pathname.slice("/fixo".length) || "/";
+    return fixoApp.fetch(new Request(new URL(newPath + url.search, url.origin), req), env, ctx);
+  }
+
+  return hmlsApp.fetch(req, env, ctx);
+}
 
 // Logging is configured on the first request, not at isolate init: LOG_LEVEL
 // arrives in the per-request env bindings, which env() can only see inside a
@@ -35,7 +59,7 @@ export default {
   fetch(req: Request, env: any, ctx: any): Promise<Response> {
     return runWithEnv(env, async () => {
       await ensureLogging();
-      return app.fetch(req, env, ctx);
+      return dispatch(req, env, ctx);
     });
   },
 

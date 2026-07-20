@@ -1,6 +1,7 @@
 {
-  // HMLS API on Cloudflare Workers. Fixo stays on Deno Deploy (api.fixo.ink).
-  // Validate with `wrangler dev` / deploy with `wrangler deploy`.
+  // HMLS API + Fixo API on Cloudflare Workers (one worker, hostname dispatch in
+  // worker.ts: api.fixo.* → fixoApp, else hmlsApp). Combined bundle is ~1.7 MB
+  // gzip, well under the 10 MB limit, so no split. Validate with `wrangler dev`.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "hmls-api",
   // Pre-built by `deno task build:worker` (esbuild + @deno/esbuild-plugin).
@@ -23,6 +24,8 @@
   },
   "vars": {
     "HMLS_AGENT_MODEL": "deepseek-v4-pro",
+    "AGENT_MODEL": "gemini-3.1-flash-lite",
+    "FIXO_MEDIA_BUCKET": "fixo-media",
     "LOG_LEVEL": "info"
   }
   // DB: connect directly to Supabase's TRANSACTION-mode pooler (host
@@ -36,4 +39,6 @@
   //   TENANT_DATABASE_URL   — restricted role @ 6543 pooler (RLS-enforcing)
   //   DEEPSEEK_API_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
   //   SLACK_WEBHOOK_URL, SUPABASE_URL, SUPABASE_ANON_KEY
+  //   GOOGLE_API_KEY         — Fixo agent (Gemini)
+  //   SUPABASE_SERVICE_ROLE_KEY — Fixo media storage
 }
