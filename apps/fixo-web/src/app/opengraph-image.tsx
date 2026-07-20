@@ -1,38 +1,19 @@
 import { ImageResponse } from "next/og";
+import { geistBlack, geistBold, geistRegular } from "./_fonts/geist";
 
-export const runtime = "edge";
+// No `runtime = "edge"`: OpenNext runs the whole app in workerd node-compat and
+// does not support Next's edge runtime. OpenNext serves this param-less
+// metadata route through the DYNAMIC handler on workerd (not the prerendered
+// PNG), so the Geist fonts are base64-embedded (./_fonts/geist) rather than
+// read from disk — node:fs is unimplemented on workerd. See
+// docs/cloudflare-migration.md Phase 2.
 export const alt =
   "Fixo — AI car diagnosis in 30 seconds from a photo, sound, or OBD-II code";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-/**
- * Geist TTFs are bundled in `_fonts/` next to this file so the OG image
- * renders in our actual brand font instead of system Helvetica/Arial. The
- * `new URL('./_fonts/...', import.meta.url)` form is Next.js's canonical
- * pattern, but webpack only statically resolves it when the path is a
- * string literal — so we declare the three URLs at module scope rather
- * than building them with template strings.
- */
-const GEIST_REGULAR_URL = new URL(
-  "./_fonts/Geist-Regular.ttf",
-  import.meta.url,
-);
-const GEIST_BOLD_URL = new URL("./_fonts/Geist-Bold.ttf", import.meta.url);
-const GEIST_BLACK_URL = new URL("./_fonts/Geist-Black.ttf", import.meta.url);
-
-async function fetchFont(url: URL): Promise<ArrayBuffer> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Font fetch failed: ${res.status} ${url}`);
-  return res.arrayBuffer();
-}
-
-export default async function Image() {
-  const [regular, bold, black] = await Promise.all([
-    fetchFont(GEIST_REGULAR_URL),
-    fetchFont(GEIST_BOLD_URL),
-    fetchFont(GEIST_BLACK_URL),
-  ]);
+export default function Image() {
+  const [regular, bold, black] = [geistRegular, geistBold, geistBlack];
 
   return new ImageResponse(
     <div

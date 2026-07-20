@@ -1,0 +1,19 @@
+{
+  // fixo-web on Cloudflare Workers via OpenNext. Built by `bun run cf:build`
+  // (next build --webpack → keeps the next-pwa service worker; then
+  // opennextjs-cloudflare build --skipBuild). See
+  // docs/cloudflare-migration.md "Full migration (phase 2+) — Phase 2".
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "fixo-web",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-03-25",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true }
+  // No server-side runtime secrets: fixo-web talks to api.fixo.ink from the
+  // client and its Supabase usage (middleware session refresh + SSR) reads
+  // NEXT_PUBLIC_* keys, which are inlined at BUILD time, not set here.
+}
