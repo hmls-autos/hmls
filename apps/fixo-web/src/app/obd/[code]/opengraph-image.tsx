@@ -18,12 +18,14 @@
 
 import { ImageResponse } from "next/og";
 import { OBD_SEO_CODES, OBD_SEO_CODES_LIST } from "@/data/obd-seed";
+import { geistBlack, geistBold, geistRegular } from "../../_fonts/geist";
 
 // No `runtime = "edge"` here: Next.js 16 disallows the edge runtime when a
 // route also exports `generateImageMetadata` (or `generateStaticParams`),
 // since those run at build time. Default Node.js runtime supports both
-// ImageResponse and the build-time metadata enumeration. The root
-// opengraph-image.tsx keeps edge runtime — it has no generateImageMetadata.
+// ImageResponse and the build-time metadata enumeration. (The root
+// opengraph-image.tsx also runs on the Node runtime — required for OpenNext,
+// which has no Next edge runtime on workerd.)
 export const alt = "Fixo OBD-II code explainer";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -37,21 +39,9 @@ export function generateImageMetadata() {
   }));
 }
 
-const GEIST_REGULAR_URL = new URL(
-  "../../_fonts/Geist-Regular.ttf",
-  import.meta.url,
-);
-const GEIST_BOLD_URL = new URL("../../_fonts/Geist-Bold.ttf", import.meta.url);
-const GEIST_BLACK_URL = new URL(
-  "../../_fonts/Geist-Black.ttf",
-  import.meta.url,
-);
-
-async function fetchFont(url: URL): Promise<ArrayBuffer> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Font fetch failed: ${res.status} ${url}`);
-  return res.arrayBuffer();
-}
+// Geist fonts are base64-embedded (../../_fonts/geist) so this works whether
+// OpenNext serves the route statically or as a dynamic workerd handler — no
+// node:fs, no file:// fetch. See docs/cloudflare-migration.md Phase 2.
 
 // Color tokens shared with the on-page tier badge so the OG card
 // visually matches what users see when they click through.
@@ -88,11 +78,7 @@ export default async function Image({ params }: { params: { code: string } }) {
 
   const tier = TIER_COLORS[entry.driveSafetyTier];
 
-  const [regular, bold, black] = await Promise.all([
-    fetchFont(GEIST_REGULAR_URL),
-    fetchFont(GEIST_BOLD_URL),
-    fetchFont(GEIST_BLACK_URL),
-  ]);
+  const [regular, bold, black] = [geistRegular, geistBold, geistBlack];
 
   return new ImageResponse(
     <div

@@ -1,3 +1,4 @@
+import { env } from "@hmls/shared/env";
 import { generateObject, type ModelMessage } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
@@ -68,7 +69,7 @@ export interface SummarizeFixoSessionOptions {
 export async function summarizeFixoSession(
   options: SummarizeFixoSessionOptions,
 ): Promise<FixoSessionResult> {
-  const apiKey = Deno.env.get("GOOGLE_API_KEY");
+  const apiKey = env("GOOGLE_API_KEY");
   if (!apiKey) {
     throw new Error("GOOGLE_API_KEY is required");
   }
@@ -77,7 +78,7 @@ export async function summarizeFixoSession(
     throw new Error("Cannot summarize a session with no messages");
   }
 
-  const modelId = options.modelId ?? Deno.env.get("AGENT_MODEL") ?? DEFAULT_MODEL;
+  const modelId = options.modelId ?? env("AGENT_MODEL") ?? DEFAULT_MODEL;
   const google = createGoogleGenerativeAI({ apiKey });
 
   logger.info("Summarizing fixo session", {

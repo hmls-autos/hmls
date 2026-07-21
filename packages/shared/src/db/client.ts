@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { sql } from "drizzle-orm";
 import postgres from "postgres";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { env } from "../lib/env.ts";
 
 // ALS carries the current DB executor (a scoped transaction, or the admin
 // client) for the duration of a request/tool unit. When set, the `db` proxy
@@ -43,8 +44,8 @@ export function createDbClient<T extends Record<string, unknown>>(schema: T) {
       // tests). A deployed env missing TENANT_DATABASE_URL is caught by the
       // boot guard in apps/gateway/src/index.ts — this fallback existing here
       // too is belt-and-suspenders for any other entrypoint.
-      const tenantUrl = Deno.env.get("TENANT_DATABASE_URL");
-      const url = tenantUrl ?? Deno.env.get("DATABASE_URL");
+      const tenantUrl = env("TENANT_DATABASE_URL");
+      const url = tenantUrl ?? env("DATABASE_URL");
       if (!url) {
         throw new Error("TENANT_DATABASE_URL/DATABASE_URL environment variable is required");
       }
@@ -55,17 +56,19 @@ export function createDbClient<T extends Record<string, unknown>>(schema: T) {
             "layer (expected only in local/dev/CI)",
         );
       }
+      // prepare:false — required for Supabase's transaction-mode pooler (port
+      // 6543), which doesn't persist prepared statements across connections.
       // deno-lint-ignore no-explicit-any
-      _tenant = drizzle(postgres(url) as any, { schema });
+      _tenant = drizzle(postgres(url, { prepare: false }) as any, { schema });
     }
     return _tenant;
   }
   function adminDb() {
     if (!_admin) {
-      const url = Deno.env.get("DATABASE_URL");
+      const url = env("DATABASE_URL");
       if (!url) throw new Error("DATABASE_URL environment variable is required");
       // deno-lint-ignore no-explicit-any
-      _admin = drizzle(postgres(url) as any, { schema });
+      _admin = drizzle(postgres(url, { prepare: false }) as any, { schema });
     }
     return _admin;
   }

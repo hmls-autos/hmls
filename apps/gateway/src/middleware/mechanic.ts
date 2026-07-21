@@ -1,3 +1,4 @@
+import { env } from "@hmls/shared/env";
 import type { Env } from "hono";
 import { createMiddleware } from "hono/factory";
 import { and, eq } from "drizzle-orm";
@@ -24,8 +25,8 @@ export type MechanicEnv = Env & {
  * provider row at request time. One indexed lookup per request.
  */
 export const requireMechanic = createMiddleware<MechanicEnv>(async (c, next) => {
-  if (Deno.env.get("SKIP_AUTH") === "true") {
-    const devProviderId = Number(Deno.env.get("DEV_PROVIDER_ID") ?? "1");
+  if (env("SKIP_AUTH") === "true") {
+    const devProviderId = Number(env("DEV_PROVIDER_ID") ?? "1");
     c.set("authUser", {
       id: "dev-mechanic",
       email: "mechanic@localhost",

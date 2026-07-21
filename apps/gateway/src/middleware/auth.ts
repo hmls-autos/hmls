@@ -1,3 +1,4 @@
+import { env } from "@hmls/shared/env";
 import type { Env } from "hono";
 import { createMiddleware } from "hono/factory";
 import { withContext } from "@logtape/logtape";
@@ -27,8 +28,8 @@ export type OptionalAuthEnv = Env & {
 export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
   // Dev bypass: SKIP_AUTH=true uses a fixed test customer (id from
   // DEV_CUSTOMER_ID, defaults to 1). Mirrors the admin/mechanic bypass.
-  if (Deno.env.get("SKIP_AUTH") === "true") {
-    const devCustomerId = Number(Deno.env.get("DEV_CUSTOMER_ID") ?? "1");
+  if (env("SKIP_AUTH") === "true") {
+    const devCustomerId = Number(env("DEV_CUSTOMER_ID") ?? "1");
     const devUser: AuthUser = {
       id: "dev-customer",
       email: "customer@localhost",
@@ -129,7 +130,7 @@ export type AuthUserEnv = Env & {
  * (e.g. first-contact chat). Returns 401 on missing/invalid token.
  */
 export const requireAuthUser = createMiddleware<AuthUserEnv>(async (c, next) => {
-  if (Deno.env.get("SKIP_AUTH") === "true") {
+  if (env("SKIP_AUTH") === "true") {
     const devUser: AuthUser = {
       id: "dev-customer",
       email: "customer@localhost",

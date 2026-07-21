@@ -4,11 +4,16 @@
   "exports": {
     ".": "./src/mod.ts",
     "./db": "./src/db/client.ts",
+    "./hmls-agent": "./src/hmls/agent.ts",
+    "./staff-agent": "./src/hmls/staff-agent.ts",
+    "./hmls-pdf": "./src/hmls/pdf/EstimatePdf.tsx",
+    "./user-context": "./src/types/user-context.ts",
     "./order-state": "./src/services/order-state.ts",
     "./order-state-core": "./src/services/order-state-core.ts",
     "./order-intake": "./src/services/order-intake.ts",
     "./auto-assign": "./src/services/auto-assign.ts",
     "./fixo-brain": "./src/fixo/fixo-brain.ts",
+    "./prediction-log": "./src/fixo/prediction-log.ts",
     "./common/shop-routing": "./src/common/shop-routing.ts"
   },
   "imports": {
@@ -28,6 +33,7 @@
     "db:migrate": "deno run -A --node-modules-dir=auto npm:drizzle-kit migrate",
     "db:push": "deno run -A --node-modules-dir=auto npm:drizzle-kit push",
     "db:studio": "deno run -A --node-modules-dir=auto npm:drizzle-kit studio",
+    "build:skills": "deno run --allow-read --allow-write src/scripts/build-skills-bundle.ts",
     "db:scrape-olp": "deno run --env=../../.env.local --allow-net --allow-env --allow-read src/scripts/scrape-olp.ts",
     "db:seed-providers": "deno run --env=../../.env.local --allow-net --allow-env --allow-read src/scripts/seed-providers.ts",
     "kill-criteria:check": "deno run --env=../../.env.local --allow-net --allow-env --allow-read src/scripts/check-kill-criteria.ts",

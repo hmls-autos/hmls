@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { sql } from "drizzle-orm";
+import { dbAdmin } from "@hmls/agent/db";
 import { getLogger } from "@logtape/logtape";
 import { AppError } from "@hmls/shared/errors";
 import { requestContext } from "./middleware/request-context.ts";
@@ -81,10 +83,17 @@ export function createHmlsApp() {
     return c.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-  if (stripeKey) {
-    app.route("/webhook", createWebhookRoute(stripeKey));
-  }
+  // DB reachability probe (SELECT 1 on the admin pool). Exists so the
+  // Workers cutover can verify the Supabase pooler path end-to-end.
+  app.get("/health/db", async (c) => {
+    await dbAdmin.execute(sql`select 1`);
+    return c.json({ status: "ok", db: true });
+  });
+
+  // Mounted unconditionally: on workerd, createHmlsApp() runs at module init
+  // where env() can't resolve yet (C3 in docs/cloudflare-migration.md). The
+  // route re-checks the Stripe keys per request and 500s if unconfigured.
+  app.route("/webhook", createWebhookRoute());
 
   app.route("/api/estimates", estimates);
   app.route("/api/orders", ordersPdf);

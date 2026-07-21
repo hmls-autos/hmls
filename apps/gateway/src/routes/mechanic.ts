@@ -7,7 +7,7 @@ import { requireShopContext, type WithShop } from "../middleware/shop-context.ts
 import { withTenantTx } from "../middleware/with-tenant-tx.ts";
 import { recordPayment, transition } from "@hmls/agent/order-state";
 import { canonicalizeStatus } from "@hmls/shared/order/status";
-import { recordOutcome } from "@hmls/agent/fixo-brain";
+import { recordOutcome } from "@hmls/agent/prediction-log";
 import { sendOrderStateResult } from "../lib/order-state-http.ts";
 import {
   createMechanicOverrideInput,

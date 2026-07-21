@@ -1,3 +1,4 @@
+import { env } from "@hmls/shared/env";
 import type { Env } from "hono";
 import { createMiddleware } from "hono/factory";
 import { withContext } from "@logtape/logtape";
@@ -19,7 +20,7 @@ export type AdminEnv = Env & {
  */
 export const requireAdmin = createMiddleware<AdminEnv>(async (c, next) => {
   // Dev bypass: SKIP_AUTH=true skips all auth checks locally
-  if (Deno.env.get("SKIP_AUTH") === "true") {
+  if (env("SKIP_AUTH") === "true") {
     const devUser = { id: "dev", email: "dev@localhost", role: "admin" as const };
     c.set("authUser", devUser);
     await withContext({ userId: devUser.id, role: "admin" }, next);

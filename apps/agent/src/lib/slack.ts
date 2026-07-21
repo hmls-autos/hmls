@@ -9,6 +9,7 @@
 // outages must not cascade into the caller. Returns true/false so the
 // caller can log if needed.
 
+import { env } from "@hmls/shared/env";
 import { getLogger } from "@logtape/logtape";
 
 const logger = getLogger(["hmls", "agent", "slack"]);
@@ -27,7 +28,7 @@ export interface SlackMessageOptions {
  * Returns true on 200, false on any failure. Never throws.
  */
 export async function postSlackMessage(opts: SlackMessageOptions): Promise<boolean> {
-  const url = opts.webhookUrl ?? Deno.env.get("SLACK_WEBHOOK_URL");
+  const url = opts.webhookUrl ?? env("SLACK_WEBHOOK_URL");
   if (!url) {
     logger.warn("SLACK_WEBHOOK_URL not configured; message dropped");
     return false;

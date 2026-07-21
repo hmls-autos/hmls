@@ -1,3 +1,4 @@
+import { env } from "@hmls/shared/env";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { getLogger, withContext } from "@logtape/logtape";
@@ -17,7 +18,10 @@ import { fixoMcp } from "./routes/fixo/mcp/route.ts";
 import { keys } from "./routes/fixo/keys.ts";
 import { type ApiKeyContext, authenticateApiKey } from "./middleware/fixo/api-key.ts";
 
-const DEV_MODE = Deno.env.get("DEV_MODE") === "true";
+// Read at request time, not module init: on workerd env() only resolves inside
+// the runWithEnv scope. (Deployed value is always false — DEV_MODE is a local
+// auth bypass — but this keeps `wrangler dev` with DEV_MODE honoring it.)
+const devMode = () => env("DEV_MODE") === "true";
 
 const logger = getLogger(["hmls", "gateway", "fixo"]);
 
@@ -113,7 +117,7 @@ export function createFixoApp() {
   app.use("/keys", requireAuth);
   app.use("/keys/*", requireAuth);
   app.use("/task", async (c, next) => {
-    if (DEV_MODE) {
+    if (devMode()) {
       logger.info("DEV_MODE: skipping auth");
       const devUserId = "00000000-0000-0000-0000-000000000001";
       c.set("auth", {

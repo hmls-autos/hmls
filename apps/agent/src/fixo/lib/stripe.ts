@@ -1,3 +1,4 @@
+import { env } from "@hmls/shared/env";
 // Stripe API helpers for Fixo: subscription checkout, top-up checkout,
 // customer portal, and webhook routing.
 //
@@ -41,7 +42,7 @@ let _stripe: Stripe | null = null;
 
 function getStripe(): Stripe {
   if (!_stripe) {
-    const secretKey = Deno.env.get("STRIPE_SECRET_KEY");
+    const secretKey = env("STRIPE_SECRET_KEY");
     if (!secretKey) {
       throw new Error("STRIPE_SECRET_KEY is required");
     }

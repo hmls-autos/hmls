@@ -1,21 +1,27 @@
+import { env } from "@hmls/shared/env";
 import { getLogger } from "@logtape/logtape";
 
 const logger = getLogger(["hmls", "agent", "olp-client"]);
 
-const OLP_WORKER_URL = Deno.env.get("OLP_WORKER_URL") ??
-  "https://olp-worker.spencerzhyp.workers.dev";
-const OLP_WORKER_SECRET = Deno.env.get("OLP_WORKER_SECRET") ?? "";
+// Read lazily, not at module init: on workerd, env() only resolves inside a
+// request's runWithEnv scope — module-scope reads would freeze URL/secret to
+// the defaults (C3 in docs/cloudflare-migration.md).
+const olpWorkerUrl = () =>
+  env("OLP_WORKER_URL") ??
+    "https://olp-worker.spencerzhyp.workers.dev";
+const olpWorkerSecret = () => env("OLP_WORKER_SECRET") ?? "";
 
 function authHeaders(): Record<string, string> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (OLP_WORKER_SECRET) {
-    headers["Authorization"] = `Bearer ${OLP_WORKER_SECRET}`;
+  const secret = olpWorkerSecret();
+  if (secret) {
+    headers["Authorization"] = `Bearer ${secret}`;
   }
   return headers;
 }
 
 async function olpPost<T>(path: string, body: unknown): Promise<T> {
-  const url = `${OLP_WORKER_URL}${path}`;
+  const url = `${olpWorkerUrl()}${path}`;
   const res = await fetch(url, {
     method: "POST",
     headers: authHeaders(),

@@ -34,3 +34,5 @@ olp-labor-times.db*
 .infisical.json
 .claude/worktrees/
 .gstack/
+.dev.vars
+.wrangler/

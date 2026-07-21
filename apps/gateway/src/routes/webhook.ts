@@ -1,3 +1,4 @@
+import { env } from "@hmls/shared/env";
 import { Hono } from "hono";
 import Stripe from "stripe";
 import { getLogger } from "@logtape/logtape";
@@ -13,19 +14,23 @@ const logger = getLogger(["hmls", "gateway", "webhook"]);
 //
 // When a shop opts into Stripe auto-capture, restore the handlers to
 // transition the order's `paidAt` / `paymentMethod` / `paidAmountCents`.
-export function createWebhookRoute(stripeSecretKey: string) {
-  const stripe = new Stripe(stripeSecretKey, {
-    apiVersion: "2026-02-25.clover",
-  });
-
+//
+// Keys are read per request, not at mount: on workerd the app is composed at
+// module init, where env() can't resolve yet (C3 in
+// docs/cloudflare-migration.md).
+export function createWebhookRoute() {
   const webhook = new Hono();
 
   webhook.post("/stripe", async (c) => {
-    const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
-    if (!webhookSecret) {
-      logger.error("STRIPE_WEBHOOK_SECRET not set");
+    const stripeSecretKey = env("STRIPE_SECRET_KEY");
+    const webhookSecret = env("STRIPE_WEBHOOK_SECRET");
+    if (!stripeSecretKey || !webhookSecret) {
+      logger.error("STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET not set");
       return c.json({ error: "Webhook not configured" }, 500);
     }
+    const stripe = new Stripe(stripeSecretKey, {
+      apiVersion: "2026-02-25.clover",
+    });
 
     const signature = c.req.header("stripe-signature");
     if (!signature) {
@@ -35,7 +40,9 @@ export function createWebhookRoute(stripeSecretKey: string) {
     let event: Stripe.Event;
     try {
       const body = await c.req.text();
-      event = stripe.webhooks.constructEvent(
+      // Async variant uses Web Crypto — the sync constructEvent does node
+      // crypto synchronously, which throws on workerd.
+      event = await stripe.webhooks.constructEventAsync(
         body,
         signature,
         webhookSecret,
