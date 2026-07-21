@@ -393,6 +393,12 @@ Deploys happen on the machine with CF account / wrangler auth. This branch's wor
 - local-workerd verification; `cf:deploy`, `NEXT_PUBLIC_*` build env, DNS cutover, and the live
   Supabase-middleware/SSE checks are done there.
 
+**Deploy is deliberately the LAST step (decided 2026-07-20).** Phases 1-3 are code-complete and
+local-workerd-verified; the entire deploy apparatus — CI/secrets scaffolding, `wrangler deploy`,
+smoke tests, and DNS cutover — is held for one final pass (Phase 5). Prereqs to line up before it:
+`infisical login` (prod secrets), the fixo.ink zone-account resolution (custom domain needs
+same-account zone), and a `CLOUDFLARE_API_TOKEN` for CI.
+
 ### Cross-cutting decisions (make these before Phase 1)
 
 | Decision                             | Recommendation                                                                                                                                                                                                                     | Why                                                                                                                         |
