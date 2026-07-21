@@ -35,26 +35,26 @@ streamed-body pull. The one thing local dev could NOT verify is postgres-js **TL
 pooler (miniflare's `startTls` emulation hangs; raw TCP + PG `SSLRequest` handshake to the 6543
 pooler works and returns `'S'`) — that needs one verification on deployed workerd.
 
-| Done | Item                                                                                                                                  |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| ✅   | `env()` shim — [env.ts](../packages/shared/src/lib/env.ts), exported as `@hmls/shared/env`                                            |
-| ✅   | Swept `Deno.env.get` → `env()` across 13 HMLS files (28 sites)                                                                        |
-| ✅   | DB client reads `DATABASE_URL`/`TENANT_DATABASE_URL` via `env()` + `prepare:false` — [client.ts](../packages/shared/src/db/client.ts) |
-| ✅   | Skills off the filesystem → [skills-bundle.ts](../apps/agent/src/hmls/skills-bundle.ts) (generator + drift test)                      |
-| ✅   | Workers entrypoint `fetch`+`scheduled` — [worker.ts](../apps/gateway/src/worker.ts)                                                   |
-| ✅   | [wrangler.jsonc](../apps/gateway/wrangler.jsonc) — nodejs_compat, cron, `no_bundle` + CompiledWasm rule                               |
-| ✅   | **C1+C2**: build pipeline — [build-worker.ts](../apps/gateway/scripts/build-worker.ts) (esbuild + @deno/esbuild-plugin)               |
-| ✅   | **C3**: module-init env reads made lazy (webhook mount, olp-client, notifications, logging)                                           |
-| ✅   | **C4**: verified on workerd — ALS readable in stream pull; tenant client created mid-pull OK                                          |
-| ✅   | **#6**: react-pdf renders on workerd (browser builds for pdfkit/png-js/image + yoga wasm as CompiledWasm module)                      |
-| ✅   | **#8**: fixo agent out of the eager worker graph ([prediction-log.ts](../apps/agent/src/fixo/prediction-log.ts) split)                |
-| ✅   | `/health/db` probe route (SELECT 1 via admin pool) for cutover verification                                                           |
-| ⏳   | Verify postgres-js TLS to the 6543 pooler on DEPLOYED workerd (local miniflare `startTls` hangs — likely local-only)                  |
-| ⏳   | CF account setup: `wrangler secret put` (see env table), first deploy, workers.dev smoke test                                         |
-| ⏳   | DNS cutover + repoint web `GATEWAY_URL` at Workers API                                                                                |
-| ⏳   | Decide: `GOOGLE_API_KEY` on the worker? (live `diagnose_symptom` in customer chat fails soft → null without it)                       |
-| —    | Web: stays on Vercel (no work)                                                                                                        |
-| —    | Auth: stays Supabase (no work)                                                                                                        |
+| Done | Item                                                                                                                                                                                                                                                                                                    |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ✅   | `env()` shim — [env.ts](../packages/shared/src/lib/env.ts), exported as `@hmls/shared/env`                                                                                                                                                                                                              |
+| ✅   | Swept `Deno.env.get` → `env()` across 13 HMLS files (28 sites)                                                                                                                                                                                                                                          |
+| ✅   | DB client reads `DATABASE_URL`/`TENANT_DATABASE_URL` via `env()` + `prepare:false` — [client.ts](../packages/shared/src/db/client.ts)                                                                                                                                                                   |
+| ✅   | Skills off the filesystem → [skills-bundle.ts](../apps/agent/src/hmls/skills-bundle.ts) (generator + drift test)                                                                                                                                                                                        |
+| ✅   | Workers entrypoint `fetch`+`scheduled` — [worker.ts](../apps/gateway/src/worker.ts)                                                                                                                                                                                                                     |
+| ✅   | [wrangler.jsonc](../apps/gateway/wrangler.jsonc) — nodejs_compat, cron, `no_bundle` + CompiledWasm rule                                                                                                                                                                                                 |
+| ✅   | **C1+C2**: build pipeline — [build-worker.ts](../apps/gateway/scripts/build-worker.ts) (esbuild + @deno/esbuild-plugin)                                                                                                                                                                                 |
+| ✅   | **C3**: module-init env reads made lazy (webhook mount, olp-client, notifications, logging)                                                                                                                                                                                                             |
+| ✅   | **C4**: verified on workerd — ALS readable in stream pull; tenant client created mid-pull OK                                                                                                                                                                                                            |
+| ✅   | **#6**: react-pdf renders on workerd (browser builds for pdfkit/png-js/image + yoga wasm as CompiledWasm module)                                                                                                                                                                                        |
+| ✅   | **#8**: fixo agent out of the eager worker graph ([prediction-log.ts](../apps/agent/src/fixo/prediction-log.ts) split)                                                                                                                                                                                  |
+| ✅   | `/health/db` probe route (SELECT 1 via admin pool) for cutover verification                                                                                                                                                                                                                             |
+| ❌   | **Direct postgres-js → 6543 pooler FAILS on deployed workerd** (2026-07-21, `hmls-api.spencerzhyp.workers.dev`): `/health/db` hangs ~11.8s → 500. NOT local-only. Fix = **Hyperdrive** (now required, not optional) — see the Hyperdrive note below. `/health` + `/fixo/health` are 200; only DB fails. |
+| ⏳   | CF account setup: `wrangler secret put` (see env table), first deploy, workers.dev smoke test                                                                                                                                                                                                           |
+| ⏳   | DNS cutover + repoint web `GATEWAY_URL` at Workers API                                                                                                                                                                                                                                                  |
+| ⏳   | Decide: `GOOGLE_API_KEY` on the worker? (live `diagnose_symptom` in customer chat fails soft → null without it)                                                                                                                                                                                         |
+| —    | Web: stays on Vercel (no work)                                                                                                                                                                                                                                                                          |
+| —    | Auth: stays Supabase (no work)                                                                                                                                                                                                                                                                          |
 
 ### Local dev (workerd)
 
